@@ -1,0 +1,64 @@
+[package]
+name = "centripetal"
+version = "0.1.0"
+authors = ["GglLfr"]
+edition = "2024"
+rust-version = "1.88.0"
+
+[dependencies]
+avian2d = "0.3"
+async-channel = "2"
+async-fs = "2"
+bevy_framepace = "0.19"
+blocking = "1"
+derive_more = { version = "2", features = ["error", "from", "display"] }
+directories = "6"
+guillotiere = "0.6"
+mimalloc-redirect = "0.1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[dependencies.bevy]
+version = "0.16"
+default-features = false
+features = [
+    "std",
+    "async_executor",
+    "custom_cursor",
+    "multi_threaded",
+    "x11",
+    "wayland",
+    "png",
+    "serialize",
+    "tonemapping_luts",
+    "bevy_asset",
+    "bevy_color",
+    "bevy_core_pipeline",
+    "bevy_input_focus",
+    "bevy_log",
+    "bevy_picking",
+    "bevy_render",
+    "bevy_scene",
+    "bevy_sprite",
+    "bevy_state",
+    "bevy_text",
+    "bevy_ui",
+    "bevy_ui_picking_backend",
+    "bevy_window",
+    "bevy_winit",
+]
+
+[dependencies.leafwing-input-manager]
+version = "0.17"
+default-features = false
+features = [
+    "asset",
+    "keyboard",
+    "mouse",
+    "picking",
+    "timing",
+]
+
+[features]
+default = ["dev"]
+dev = ["bevy/dynamic_linking"]
