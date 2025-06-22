@@ -9,11 +9,14 @@ rust-version = "1.88.0"
 avian2d = "0.3"
 async-channel = "2"
 async-fs = "2"
+bevy_asset_loader = { version = "0.23", features = ["progress_tracking"] }
+bevy_ecs_tilemap = "0.16"
 bevy_framepace = "0.19"
 blocking = "1"
 derive_more = { version = "2", features = ["error", "from", "display"] }
 directories = "6"
 guillotiere = "0.6"
+iyes_progress = { version = "0.14", features = ["assets", "async"] }
 mimalloc-redirect = "0.1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

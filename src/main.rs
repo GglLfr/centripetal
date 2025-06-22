@@ -5,6 +5,8 @@ use bevy_framepace::FramepacePlugin;
 use crate::asset::SetupAssetPlugin;
 
 pub mod asset;
+pub mod render;
+
 mod config;
 pub use config::*;
 

@@ -31,7 +31,7 @@ impl FromWorld for Sprites {
 
         Self {
             pages: vec![Page::new(
-                UVec2::splat(device.limits().max_texture_dimension_2d),
+                UVec2::splat(device.limits().max_texture_dimension_2d.min(2048)),
                 &mut images,
                 &mut layouts,
             )],
@@ -196,8 +196,8 @@ pub fn prepare_pending_sprites(
             },
             data,
             TexelCopyBufferLayout {
-                offset: 1,
-                bytes_per_row: Some(image.width() * TextureFormat::Rgba8UnormSrgb.pixel_size() as u32),
+                offset: 0,
+                bytes_per_row: Some(rect.size().x * TextureFormat::Rgba8UnormSrgb.pixel_size() as u32),
                 rows_per_image: None,
             },
             Extent3d {
