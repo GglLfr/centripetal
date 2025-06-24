@@ -11,27 +11,36 @@ use serde::{
     de::{self, Visitor},
 };
 
-use crate::asset::ldtk::{Ldtk, LdtkLevel};
+use crate::asset::ldtk::{Ldtk, LdtkIntCell, LdtkLayer, LdtkLayerData, LdtkLevel, LdtkTile, LdtkTiles, LdtkTileset};
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct LdtkRoot<'a> {
+struct Root {
     iid: Uuid,
-    #[serde(deserialize_with = "de_color")]
-    bg_color: Srgba,
-    #[serde(borrow)]
-    levels: Vec<LevelPaths<'a>>,
+    defs: Definitions,
+    levels: Vec<LevelPath>,
 }
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct Definitions {}
+struct Definitions {
+    tilesets: Vec<Tileset>,
+}
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct LevelPaths<'a> {
+struct Tileset {
+    uid: u32,
+    rel_path: String,
+    tile_grid_size: u32,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct LevelPath {
     iid: Uuid,
-    external_rel_path: &'a str,
+    identifier: String,
+    external_rel_path: String,
 }
 
 fn de_color<'de, D: Deserializer<'de>>(de: D) -> Result<Srgba, D::Error> {
@@ -53,6 +62,9 @@ fn de_color<'de, D: Deserializer<'de>>(de: D) -> Result<Srgba, D::Error> {
 
 #[derive(Debug, Display, Error, From)]
 pub enum LdtkError {
+    #[display("External levels are supposed to be in a subdirectory")]
+    #[error(ignore)]
+    MissingParentDirectory,
     Path(ParseAssetPathError),
     Json(serde_json::Error),
     Io(io::Error),
@@ -74,16 +86,27 @@ impl AssetLoader for LdtkLoader {
         let mut file = String::new();
         reader.read_to_string(&mut file).await?;
 
-        let root: LdtkRoot = serde_json::from_str(&file)?;
+        let root: Root = serde_json::from_str(&file)?;
         let base_path = load_context.asset_path().clone();
+
+        let (levels, level_identifiers) = root.levels.into_iter().try_fold(
+            (HashMap::new(), HashMap::new()),
+            |(mut levels, mut level_identifiers), path| {
+                levels.insert(path.iid, base_path.resolve_embed(&path.external_rel_path)?);
+                level_identifiers.insert(path.identifier, path.iid);
+                Ok::<_, Self::Error>((levels, level_identifiers))
+            },
+        )?;
 
         Ok(Ldtk {
             iid: root.iid,
-            bg_color: root.bg_color,
-            levels: root.levels.into_iter().try_fold(HashMap::new(), |mut out, path| {
-                let level_path = base_path.resolve_embed(path.external_rel_path)?;
+            levels,
+            level_identifiers,
+            tilesets: root.defs.tilesets.into_iter().try_fold(HashMap::new(), |mut out, tileset| {
+                out.insert(tileset.uid, LdtkTileset {
+                    tile_size: tileset.tile_grid_size,
+                });
 
-                out.insert(path.iid, load_context.load(level_path));
                 Ok::<_, Self::Error>(out)
             })?,
         })
@@ -95,8 +118,49 @@ impl AssetLoader for LdtkLoader {
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct Level {
     iid: Uuid,
+    #[serde(rename = "__bgColor", deserialize_with = "de_color")]
+    bg_color: Srgba,
+    layer_instances: Vec<LayerInstance>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct LayerInstance {
+    #[serde(rename = "__identifier")]
+    id: String,
+    #[serde(rename = "__cWid")]
+    width: u32,
+    #[serde(rename = "__cHei")]
+    height: u32,
+    #[serde(rename = "__gridSize")]
+    grid_size: u32,
+    #[serde(flatten)]
+    data: LayerInstanceData,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all_fields = "camelCase", tag = "__type")]
+enum LayerInstanceData {
+    IntGrid {
+        int_grid_csv: Vec<u32>,
+        auto_layer_tiles: Option<Vec<TileInstance>>,
+        #[serde(rename = "__tilesetDefUid")]
+        tileset: Option<u32>,
+        #[serde(rename = "__tilesetRelPath")]
+        tileset_image: String,
+    },
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct TileInstance {
+    a: f32,
+    px: [u32; 2],
+    src: [u32; 2],
+    t: u32,
 }
 
 #[derive(Debug, Copy, Clone, Default)]
@@ -116,8 +180,58 @@ impl AssetLoader for LdtkLevelLoader {
         reader.read_to_string(&mut file).await?;
 
         let level: Level = serde_json::from_str(&file)?;
+        let base_path = load_context.asset_path().parent().ok_or(LdtkError::MissingParentDirectory)?;
 
-        Ok(LdtkLevel { iid: level.iid })
+        Ok(LdtkLevel {
+            iid: level.iid,
+            bg_color: level.bg_color.into(),
+            layers: level.layer_instances.into_iter().try_fold(Vec::new(), |mut out, layer| {
+                out.push(LdtkLayer {
+                    id: layer.id,
+                    width: layer.width,
+                    height: layer.height,
+                    grid_size: layer.grid_size,
+                    data: match layer.data {
+                        LayerInstanceData::IntGrid {
+                            int_grid_csv,
+                            auto_layer_tiles,
+                            tileset,
+                            tileset_image,
+                        } => LdtkLayerData::IntGrid {
+                            grid: int_grid_csv
+                                .into_iter()
+                                .enumerate()
+                                .map(|(i, value)| LdtkIntCell {
+                                    x: i as u32 % layer.width,
+                                    y: i as u32 / layer.width,
+                                    value,
+                                })
+                                .collect(),
+                            tiles: auto_layer_tiles
+                                .zip(tileset)
+                                .map(|(tiles, tileset)| {
+                                    Ok::<_, LdtkError>(LdtkTiles {
+                                        tileset,
+                                        tileset_image: load_context.load(base_path.resolve_embed(&tileset_image)?),
+                                        tiles: tiles
+                                            .into_iter()
+                                            .map(|tile| LdtkTile {
+                                                id: tile.t,
+                                                grid_position_px: tile.px.into(),
+                                                tileset_position_px: tile.src.into(),
+                                                alpha: tile.a,
+                                            })
+                                            .collect(),
+                                    })
+                                })
+                                .transpose()?,
+                        },
+                    },
+                });
+
+                Ok::<_, LdtkError>(out)
+            })?,
+        })
     }
 
     fn extensions(&self) -> &[&str] {

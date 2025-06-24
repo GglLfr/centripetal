@@ -116,19 +116,16 @@ impl<T: 'static + Send + Clone + Default + Serialize + for<'de> Deserialize<'de>
 pub struct WindowConfig {
     pub present_mode: PresentMode,
     pub mode: WindowMode,
-    width: u32,
-    height: u32,
-    position: WindowPosition,
 }
 
 impl Default for WindowConfig {
     fn default() -> Self {
         Self {
-            width: 1024,
-            height: 800,
             present_mode: PresentMode::AutoVsync,
+            #[cfg(not(feature = "dev"))]
+            mode: WindowMode::BorderlessFullscreen(MonitorSelection::Current),
+            #[cfg(feature = "dev")]
             mode: WindowMode::Windowed,
-            position: WindowPosition::Automatic,
         }
     }
 }
@@ -137,11 +134,6 @@ impl WindowConfig {
     pub fn update_from(&mut self, window: &Window) {
         self.present_mode = window.present_mode;
         self.mode = window.mode;
-
-        let UVec2 { x, y } = window.physical_size();
-        self.width = x;
-        self.height = y;
-        self.position = if let pos @ WindowPosition::At(..) = window.position { pos } else { WindowPosition::Automatic };
     }
 
     pub fn update_to(&self, window: &mut Window) {
@@ -178,15 +170,17 @@ impl Plugin for ConfigPlugin {
         .expect("`ready()` should ensure `ConfigTask::is_finished()`")
         {
             Ok((window_conf,)) => {
+                let mut window = Window {
+                    present_mode: window_conf.present_mode,
+                    resolution: WindowResolution::new(1280., 800.),
+                    title: "Centripetal".into(),
+                    visible: false,
+                    ..default()
+                };
+                window.set_maximized(true);
+
                 let id = world
-                    .spawn((PrimaryWindow, Window {
-                        present_mode: window_conf.present_mode,
-                        position: window_conf.position,
-                        resolution: WindowResolution::new(window_conf.width as f32, window_conf.height as f32),
-                        title: "Centripetal".into(),
-                        visible: false,
-                        ..default()
-                    }))
+                    .spawn((PrimaryWindow, window))
                     .observe(
                         |trigger: Trigger<OnRemove, Window>,
                          query: Query<&Window>,
