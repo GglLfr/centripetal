@@ -1,7 +1,8 @@
 use std::io;
 
 use bevy::{
-    asset::{AssetLoader, AsyncReadExt, LoadContext, ParseAssetPathError, io::Reader, uuid::Uuid},
+    asset::{AssetLoader, AsyncReadExt, LoadContext, ParseAssetPathError, RenderAssetUsages, io::Reader, uuid::Uuid},
+    image::ImageLoaderSettings,
     platform::collections::HashMap,
     prelude::*,
 };
@@ -219,7 +220,12 @@ impl AssetLoader for LdtkLevelLoader {
                                 .map(|(tiles, tileset)| {
                                     Ok::<_, LdtkError>(LdtkTiles {
                                         tileset,
-                                        tileset_image: load_context.load(base_path.resolve_embed(&tileset_image)?),
+                                        tileset_image: load_context
+                                            .loader()
+                                            .with_settings(|settings: &mut ImageLoaderSettings| {
+                                                settings.asset_usage = RenderAssetUsages::RENDER_WORLD;
+                                            })
+                                            .load(base_path.resolve_embed(&tileset_image)?),
                                         tiles: tiles
                                             .into_iter()
                                             .map(|tile| LdtkTile {

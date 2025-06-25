@@ -65,7 +65,6 @@ fn dev_init(
 
     commands.spawn((
         Camera2d,
-        Msaa::Off,
         Projection::Orthographic(OrthographicProjection {
             scaling_mode: ScalingMode::AutoMax {
                 max_width: 1920.,
