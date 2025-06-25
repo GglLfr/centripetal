@@ -1,13 +1,15 @@
 use bevy::{
     asset::{LoadState, RecursiveDependencyLoadState, uuid::Uuid},
     prelude::*,
+    render::sync_world::SyncToRenderWorld,
 };
+use bevy_ecs_tilemap::prelude::*;
 use iyes_progress::ProgressEntry;
 
 use crate::{
     asset::{
         LdtkWorld,
-        ldtk::{LdtkLayerData, LdtkLevel},
+        ldtk::{Ldtk, LdtkLayer, LdtkLayerData, LdtkLevel, LdtkTiles},
     },
     logic::InGameState,
 };
@@ -29,6 +31,11 @@ pub struct LevelLayer {
 
 impl LevelLayer {
     pub const MAIN: &'static str = "layer_main";
+}
+
+#[derive(Debug, Copy, Clone, Component)]
+pub struct LevelTile {
+    pub id: u32,
 }
 
 pub fn handle_load_level_event(
@@ -58,6 +65,7 @@ pub fn handle_load_level_progress(
     server: Res<AssetServer>,
     mut level_handles: Query<(Entity, &LevelHandle, &mut LevelSpawned)>,
     levels: Res<Assets<LdtkLevel>>,
+    world: LdtkWorld,
 ) -> Result {
     let mut all_done = 0;
     let mut all_total = 0;
@@ -81,23 +89,25 @@ pub fn handle_load_level_progress(
             let level = levels.get(handle.id()).ok_or("Level asset unloaded")?;
             commands.insert_resource(ClearColor(level.bg_color));
 
-            commands.entity(e).with_children(|children| {
-                for layer in &level.layers {
-                    children
-                        .spawn(LevelLayer { id: layer.id.clone() })
-                        .with_children(|layer_children| match &layer.data {
-                            LdtkLayerData::IntGrid { grid, tiles } => {
-                                for &val in grid {
-                                    layer_children.spawn(val);
-                                }
-
-                                if let Some(tiles) = tiles {
-                                    //
-                                }
+            for layer in &level.layers {
+                let mut layer_entity = commands.spawn(LevelLayer { id: layer.id.clone() });
+                match &layer.data {
+                    LdtkLayerData::IntGrid { grid, tiles } => {
+                        layer_entity.with_children(|layer_children| {
+                            for &val in grid {
+                                layer_children.spawn(val);
                             }
                         });
+
+                        if let Some(tiles) = tiles {
+                            spawn_tilemap(&mut layer_entity, tiles, layer, world.get())?;
+                        }
+                    }
                 }
-            });
+
+                let layer_entity = layer_entity.id();
+                commands.entity(e).add_child(layer_entity);
+            }
         }
 
         all_done += if done { 1 } else { 0 };
@@ -105,5 +115,71 @@ pub fn handle_load_level_progress(
     }
 
     tracker.set_progress(all_done, all_total);
+    Ok(())
+}
+
+fn spawn_tilemap(layer_entity: &mut EntityCommands, tiles: &LdtkTiles, layer: &LdtkLayer, world: &Ldtk) -> Result {
+    let layer_entity_id = layer_entity.id();
+    let tileset = world
+        .tilesets
+        .get(&tiles.tileset)
+        .ok_or_else(|| format!("Tileset {} not found", tiles.tileset))?;
+    let size = TilemapSize {
+        x: layer.width,
+        y: layer.height,
+    };
+
+    let mut storage = TileStorage::empty(size);
+    layer_entity.with_children(|layer_children| {
+        for &tile in &tiles.tiles {
+            let tile_pos = tile.grid_position_px / layer.grid_size;
+            let tile_pos = TilePos::new(tile_pos.x, tile_pos.y);
+
+            storage.set(
+                &tile_pos,
+                layer_children
+                    .spawn((LevelTile { id: tile.id }, TileBundle {
+                        position: tile_pos,
+                        texture_index: TileTextureIndex(
+                            (tile.tileset_position_px.y * tileset.width + tile.tileset_position_px.x) / tileset.tile_size,
+                        ),
+                        tilemap_id: TilemapId(layer_entity_id),
+                        visible: default(),
+                        flip: default(),
+                        color: TileColor(Srgba::new(1., 1., 1., tile.alpha).into()),
+                        old_position: TilePosOld(tile_pos),
+                        sync: SyncToRenderWorld,
+                    }))
+                    .id(),
+            );
+        }
+    });
+
+    layer_entity.insert(TilemapBundle {
+        grid_size: TilemapGridSize {
+            x: layer.grid_size as f32,
+            y: layer.grid_size as f32,
+        },
+        map_type: TilemapType::Square,
+        size,
+        spacing: TilemapSpacing::zero(),
+        storage,
+        texture: TilemapTexture::Single(tiles.tileset_image.clone_weak()),
+        tile_size: TilemapTileSize {
+            x: tileset.tile_size as f32,
+            y: tileset.tile_size as f32,
+        },
+        transform: default(),
+        global_transform: default(),
+        render_settings: default(),
+        visibility: default(),
+        inherited_visibility: default(),
+        view_visibility: default(),
+        frustum_culling: default(),
+        material: MaterialTilemapHandle(Handle::<StandardTilemapMaterial>::default()),
+        sync: SyncToRenderWorld,
+        anchor: default(),
+    });
+
     Ok(())
 }

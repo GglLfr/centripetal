@@ -3,7 +3,6 @@ use bevy::{
     platform::collections::HashMap,
     prelude::*,
 };
-use bevy_ecs_tilemap::prelude::*;
 
 mod loader;
 
@@ -20,6 +19,8 @@ pub struct Ldtk {
 #[derive(Debug)]
 pub struct LdtkTileset {
     pub tile_size: u32,
+    pub width: u32,
+    pub height: u32,
 }
 
 #[derive(Debug, TypePath)]
@@ -93,117 +94,3 @@ impl Plugin for LdtkPlugin {
             .init_asset_loader::<LdtkLevelLoader>();
     }
 }
-
-/*
-#[derive(Debug, Asset, TypePath)]
-pub struct LdtkLevel {
-    pub iid: Uuid,
-    pub layers: Vec<LdtkLayer>,
-}
-
-#[derive(Debug)]
-pub struct LdtkLayer {
-    pub iid: Uuid,
-    pub width: u32,
-    pub height: u32,
-    pub data: LdtkLayerData,
-}
-
-#[derive(Debug)]
-pub enum LdtkLayerData {
-    IntGrid {
-        grid: Vec<LdtkIntCell>,
-        tiles: Option<LdtkTiles>,
-    },
-}
-
-impl LdtkLayerData {
-    pub fn insert_to_entity<M: MaterialTilemap>(&self, entity: &mut EntityCommands, material: Handle<M>, root: &Ldtk) {}
-}
-
-#[derive(Debug, Copy, Clone, Component)]
-pub struct LdtkIntCell {
-    pub value: u32,
-    pub x: u32,
-    pub y: u32,
-}
-
-#[derive(Debug, Clone)]
-pub struct LdtkTiles {
-    pub grid_size: TilemapGridSize,
-    pub size: TilemapSize,
-    pub tileset: u32,
-    pub tiles: Vec<LdtkTile>,
-}
-
-#[derive(Debug, Copy, Clone)]
-pub struct LdtkTile {
-    pub position: TilePos,
-    pub texture_index: TileTextureIndex,
-}
-
-impl LdtkTiles {
-    pub fn insert_to_entity<M: MaterialTilemap>(&self, entity: &mut EntityCommands, material: Handle<M>, root: &Ldtk) {
-        let Self {
-            grid_size,
-            size,
-            tileset,
-            tiles,
-        } = self.clone();
-
-        let mut storage = TileStorage::empty(size);
-        entity.with_children(|spawn| {
-            let tilemap_entity = spawn.target_entity();
-            for tile in tiles {
-                let pos = tile.position;
-                storage.set(
-                    &pos,
-                    spawn
-                        .spawn(TileBundle {
-                            position: pos,
-                            texture_index: tile.texture_index,
-                            tilemap_id: TilemapId(tilemap_entity),
-                            ..default()
-                        })
-                        .id(),
-                );
-            }
-        });
-
-        let tileset = &root.tilesets[&tileset];
-        entity.insert(MaterialTilemapBundle {
-            grid_size,
-            map_type: TilemapType::Square,
-            size,
-            spacing: TilemapSpacing::zero(),
-            storage,
-            texture: TilemapTexture::Single(tileset.image.clone_weak()),
-            tile_size: TilemapTileSize {
-                x: tileset.tile_size as f32,
-                y: tileset.tile_size as f32,
-            },
-            material: MaterialTilemapHandle(material),
-            transform: default(),
-            global_transform: default(),
-            render_settings: default(),
-            visibility: default(),
-            inherited_visibility: default(),
-            view_visibility: default(),
-            frustum_culling: default(),
-            sync: SyncToRenderWorld,
-            anchor: TilemapAnchor::None,
-        });
-    }
-}
-
-#[derive(Debug, Copy, Clone, Default)]
-pub struct LdtkPlugin;
-impl Plugin for LdtkPlugin {
-    fn build(&self, app: &mut App) {
-        app.init_asset::<Ldtk>()
-            .init_asset::<LdtkLevel>()
-            .init_asset_loader::<LdtkLoader>()
-            .init_asset_loader::<LdtkLevelLoader>();
-    }
-}
-*/

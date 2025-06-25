@@ -31,8 +31,11 @@ struct Definitions {
 #[serde(rename_all = "camelCase")]
 struct Tileset {
     uid: u32,
-    rel_path: String,
     tile_grid_size: u32,
+    #[serde(rename = "__cWid")]
+    width: u32,
+    #[serde(rename = "__cHei")]
+    height: u32,
 }
 
 #[derive(Debug, Deserialize)]
@@ -105,6 +108,8 @@ impl AssetLoader for LdtkLoader {
             tilesets: root.defs.tilesets.into_iter().try_fold(HashMap::new(), |mut out, tileset| {
                 out.insert(tileset.uid, LdtkTileset {
                     tile_size: tileset.tile_grid_size,
+                    width: tileset.width,
+                    height: tileset.height,
                 });
 
                 Ok::<_, Self::Error>(out)
@@ -186,6 +191,8 @@ impl AssetLoader for LdtkLevelLoader {
             iid: level.iid,
             bg_color: level.bg_color.into(),
             layers: level.layer_instances.into_iter().try_fold(Vec::new(), |mut out, layer| {
+                // Convert Y+ bottom to Y+ top.
+                let top = (layer.height - 1) * layer.grid_size;
                 out.push(LdtkLayer {
                     id: layer.id,
                     width: layer.width,
@@ -217,7 +224,7 @@ impl AssetLoader for LdtkLevelLoader {
                                             .into_iter()
                                             .map(|tile| LdtkTile {
                                                 id: tile.t,
-                                                grid_position_px: tile.px.into(),
+                                                grid_position_px: uvec2(tile.px[0], top - tile.px[1]),
                                                 tileset_position_px: tile.src.into(),
                                                 alpha: tile.a,
                                             })
