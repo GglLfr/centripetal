@@ -1,7 +1,7 @@
 use std::io;
 
 use bevy::{
-    asset::{AssetLoader, AsyncReadExt, LoadContext, ParseAssetPathError, RenderAssetUsages, io::Reader, uuid::Uuid},
+    asset::{AssetLoader, AsyncReadExt, LoadContext, ParseAssetPathError, RenderAssetUsages, io::Reader},
     image::ImageLoaderSettings,
     platform::collections::HashMap,
     prelude::*,
@@ -17,7 +17,6 @@ use crate::asset::ldtk::{Ldtk, LdtkIntCell, LdtkLayer, LdtkLayerData, LdtkLevel,
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct Root {
-    iid: Uuid,
     defs: Definitions,
     levels: Vec<LevelPath>,
 }
@@ -42,7 +41,6 @@ struct Tileset {
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct LevelPath {
-    iid: Uuid,
     identifier: String,
     external_rel_path: String,
 }
@@ -93,19 +91,13 @@ impl AssetLoader for LdtkLoader {
         let root: Root = serde_json::from_str(&file)?;
         let base_path = load_context.asset_path().clone();
 
-        let (levels, level_identifiers) = root.levels.into_iter().try_fold(
-            (HashMap::new(), HashMap::new()),
-            |(mut levels, mut level_identifiers), path| {
-                levels.insert(path.iid, base_path.resolve_embed(&path.external_rel_path)?);
-                level_identifiers.insert(path.identifier, path.iid);
-                Ok::<_, Self::Error>((levels, level_identifiers))
-            },
-        )?;
+        let levels = root.levels.into_iter().try_fold(HashMap::new(), |mut levels, path| {
+            levels.insert(path.identifier, base_path.resolve_embed(&path.external_rel_path)?);
+            Ok::<_, Self::Error>(levels)
+        })?;
 
         Ok(Ldtk {
-            iid: root.iid,
             levels,
-            level_identifiers,
             tilesets: root.defs.tilesets.into_iter().try_fold(HashMap::new(), |mut out, tileset| {
                 out.insert(tileset.uid, LdtkTileset {
                     tile_size: tileset.tile_grid_size,
@@ -126,7 +118,6 @@ impl AssetLoader for LdtkLoader {
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct Level {
-    iid: Uuid,
     #[serde(rename = "__bgColor", deserialize_with = "de_color")]
     bg_color: Srgba,
     layer_instances: Vec<LayerInstance>,
@@ -150,6 +141,7 @@ struct LayerInstance {
 #[derive(Debug, Deserialize)]
 #[serde(rename_all_fields = "camelCase", tag = "__type")]
 enum LayerInstanceData {
+    Entities,
     IntGrid {
         int_grid_csv: Vec<u32>,
         auto_layer_tiles: Option<Vec<TileInstance>>,
@@ -189,7 +181,6 @@ impl AssetLoader for LdtkLevelLoader {
         let base_path = load_context.asset_path().parent().ok_or(LdtkError::MissingParentDirectory)?;
 
         Ok(LdtkLevel {
-            iid: level.iid,
             bg_color: level.bg_color.into(),
             layers: level.layer_instances.into_iter().try_fold(Vec::new(), |mut out, layer| {
                 // Convert Y+ bottom to Y+ top.
@@ -200,6 +191,7 @@ impl AssetLoader for LdtkLevelLoader {
                     height: layer.height,
                     grid_size: layer.grid_size,
                     data: match layer.data {
+                        LayerInstanceData::Entities => LdtkLayerData::Entities,
                         LayerInstanceData::IntGrid {
                             int_grid_csv,
                             auto_layer_tiles,

@@ -1,5 +1,5 @@
 use bevy::{
-    asset::{AssetPath, UntypedAssetId, VisitAssetDependencies, uuid::Uuid},
+    asset::{AssetPath, UntypedAssetId, VisitAssetDependencies},
     platform::collections::HashMap,
     prelude::*,
 };
@@ -10,9 +10,7 @@ pub use loader::*;
 
 #[derive(Debug, Asset, TypePath)]
 pub struct Ldtk {
-    pub iid: Uuid,
-    pub levels: HashMap<Uuid, AssetPath<'static>>,
-    pub level_identifiers: HashMap<String, Uuid>,
+    pub levels: HashMap<String, AssetPath<'static>>,
     pub tilesets: HashMap<u32, LdtkTileset>,
 }
 
@@ -25,7 +23,6 @@ pub struct LdtkTileset {
 
 #[derive(Debug, TypePath)]
 pub struct LdtkLevel {
-    pub iid: Uuid,
     pub bg_color: Color,
     pub layers: Vec<LdtkLayer>,
 }
@@ -35,6 +32,7 @@ impl VisitAssetDependencies for LdtkLevel {
     fn visit_dependencies(&self, visit: &mut impl FnMut(UntypedAssetId)) {
         for layer in &self.layers {
             match &layer.data {
+                LdtkLayerData::Entities => {}
                 LdtkLayerData::IntGrid { tiles, .. } => {
                     if let Some(tiles) = tiles {
                         visit(tiles.tileset_image.id().untyped());
@@ -56,6 +54,7 @@ pub struct LdtkLayer {
 
 #[derive(Debug)]
 pub enum LdtkLayerData {
+    Entities,
     IntGrid {
         grid: Vec<LdtkIntCell>,
         tiles: Option<LdtkTiles>,

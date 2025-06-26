@@ -1,5 +1,7 @@
+use std::borrow::Cow;
+
 use bevy::{
-    asset::{LoadState, RecursiveDependencyLoadState, uuid::Uuid},
+    asset::{LoadState, RecursiveDependencyLoadState},
     prelude::*,
     render::sync_world::SyncToRenderWorld,
 };
@@ -14,8 +16,8 @@ use crate::{
     logic::InGameState,
 };
 
-#[derive(Debug, Copy, Clone, Event, Deref, DerefMut)]
-pub struct LoadLevelEvent(pub Uuid);
+#[derive(Debug, Clone, Event, Deref, DerefMut)]
+pub struct LoadLevelEvent(pub Cow<'static, str>);
 
 #[derive(Debug, Clone, Component, Deref, DerefMut)]
 #[require(LevelSpawned)]
@@ -30,7 +32,7 @@ pub struct LevelLayer {
 }
 
 impl LevelLayer {
-    pub const MAIN: &'static str = "layer_main";
+    pub const TILES_MAIN: &'static str = "tiles_main";
 }
 
 #[derive(Debug, Copy, Clone, Component)]
@@ -45,13 +47,13 @@ pub fn handle_load_level_event(
     world: LdtkWorld,
     mut state: ResMut<NextState<InGameState>>,
 ) -> Result {
-    let Some(&event) = events.read().last() else { return Ok(()) };
+    let Some(event) = events.read().last() else { return Ok(()) };
     commands.spawn(LevelHandle(
         server.load(
             world
                 .levels
-                .get(&*event)
-                .ok_or_else(|| format!("Level {} not found", event.as_hyphenated()))?,
+                .get(event.as_ref())
+                .ok_or_else(|| format!("Level {} not found", event.as_ref()))?,
         ),
     ));
 
@@ -92,6 +94,7 @@ pub fn handle_load_level_progress(
             for layer in &level.layers {
                 let mut layer_entity = commands.spawn(LevelLayer { id: layer.id.clone() });
                 match &layer.data {
+                    LdtkLayerData::Entities => {}
                     LdtkLayerData::IntGrid { grid, tiles } => {
                         layer_entity.with_children(|layer_children| {
                             for &val in grid {

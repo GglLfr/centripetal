@@ -4,7 +4,7 @@ use bevy_ecs_tilemap::TilemapPlugin;
 use bevy_framepace::FramepacePlugin;
 
 use crate::{
-    asset::{LevelUuids, SetupAssetPlugin},
+    asset::SetupAssetPlugin,
     logic::{InGameState, LoadLevelEvent, LogicPlugin},
 };
 
@@ -54,14 +54,9 @@ fn main() -> AppExit {
         .run()
 }
 
-fn dev_init(
-    mut commands: Commands,
-    mut state: ResMut<NextState<GameState>>,
-    mut load: EventWriter<LoadLevelEvent>,
-    uuids: Res<LevelUuids>,
-) {
+fn dev_init(mut commands: Commands, mut state: ResMut<NextState<GameState>>, mut load: EventWriter<LoadLevelEvent>) {
     state.set(GameState::InGame);
-    load.write(LoadLevelEvent(uuids.initial));
+    load.write(LoadLevelEvent("penumbra_wing_l".into()));
 
     commands.spawn((
         Camera2d,
@@ -91,5 +86,5 @@ fn move_camera(mut trns: Single<&mut Transform, With<Camera2d>>, input: Res<Butt
         x += 1.
     }
 
-    trns.translation += Vec3::new(x, y, 0.) * time.delta_secs() * 5.;
+    trns.translation += Vec3::new(x, y, 0.) * time.delta_secs() * 3.5;
 }

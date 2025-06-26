@@ -2,8 +2,7 @@ use std::ops::Deref;
 
 use async_channel::{Receiver, Sender};
 use bevy::{
-    asset::uuid::Uuid,
-    ecs::system::{SystemParam, SystemState},
+    ecs::system::SystemParam,
     prelude::*,
     render::{Render, RenderApp, render_asset::prepare_assets, texture::GpuImage},
     tasks::ComputeTaskPool,
@@ -32,8 +31,7 @@ impl Plugin for SetupAssetPlugin {
             .add_loading_state(
                 LoadingState::new(GameState::Loading)
                     .load_collection::<WorldHandle>()
-                    .load_collection::<EntityAssets>()
-                    .finally_init_resource::<LevelUuids>(),
+                    .load_collection::<EntityAssets>(),
             )
             .add_plugins(ProgressPlugin::<GameState>::new().with_state_transition(GameState::Loading, GameState::Menu));
 
@@ -96,28 +94,6 @@ impl Deref for LdtkWorld<'_> {
 
     fn deref(&self) -> &Self::Target {
         self.get()
-    }
-}
-
-#[derive(Debug, Copy, Clone, Resource)]
-pub struct LevelUuids {
-    /// Codename `sanctuary_chapel_nw`.
-    pub initial: Uuid,
-}
-
-impl FromWorld for LevelUuids {
-    fn from_world(world: &mut World) -> Self {
-        let world = &*SystemState::<LdtkWorld>::new(world).get(world);
-        let load = |name| {
-            *world
-                .level_identifiers
-                .get(name)
-                .unwrap_or_else(|| panic!("Level with codename {name} not found"))
-        };
-
-        Self {
-            initial: load("sanctuary_chapel_nw"),
-        }
     }
 }
 
