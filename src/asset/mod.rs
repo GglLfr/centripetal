@@ -11,8 +11,8 @@ use bevy_asset_loader::prelude::*;
 use iyes_progress::ProgressPlugin;
 
 use crate::{
-    GameState,
     asset::ldtk::{Ldtk, LdtkPlugin},
+    logic::GameState,
 };
 
 pub mod ldtk;

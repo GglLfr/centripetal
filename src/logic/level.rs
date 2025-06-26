@@ -39,6 +39,11 @@ pub struct LevelLayer {
     pub id: String,
 }
 
+impl LevelLayer {
+    pub const ENTITIES: &'static str = "entities";
+    pub const TILES_MAIN: &'static str = "tiles_main";
+}
+
 #[derive(Debug, Clone, Component)]
 #[require(Transform, Visibility)]
 pub struct LevelEntity {
@@ -195,7 +200,6 @@ pub fn handle_load_level_progress(
     tracker: ProgressEntry<InGameState>,
     server: Res<AssetServer>,
     mut level_handles: Query<(Entity, &LevelHandle, &mut LevelSpawned), Without<LevelUnload>>,
-    to_be_unloaded: Query<Entity, With<LevelUnload>>,
     levels: Res<Assets<LdtkLevel>>,
     world: LdtkWorld,
 ) -> Result {
@@ -266,13 +270,6 @@ pub fn handle_load_level_progress(
 
         all_done += if done { 1 } else { 0 };
         all_total += 1;
-    }
-
-    // Unload previous levels at the very last so some asset handles could be shared.
-    if all_done == all_total {
-        for e in to_be_unloaded {
-            commands.entity(e).despawn();
-        }
     }
 
     tracker.set_progress(all_done, all_total);
@@ -353,11 +350,16 @@ pub fn handle_load_level_end(
         Query<(&LevelLayer, &Children), Added<LevelLayer>>,
         Query<(Entity, &LevelEntity)>,
         Query<(Entity, &LevelIntCell)>,
+        ResMut<NextState<InGameState>>,
+        Query<Entity, With<LevelUnload>>,
     )>,
     mut entity_targets: Local<HashMap<SystemId<InRef<[Entity]>, Result>, Vec<Entity>>>,
     mut tile_targets: Local<HashMap<SystemId<InRef<[Entity]>, Result>, Vec<Entity>>>,
+    mut unload_levels: Local<Vec<Entity>>,
 ) -> Result {
-    let (entity_creators, int_cell_creators, spawned_layers, entities, int_cells) = state.get_mut(world);
+    let (entity_creators, int_cell_creators, spawned_layers, entities, int_cells, mut state, to_be_unloaded) =
+        state.get_mut(world);
+
     for (layer, layer_children) in &spawned_layers {
         if let Some(creators) = entity_creators.0.get(&layer.id) {
             for (entity_id, entity) in entities.iter_many(layer_children) {
@@ -374,6 +376,14 @@ pub fn handle_load_level_end(
                 }
             }
         }
+    }
+
+    // Unload previous levels at the very last so some asset handles could be shared.
+    state.set(InGameState::Resumed);
+    unload_levels.extend(to_be_unloaded);
+
+    for e in unload_levels.drain(..) {
+        world.try_despawn(e)?;
     }
 
     for (&id, entities) in &mut entity_targets {
