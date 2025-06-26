@@ -40,7 +40,6 @@ features = [
     "bevy_log",
     "bevy_picking",
     "bevy_render",
-    "bevy_scene",
     "bevy_sprite",
     "bevy_state",
     "bevy_text",

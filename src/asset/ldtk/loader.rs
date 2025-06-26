@@ -6,13 +6,16 @@ use bevy::{
     platform::collections::HashMap,
     prelude::*,
 };
+use blocking::unblock;
 use derive_more::{Display, Error, From};
 use serde::{
     Deserialize, Deserializer,
     de::{self, Visitor},
 };
 
-use crate::asset::ldtk::{Ldtk, LdtkIntCell, LdtkLayer, LdtkLayerData, LdtkLevel, LdtkTile, LdtkTiles, LdtkTileset};
+use crate::asset::ldtk::{
+    Ldtk, LdtkEntity, LdtkEntityField, LdtkIntCell, LdtkLayer, LdtkLayerData, LdtkLevel, LdtkTile, LdtkTiles, LdtkTileset,
+};
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -88,7 +91,7 @@ impl AssetLoader for LdtkLoader {
         let mut file = String::new();
         reader.read_to_string(&mut file).await?;
 
-        let root: Root = serde_json::from_str(&file)?;
+        let root: Root = unblock(move || serde_json::from_str(&file)).await?;
         let base_path = load_context.asset_path().clone();
 
         let levels = root.levels.into_iter().try_fold(HashMap::new(), |mut levels, path| {
@@ -141,7 +144,9 @@ struct LayerInstance {
 #[derive(Debug, Deserialize)]
 #[serde(rename_all_fields = "camelCase", tag = "__type")]
 enum LayerInstanceData {
-    Entities,
+    Entities {
+        entity_instances: Vec<EntityInstance>,
+    },
     IntGrid {
         int_grid_csv: Vec<u32>,
         auto_layer_tiles: Option<Vec<TileInstance>>,
@@ -149,6 +154,41 @@ enum LayerInstanceData {
         tileset: Option<u32>,
         #[serde(rename = "__tilesetRelPath")]
         tileset_image: String,
+    },
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct EntityInstance {
+    #[serde(rename = "__identifier")]
+    id: String,
+    px: [u32; 2],
+    field_instances: Vec<FieldInstance>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct FieldInstance {
+    #[serde(rename = "__identifier")]
+    id: String,
+    #[serde(flatten)]
+    data: FieldInstanceData,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all_fields = "camelCase", tag = "__type")]
+enum FieldInstanceData {
+    Int {
+        #[serde(rename = "__value")]
+        value: Option<u32>,
+    },
+    Float {
+        #[serde(rename = "__value")]
+        value: Option<f32>,
+    },
+    String {
+        #[serde(rename = "__value")]
+        value: Option<String>,
     },
 }
 
@@ -177,21 +217,42 @@ impl AssetLoader for LdtkLevelLoader {
         let mut file = String::new();
         reader.read_to_string(&mut file).await?;
 
-        let level: Level = serde_json::from_str(&file)?;
+        let level: Level = unblock(move || serde_json::from_str(&file)).await?;
         let base_path = load_context.asset_path().parent().ok_or(LdtkError::MissingParentDirectory)?;
 
         Ok(LdtkLevel {
             bg_color: level.bg_color.into(),
             layers: level.layer_instances.into_iter().try_fold(Vec::new(), |mut out, layer| {
                 // Convert Y+ bottom to Y+ top.
-                let top = (layer.height - 1) * layer.grid_size;
+                let top_grid = layer.height - 1;
+                let top_px = top_grid * layer.grid_size;
+
                 out.push(LdtkLayer {
                     id: layer.id,
                     width: layer.width,
                     height: layer.height,
                     grid_size: layer.grid_size,
                     data: match layer.data {
-                        LayerInstanceData::Entities => LdtkLayerData::Entities,
+                        LayerInstanceData::Entities { entity_instances } => LdtkLayerData::Entities(
+                            entity_instances
+                                .into_iter()
+                                .map(|e| LdtkEntity {
+                                    id: e.id,
+                                    grid_position_px: uvec2(e.px[0], top_px - e.px[1]),
+                                    fields: e
+                                        .field_instances
+                                        .into_iter()
+                                        .filter_map(|f| {
+                                            Some((f.id, match f.data {
+                                                FieldInstanceData::Int { value } => LdtkEntityField::Int(value?),
+                                                FieldInstanceData::Float { value } => LdtkEntityField::Float(value?),
+                                                FieldInstanceData::String { value } => LdtkEntityField::String(value?),
+                                            }))
+                                        })
+                                        .collect(),
+                                })
+                                .collect(),
+                        ),
                         LayerInstanceData::IntGrid {
                             int_grid_csv,
                             auto_layer_tiles,
@@ -203,7 +264,7 @@ impl AssetLoader for LdtkLevelLoader {
                                 .enumerate()
                                 .map(|(i, value)| LdtkIntCell {
                                     x: i as u32 % layer.width,
-                                    y: i as u32 / layer.width,
+                                    y: top_grid - i as u32 / layer.width,
                                     value,
                                 })
                                 .collect(),
@@ -222,7 +283,7 @@ impl AssetLoader for LdtkLevelLoader {
                                             .into_iter()
                                             .map(|tile| LdtkTile {
                                                 id: tile.t,
-                                                grid_position_px: uvec2(tile.px[0], top - tile.px[1]),
+                                                grid_position_px: uvec2(tile.px[0], top_px - tile.px[1]),
                                                 tileset_position_px: tile.src.into(),
                                                 alpha: tile.a,
                                             })

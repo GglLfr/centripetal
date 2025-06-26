@@ -25,6 +25,8 @@ impl Plugin for LogicPlugin {
                 ProgressPlugin::<InGameState>::new().with_state_transition(InGameState::Loading, InGameState::Resumed),
             )
             .add_event::<LoadLevelEvent>()
+            .init_resource::<LevelEntities>()
+            .init_resource::<LevelIntCells>()
             .add_systems(
                 Update,
                 (
@@ -33,6 +35,7 @@ impl Plugin for LogicPlugin {
                         .after(handle_load_level_event)
                         .run_if(in_state(InGameState::Loading)),
                 ),
-            );
+            )
+            .add_systems(OnExit(InGameState::Loading), handle_load_level_end);
     }
 }
