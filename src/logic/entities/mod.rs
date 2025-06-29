@@ -1,11 +1,15 @@
 use avian2d::{dynamics::integrator::IntegrationSet, prelude::*};
 use bevy::prelude::*;
+use leafwing_input_manager::{plugin::InputManagerSystem, prelude::*};
 
 #[cfg(feature = "dev")]
 use crate::logic::entities::penumbra::draw_attractor_radius;
 use crate::logic::{
     LevelApp, LevelLayer,
-    entities::penumbra::{Attractor, SelenePenumbra, apply_attractor_accels, detect_attracted_entities},
+    entities::penumbra::{
+        Attractor, AttractorHoverAction, SelenePenumbra, apply_attractor_accels, copy_player_to_hover_state,
+        detect_attracted_entities,
+    },
 };
 
 pub mod penumbra;
@@ -14,8 +18,12 @@ pub mod penumbra;
 pub struct EntitiesPlugin;
 impl Plugin for EntitiesPlugin {
     fn build(&self, app: &mut App) {
-        app.register_level_entity::<SelenePenumbra>(LevelLayer::ENTITIES, "selene_penumbra")
+        app
+            // Penumbra entities.
+            .add_plugins(InputManagerPlugin::<AttractorHoverAction>::default())
             .register_level_entity::<Attractor>(LevelLayer::ENTITIES, "attractor")
+            .register_level_entity::<SelenePenumbra>(LevelLayer::ENTITIES, "selene_penumbra")
+            .add_systems(PreUpdate, copy_player_to_hover_state.after(InputManagerSystem::ManualControl))
             .add_systems(
                 SubstepSchedule,
                 apply_attractor_accels.in_set(IntegrationSet::Velocity).ambiguous_with_all(),

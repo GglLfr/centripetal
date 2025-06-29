@@ -33,14 +33,16 @@ fn main() -> AppExit {
                 primary_window: None,
                 ..default()
             }),
-            ConfigPlugin,
             PhysicsPlugins::default().with_length_unit(16.),
             #[cfg(feature = "dev")]
             PhysicsDebugPlugin::default(),
             TilemapPlugin,
             FramepacePlugin,
+            SetupAssetPlugin,
+            LogicPlugin,
+            GfxPlugin,
+            ConfigPlugin,
         ))
-        .add_plugins((SetupAssetPlugin, LogicPlugin, GfxPlugin))
         .add_systems(OnEnter(GameState::Menu), dev_init)
         .run()
 }

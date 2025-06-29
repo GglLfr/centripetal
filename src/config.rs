@@ -4,8 +4,10 @@ use std::{
 };
 
 use async_fs::File;
+#[cfg(not(feature = "dev"))]
+use bevy::asset::AsyncReadExt;
 use bevy::{
-    asset::{AsyncReadExt, AsyncWriteExt, ron},
+    asset::{AsyncWriteExt, ron},
     prelude::*,
     tasks::{ConditionalSendFuture, IoTaskPool, Task, futures::check_ready},
     window::{PresentMode, PrimaryWindow, WindowMode, WindowResolution},
@@ -13,7 +15,10 @@ use bevy::{
 };
 use blocking::unblock;
 use directories::ProjectDirs;
+use leafwing_input_manager::prelude::*;
 use serde::{Deserialize, Serialize};
+
+use crate::logic::PlayerAction;
 
 #[derive(Debug, Clone, Resource)]
 pub struct Dirs {
@@ -55,37 +60,51 @@ pub struct Config<T: 'static + Send + Clone + Default + Serialize + for<'de> Des
 impl<T: 'static + Send + Clone + Default + Serialize + for<'de> Deserialize<'de>> Config<T> {
     pub fn new<P: Into<PathBuf>>(path: P) -> impl ConditionalSendFuture<Output = io::Result<Self>> + use<T, P> {
         let path = path.into();
-        async move {
-            let create_default = async |path: PathBuf| {
-                let (inner, inner_serialized) = unblock(|| {
-                    let inner = T::default();
-                    ron::ser::to_string_pretty(&inner, default()).map(|str| (inner, str))
-                })
-                .await
-                .map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, e))?;
 
-                let mut file = File::create(&path).await?;
-                file.write_all(inner_serialized.as_bytes()).await?;
-                file.sync_all().await?;
+        #[cfg(not(feature = "dev"))]
+        {
+            async move {
+                let create_default = async |path: PathBuf| {
+                    let (inner, inner_serialized) = unblock(|| {
+                        let inner = T::default();
+                        ron::ser::to_string_pretty(&inner, default()).map(|str| (inner, str))
+                    })
+                    .await
+                    .map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, e))?;
 
-                Ok(Config { inner, path })
-            };
+                    let mut file = File::create(&path).await?;
+                    file.write_all(inner_serialized.as_bytes()).await?;
+                    file.sync_all().await?;
 
-            match File::open(&path).await {
-                Ok(mut file) => {
-                    let mut bytes = Vec::new();
-                    file.read_to_end(&mut bytes).await?;
+                    Ok(Self { inner, path })
+                };
 
-                    match unblock(move || ron::de::from_bytes(&bytes)).await {
-                        Ok(inner) => Ok(Config { inner, path }),
-                        Err(e) => {
-                            error!("Invalid config file {}: falling back to defaults!\n{e}", path.display());
-                            create_default(path).await
+                match File::open(&path).await {
+                    Ok(mut file) => {
+                        let mut bytes = Vec::new();
+                        file.read_to_end(&mut bytes).await?;
+
+                        match unblock(move || ron::de::from_bytes(&bytes)).await {
+                            Ok(inner) => Ok(Self { inner, path }),
+                            Err(e) => {
+                                error!("Invalid config file {}: falling back to defaults!\n{e}", path.display());
+                                create_default(path).await
+                            }
                         }
                     }
+                    Err(e) if e.kind() == io::ErrorKind::NotFound => create_default(path).await,
+                    Err(e) => Err(e),
                 }
-                Err(e) if e.kind() == io::ErrorKind::NotFound => create_default(path).await,
-                Err(e) => Err(e),
+            }
+        }
+
+        #[cfg(feature = "dev")]
+        {
+            async move {
+                Ok(Self {
+                    inner: T::default(),
+                    path,
+                })
             }
         }
     }
@@ -142,8 +161,23 @@ impl WindowConfig {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, Deref, DerefMut)]
+#[serde(default)]
+pub struct PlayerKeybinds(pub InputMap<PlayerAction>);
+impl Default for PlayerKeybinds {
+    fn default() -> Self {
+        Self(
+            InputMap::default()
+                .with_dual_axis(PlayerAction::Move, VirtualDPad::wasd())
+                .with(PlayerAction::Attack, KeyCode::KeyZ)
+                .with(PlayerAction::PenumbraHoverIntensify, KeyCode::ShiftLeft)
+                .with_axis(PlayerAction::PenumbraHover, VirtualAxis::vertical_arrow_keys()),
+        )
+    }
+}
+
 #[derive(Debug, Resource)]
-struct ConfigTask(Task<io::Result<(Config<WindowConfig>,)>>);
+struct ConfigTask(Task<io::Result<(Config<WindowConfig>, Config<PlayerKeybinds>)>>);
 
 #[derive(Debug, Copy, Clone, Default)]
 pub struct ConfigPlugin;
@@ -151,8 +185,11 @@ impl Plugin for ConfigPlugin {
     fn build(&self, app: &mut App) {
         let dirs = app.world().resource::<Dirs>();
         let window = Config::new(dirs.settings.join("window.conf"));
+        let keybinds = Config::new(dirs.settings.join("keybinds.conf"));
 
-        app.insert_resource(ConfigTask(IoTaskPool::get().spawn(async move { Ok((window.await?,)) })));
+        app.insert_resource(ConfigTask(
+            IoTaskPool::get().spawn(async move { Ok((window.await?, keybinds.await?)) }),
+        ));
     }
 
     fn ready(&self, app: &App) -> bool {
@@ -169,7 +206,7 @@ impl Plugin for ConfigPlugin {
         )
         .expect("`ready()` should ensure `ConfigTask::is_finished()`")
         {
-            Ok((window_conf,)) => {
+            Ok((window_conf, keybind_conf)) => {
                 let mut window = Window {
                     present_mode: window_conf.present_mode,
                     resolution: WindowResolution::new(1280., 800.),
@@ -197,6 +234,7 @@ impl Plugin for ConfigPlugin {
 
                 let mode = window_conf.mode;
                 world.insert_resource(window_conf);
+                world.insert_resource(keybind_conf);
                 world.flush();
 
                 app.add_systems(

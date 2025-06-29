@@ -1,15 +1,18 @@
 use bevy::{prelude::*, render::camera::CameraUpdateSystem};
 use iyes_progress::ProgressPlugin;
+use leafwing_input_manager::prelude::*;
 
 use crate::logic::entities::EntitiesPlugin;
 
 pub mod entities;
 
 mod camera;
+mod control;
 mod level;
 mod penumbra;
 
 pub use camera::*;
+pub use control::*;
 pub use level::*;
 pub use penumbra::*;
 
@@ -34,7 +37,8 @@ pub enum InGameState {
 pub struct LogicPlugin;
 impl Plugin for LogicPlugin {
     fn build(&self, app: &mut App) {
-        app.init_state::<GameState>()
+        app.add_plugins(InputManagerPlugin::<PlayerAction>::default())
+            .init_state::<GameState>()
             .add_sub_state::<InGameState>()
             .add_plugins(
                 ProgressPlugin::<InGameState>::new().with_state_transition(InGameState::Loading, InGameState::Resumed),

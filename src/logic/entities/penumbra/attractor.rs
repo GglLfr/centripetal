@@ -3,6 +3,7 @@ use bevy::{
     ecs::{entity::MapEntities, query::QueryItem, system::SystemParamItem},
     prelude::*,
 };
+use leafwing_input_manager::prelude::*;
 
 use crate::logic::{FromLevelEntity, LevelEntity, PenumbraEntity};
 
@@ -14,12 +15,8 @@ pub struct Attractor {
     pub caster: Collider,
 }
 
-#[derive(Debug, Copy, Clone, Default, Component)]
-#[component(storage = "SparseSet")]
-#[require(PenumbraEntity)]
-pub struct AttractorInitial {
-    pub ccw: bool,
-}
+#[derive(Debug, Clone, Default, Component, MapEntities, Deref, DerefMut)]
+pub struct AttractedEntities(#[entities] pub Vec<Entity>);
 
 impl FromLevelEntity for Attractor {
     type Param = ();
@@ -48,8 +45,28 @@ impl FromLevelEntity for Attractor {
     }
 }
 
-#[derive(Debug, Clone, Default, Component, MapEntities, Deref, DerefMut)]
-pub struct AttractedEntities(#[entities] pub Vec<Entity>);
+#[derive(Debug, Copy, Clone, Default, Component)]
+#[component(storage = "SparseSet")]
+#[require(PenumbraEntity)]
+pub struct AttractorInitial {
+    pub ccw: bool,
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Reflect, Actionlike)]
+pub enum AttractorHoverAction {
+    Intensify,
+    #[actionlike(Axis)]
+    Maneouver,
+}
+
+#[derive(Debug, Copy, Clone, Component)]
+#[require(ActionState<AttractorHoverAction>)]
+pub struct AttractorHoverParams {
+    pub centrifugal: f32,
+    pub centripetal: f32,
+    pub centrifugal_intense: f32,
+    pub centripetal_intense: f32,
+}
 
 pub fn draw_attractor_radius(mut gizmos: Gizmos, attractors: Query<(&Position, &Attractor)>) {
     for (&pos, attractor) in &attractors {
@@ -98,19 +115,40 @@ pub fn detect_attracted_entities(
 pub fn apply_attractor_accels(
     time: Res<Time<Substeps>>,
     attractors: Query<(&Position, &Attractor, &AttractedEntities)>,
-    mut attracted: Query<(&Position, &AccumulatedTranslation, &mut LinearVelocity)>,
+    mut attracted: Query<(
+        &Position,
+        &AccumulatedTranslation,
+        Option<(&AttractorHoverParams, &ActionState<AttractorHoverAction>)>,
+        &mut LinearVelocity,
+    )>,
 ) {
     let dt = time.delta_secs();
     for (&attractor_pos, attractor, attracted_entities) in &attractors {
         let mut attracted = attracted.iter_many_mut(&**attracted_entities);
 
-        while let Some((&pos, &accum_pos, mut vel)) = attracted.fetch_next() {
+        while let Some((&pos, &accum_pos, hover, mut vel)) = attracted.fetch_next() {
             let pos = *pos + *accum_pos;
             let r_vec = *attractor_pos - pos;
             let r = r_vec.length();
 
             let gravity_accel = attractor.gravity / (r * r * r) * r_vec;
             **vel += gravity_accel * dt;
+
+            if let Some((&param, state)) = hover {
+                let intense = state.pressed(&AttractorHoverAction::Intensify);
+                let Some(axis) = state.axis_data(&AttractorHoverAction::Maneouver) else { continue };
+                if axis.value.abs() < 0.01 {
+                    continue
+                }
+
+                let hover = if axis.value > 0. {
+                    (if intense { param.centrifugal_intense } else { param.centrifugal }) * (-axis.value).max(-1.)
+                } else {
+                    (if intense { param.centripetal_intense } else { param.centripetal }) * (-axis.value).min(1.)
+                };
+
+                **vel += hover / r * r_vec * dt;
+            }
         }
     }
 }
