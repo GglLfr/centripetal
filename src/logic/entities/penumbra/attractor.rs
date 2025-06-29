@@ -1,6 +1,7 @@
 use avian2d::prelude::*;
 use bevy::{
     ecs::{entity::MapEntities, query::QueryItem, system::SystemParamItem},
+    math::VectorSpace,
     prelude::*,
 };
 use leafwing_input_manager::prelude::*;
@@ -43,6 +44,12 @@ impl FromLevelEntity for Attractor {
 
         Ok(())
     }
+}
+
+#[derive(Debug, Clone, Component)]
+pub struct AttractorPrediction {
+    pub points: Vec<Vec2>,
+    pub max_distance: f32,
 }
 
 #[derive(Debug, Copy, Clone, Default, Component)]
@@ -125,15 +132,8 @@ pub fn apply_attractor_accels(
     let dt = time.delta_secs();
     for (&attractor_pos, attractor, attracted_entities) in &attractors {
         let mut attracted = attracted.iter_many_mut(&**attracted_entities);
-
         while let Some((&pos, &accum_pos, hover, mut vel)) = attracted.fetch_next() {
-            let pos = *pos + *accum_pos;
-            let r_vec = *attractor_pos - pos;
-            let r = r_vec.length();
-
-            let gravity_accel = attractor.gravity / (r * r * r) * r_vec;
-            **vel += gravity_accel * dt;
-
+            **vel += gravity_accel(*pos + *accum_pos, *attractor_pos, attractor.gravity) * dt;
             if let Some((&param, state)) = hover {
                 let intense = state.pressed(&AttractorHoverAction::Intensify);
                 let Some(axis) = state.axis_data(&AttractorHoverAction::Maneouver) else { continue };
@@ -147,8 +147,62 @@ pub fn apply_attractor_accels(
                     (if intense { param.centripetal_intense } else { param.centripetal }) * (-axis.value).min(1.)
                 };
 
+                let r_vec = *attractor_pos - *pos;
+                let r = r_vec.length();
                 **vel += hover / r * r_vec * dt;
             }
         }
     }
+}
+
+pub fn predict_attract_trajectory(
+    time: Res<Time<Physics>>,
+    attractors: Query<(&Position, &Attractor, &AttractedEntities)>,
+    mut attracted: Query<(&Position, &LinearVelocity, &mut AttractorPrediction)>,
+) {
+    let dt = time.delta_secs() * 3.;
+    for (&attractor_pos, attractor, attracted_entities) in &attractors {
+        let g = attractor.gravity;
+        let mut attracted = attracted.iter_many_mut(&**attracted_entities);
+
+        while let Some((&pos, &vel, mut prediction)) = attracted.fetch_next() {
+            let max = prediction.max_distance;
+            let mut accum = 0.;
+
+            let mut pos = *pos;
+            let mut vel = *vel;
+
+            prediction.points.clear();
+            while accum < max {
+                vel += gravity_accel(pos, *attractor_pos, g) * dt;
+
+                let new_pos = pos + vel * dt;
+
+                accum += (new_pos - pos).length();
+                pos = new_pos;
+
+                prediction.points.push(pos);
+            }
+        }
+    }
+}
+
+pub fn draw_attract_trajectory(mut gizmos: Gizmos, attracted: Query<(&Position, &AttractorPrediction)>) {
+    for (&pos, prediction) in &attracted {
+        let mut pos = *pos;
+        for (i, &point) in prediction.points.iter().enumerate() {
+            gizmos.line_2d(
+                pos,
+                point,
+                LinearRgba::WHITE.lerp(LinearRgba::NONE, i as f32 / (prediction.points.len() - 1) as f32),
+            );
+            pos = point;
+        }
+    }
+}
+
+fn gravity_accel(pos: Vec2, attractor_pos: Vec2, gravity: f32) -> Vec2 {
+    let r_vec = attractor_pos - pos;
+    let r = r_vec.length();
+    gravity / (r * r * r) * r_vec
 }

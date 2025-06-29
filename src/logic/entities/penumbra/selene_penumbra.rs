@@ -7,7 +7,7 @@ use leafwing_input_manager::prelude::*;
 
 use crate::logic::{
     CameraTarget, FromLevelEntity, IsPlayer, LevelEntity, PenumbraEntity, PlayerAction,
-    entities::penumbra::{AttractorHoverAction, AttractorHoverParams, AttractorInitial},
+    entities::penumbra::{AttractorHoverAction, AttractorHoverParams, AttractorInitial, AttractorPrediction},
 };
 
 #[derive(Debug, Copy, Clone, Default, Component)]
@@ -29,10 +29,14 @@ impl FromLevelEntity for SelenePenumbra {
             Self,
             AttractorInitial { ccw },
             AttractorHoverParams {
-                centrifugal: 80.,
-                centripetal: 80.,
-                centrifugal_intense: 24.,
-                centripetal_intense: 24.,
+                centrifugal: 40.,
+                centripetal: 40.,
+                centrifugal_intense: 120.,
+                centripetal_intense: 120.,
+            },
+            AttractorPrediction {
+                points: Vec::new(),
+                max_distance: 640.,
             },
             Collider::circle(8.),
         ));

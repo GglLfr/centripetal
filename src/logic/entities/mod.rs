@@ -3,12 +3,12 @@ use bevy::prelude::*;
 use leafwing_input_manager::{plugin::InputManagerSystem, prelude::*};
 
 #[cfg(feature = "dev")]
-use crate::logic::entities::penumbra::draw_attractor_radius;
+use crate::logic::entities::penumbra::{draw_attract_trajectory, draw_attractor_radius};
 use crate::logic::{
     LevelApp, LevelLayer,
     entities::penumbra::{
         Attractor, AttractorHoverAction, SelenePenumbra, apply_attractor_accels, copy_player_to_hover_state,
-        detect_attracted_entities,
+        detect_attracted_entities, predict_attract_trajectory,
     },
 };
 
@@ -30,12 +30,14 @@ impl Plugin for EntitiesPlugin {
             )
             .add_systems(
                 PhysicsSchedule,
-                detect_attracted_entities
-                    .in_set(PhysicsStepSet::SpatialQuery)
+                (
+                    predict_attract_trajectory.after(SolverSet::ApplyTranslation),
+                    detect_attracted_entities.in_set(PhysicsStepSet::SpatialQuery),
+                )
                     .ambiguous_with_all(),
             );
 
         #[cfg(feature = "dev")]
-        app.add_systems(Update, draw_attractor_radius);
+        app.add_systems(Update, (draw_attractor_radius, draw_attract_trajectory));
     }
 }
