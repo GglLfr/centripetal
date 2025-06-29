@@ -186,6 +186,10 @@ enum FieldInstanceData {
         #[serde(rename = "__value")]
         value: Option<f32>,
     },
+    Bool {
+        #[serde(rename = "__value")]
+        value: Option<bool>,
+    },
     String {
         #[serde(rename = "__value")]
         value: Option<String>,
@@ -246,6 +250,7 @@ impl AssetLoader for LdtkLevelLoader {
                                             Some((f.id, match f.data {
                                                 FieldInstanceData::Int { value } => LdtkEntityField::Int(value?),
                                                 FieldInstanceData::Float { value } => LdtkEntityField::Float(value?),
+                                                FieldInstanceData::Bool { value } => LdtkEntityField::Bool(value?),
                                                 FieldInstanceData::String { value } => LdtkEntityField::String(value?),
                                             }))
                                         })

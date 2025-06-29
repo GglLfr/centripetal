@@ -11,6 +11,7 @@ use bevy::{
     render::sync_world::SyncToRenderWorld,
 };
 use bevy_ecs_tilemap::prelude::*;
+use derive_more::{Display, Error};
 use iyes_progress::ProgressEntry;
 
 use crate::{
@@ -49,6 +50,54 @@ impl LevelLayer {
 pub struct LevelEntity {
     pub id: String,
     pub fields: HashMap<String, LdtkEntityField>,
+}
+
+#[derive(Debug, Display, Error)]
+pub enum LevelEntityFieldError {
+    NotFound,
+    WrongType,
+}
+
+impl LevelEntity {
+    pub fn int(&self, name: impl AsRef<str>) -> Result<u32, LevelEntityFieldError> {
+        self.fields
+            .get(name.as_ref())
+            .map(|f| match f {
+                LdtkEntityField::Int(value) => Ok(*value),
+                _ => Err(LevelEntityFieldError::WrongType),
+            })
+            .unwrap_or(Err(LevelEntityFieldError::NotFound))
+    }
+
+    pub fn float(&self, name: impl AsRef<str>) -> Result<f32, LevelEntityFieldError> {
+        self.fields
+            .get(name.as_ref())
+            .map(|f| match f {
+                LdtkEntityField::Float(value) => Ok(*value),
+                _ => Err(LevelEntityFieldError::WrongType),
+            })
+            .unwrap_or(Err(LevelEntityFieldError::NotFound))
+    }
+
+    pub fn bool(&self, name: impl AsRef<str>) -> Result<bool, LevelEntityFieldError> {
+        self.fields
+            .get(name.as_ref())
+            .map(|f| match f {
+                LdtkEntityField::Bool(value) => Ok(*value),
+                _ => Err(LevelEntityFieldError::WrongType),
+            })
+            .unwrap_or(Err(LevelEntityFieldError::NotFound))
+    }
+
+    pub fn string(&self, name: impl AsRef<str>) -> Result<&str, LevelEntityFieldError> {
+        self.fields
+            .get(name.as_ref())
+            .map(|f| match f {
+                LdtkEntityField::String(value) => Ok(value.as_ref()),
+                _ => Err(LevelEntityFieldError::WrongType),
+            })
+            .unwrap_or(Err(LevelEntityFieldError::NotFound))
+    }
 }
 
 #[derive(Debug, Copy, Clone, Component)]

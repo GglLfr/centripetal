@@ -72,6 +72,7 @@ pub struct LdtkEntity {
 pub enum LdtkEntityField {
     Int(u32),
     Float(f32),
+    Bool(bool),
     String(String),
 }
 

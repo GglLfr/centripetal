@@ -4,10 +4,10 @@ use bevy::{
     prelude::*,
 };
 
-use crate::logic::{CameraTarget, FromLevelEntity, LevelEntity};
+use crate::logic::{CameraTarget, FromLevelEntity, LevelEntity, PenumbraEntity, entities::penumbra::AttractorInitial};
 
 #[derive(Debug, Copy, Clone, Default, Component)]
-#[require(CameraTarget)]
+#[require(CameraTarget, PenumbraEntity)]
 pub struct SelenePenumbra;
 impl FromLevelEntity for SelenePenumbra {
     type Param = ();
@@ -15,11 +15,13 @@ impl FromLevelEntity for SelenePenumbra {
 
     fn from_level_entity(
         mut e: EntityCommands,
-        _: &LevelEntity,
+        entity: &LevelEntity,
         _: &mut SystemParamItem<Self::Param>,
         _: QueryItem<Self::Data>,
     ) -> Result {
-        e.insert((Self, RigidBody::Kinematic, Collider::circle(8.)));
+        let ccw = entity.bool("ccw")?;
+
+        e.insert((Self, AttractorInitial { ccw }, Collider::circle(8.)));
         Ok(())
     }
 }

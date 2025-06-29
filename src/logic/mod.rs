@@ -7,9 +7,11 @@ pub mod entities;
 
 mod camera;
 mod level;
+mod penumbra;
 
 pub use camera::*;
 pub use level::*;
+pub use penumbra::*;
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug, Hash, Default, States)]
 pub enum GameState {
