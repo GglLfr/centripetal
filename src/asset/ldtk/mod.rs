@@ -24,6 +24,8 @@ pub struct LdtkTileset {
 #[derive(Debug, Clone, TypePath)]
 pub struct LdtkLevel {
     pub bg_color: Color,
+    pub width_px: u32,
+    pub height_px: u32,
     pub layers: Vec<LdtkLayer>,
 }
 

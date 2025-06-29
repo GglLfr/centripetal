@@ -1,4 +1,4 @@
-use bevy::prelude::*;
+use bevy::{prelude::*, render::camera::CameraUpdateSystem};
 use iyes_progress::ProgressPlugin;
 
 use crate::logic::entities::EntitiesPlugin;
@@ -54,6 +54,12 @@ impl Plugin for LogicPlugin {
             )
             .add_systems(OnExit(InGameState::Loading), handle_load_level_end)
             .add_systems(Startup, startup_camera)
-            .add_systems(Update, move_camera.run_if(in_state(InGameState::Resumed)));
+            .add_systems(
+                PostUpdate,
+                move_camera
+                    .run_if(in_state(InGameState::Resumed))
+                    .after(CameraUpdateSystem)
+                    .before(TransformSystem::TransformPropagate),
+            );
     }
 }

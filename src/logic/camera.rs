@@ -1,5 +1,7 @@
 use bevy::{prelude::*, render::camera::ScalingMode};
 
+use crate::logic::LevelBounds;
+
 #[derive(Debug, Copy, Clone, Default, Component)]
 #[require(Transform, CameraConfines, CameraScale)]
 pub struct CameraTarget;
@@ -38,11 +40,17 @@ pub fn startup_camera(mut commands: Commands) {
 }
 
 pub fn move_camera(
-    mut camera: Single<&mut Transform, With<MainCamera>>,
-    target: Single<(&Transform, Option<&ChildOf>), (With<CameraTarget>, Without<MainCamera>)>,
+    camera: Single<(&mut Transform, &Projection), With<MainCamera>>,
+    target: Single<(&Transform, &CameraConfines, Option<&ChildOf>), (With<CameraTarget>, Without<MainCamera>)>,
+    level_bounds: Single<&LevelBounds>,
     child_of_query: Query<(&Transform, Option<&ChildOf>), Without<MainCamera>>,
-) {
-    let (target_trns, target_child_of) = *target;
+) -> Result {
+    let (mut camera_trns, camera_proj) = camera.into_inner();
+    let Projection::Orthographic(ortho) = camera_proj else {
+        Err("Camera projection must be orthographic")?
+    };
+
+    let (target_trns, &target_confines, target_child_of) = target.into_inner();
     let mut trns = *target_trns;
 
     if let Some(mut e) = target_child_of.map(ChildOf::parent) {
@@ -56,5 +64,24 @@ pub fn move_camera(
         }
     }
 
-    **camera = trns;
+    let trns = trns.translation.truncate();
+    camera_trns.translation = match target_confines {
+        CameraConfines::Level => {
+            let mut rect = ortho.area;
+            rect.min += trns;
+            rect.max += trns;
+
+            let bounds = ***level_bounds;
+            let size_diff = bounds - rect.size();
+
+            let x = if size_diff.x < 0. { bounds.x / 2. } else { trns.x.clamp(0., size_diff.x) };
+            let y = if size_diff.y < 0. { bounds.y / 2. } else { trns.y.clamp(0., size_diff.y) };
+
+            vec2(x, y)
+        }
+        CameraConfines::Fixed(rel) => trns + rel,
+    }
+    .extend(camera_trns.translation.z);
+
+    Ok(())
 }

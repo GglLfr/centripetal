@@ -26,8 +26,11 @@ use crate::{
 pub struct LoadLevelEvent(pub Cow<'static, str>);
 
 #[derive(Debug, Clone, Component, Deref, DerefMut)]
-#[require(LevelSpawned)]
+#[require(LevelSpawned, Transform, Visibility)]
 pub struct LevelHandle(pub Handle<LdtkLevel>);
+
+#[derive(Debug, Copy, Clone, Component, Deref, DerefMut)]
+pub struct LevelBounds(pub Vec2);
 
 #[derive(Debug, Copy, Clone, Component, Default)]
 pub struct LevelSpawned(bool);
@@ -227,17 +230,13 @@ pub fn handle_load_level_event(
         commands.entity(e).insert(LevelUnload);
     }
 
-    commands.spawn((
-        LevelHandle(
-            server.load(
-                world
-                    .levels
-                    .get(event.as_ref())
-                    .ok_or_else(|| format!("Level {} not found", event.as_ref()))?,
-            ),
+    commands.spawn(LevelHandle(
+        server.load(
+            world
+                .levels
+                .get(event.as_ref())
+                .ok_or_else(|| format!("Level {} not found", event.as_ref()))?,
         ),
-        Transform::default(),
-        Visibility::default(),
     ));
 
     state.set(InGameState::Loading);
@@ -273,6 +272,10 @@ pub fn handle_load_level_progress(
         if done && !std::mem::replace(&mut spawned.0, true) {
             let level = levels.get(handle.id()).ok_or("Level asset unloaded")?;
             commands.insert_resource(ClearColor(level.bg_color));
+
+            commands
+                .entity(e)
+                .insert(LevelBounds(uvec2(level.width_px, level.height_px).as_vec2()));
 
             for layer in &level.layers {
                 let mut layer_entity = commands.spawn((
@@ -403,7 +406,7 @@ pub fn handle_load_level_end(
         Query<Entity, With<LevelUnload>>,
     )>,
     mut entity_targets: Local<HashMap<SystemId<InRef<[Entity]>, Result>, Vec<Entity>>>,
-    mut tile_targets: Local<HashMap<SystemId<InRef<[Entity]>, Result>, Vec<Entity>>>,
+    mut int_cell_targets: Local<HashMap<SystemId<InRef<[Entity]>, Result>, Vec<Entity>>>,
     mut unload_levels: Local<Vec<Entity>>,
 ) -> Result {
     let (entity_creators, int_cell_creators, spawned_layers, entities, int_cells, mut state, to_be_unloaded) =
@@ -421,7 +424,7 @@ pub fn handle_load_level_end(
         if let Some(creators) = int_cell_creators.0.get(&layer.id) {
             for (cell_id, cell) in int_cells.iter_many(layer_children) {
                 if let Some(&create) = creators.get(&cell.value) {
-                    tile_targets.entry(create).or_default().push(cell_id);
+                    int_cell_targets.entry(create).or_default().push(cell_id);
                 }
             }
         }
@@ -437,6 +440,10 @@ pub fn handle_load_level_end(
 
     for (&id, entities) in &mut entity_targets {
         world.run_system_with(id, entities.drain(..).as_slice())??;
+    }
+
+    for (&id, int_cells) in &mut int_cell_targets {
+        world.run_system_with(id, int_cells.drain(..).as_slice())??;
     }
 
     Ok(())

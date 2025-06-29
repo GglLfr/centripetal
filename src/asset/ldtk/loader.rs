@@ -123,6 +123,10 @@ impl AssetLoader for LdtkLoader {
 struct Level {
     #[serde(rename = "__bgColor", deserialize_with = "de_color")]
     bg_color: Srgba,
+    #[serde(rename = "pxWid")]
+    width_px: u32,
+    #[serde(rename = "pxHei")]
+    height_px: u32,
     layer_instances: Vec<LayerInstance>,
 }
 
@@ -226,10 +230,12 @@ impl AssetLoader for LdtkLevelLoader {
 
         Ok(LdtkLevel {
             bg_color: level.bg_color.into(),
+            width_px: level.width_px,
+            height_px: level.height_px,
             layers: level.layer_instances.into_iter().try_fold(Vec::new(), |mut out, layer| {
                 // Convert Y+ bottom to Y+ top.
                 let top_grid = layer.height - 1;
-                let top_px = top_grid * layer.grid_size;
+                let top_px = layer.height * layer.grid_size;
 
                 out.push(LdtkLayer {
                     id: layer.id,
