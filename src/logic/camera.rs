@@ -32,6 +32,10 @@ impl Default for CameraScale {
         scale: 1. / 3.,
         ..OrthographicProjection::default_2d()
     }),
+    Camera {
+        clear_color: ClearColorConfig::Custom(Color::NONE),
+        ..default()
+    }
 )]
 pub struct MainCamera;
 

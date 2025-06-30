@@ -28,10 +28,10 @@ impl FromLevelEntity for SelenePenumbra {
             Self,
             AttractorInitial { ccw },
             AttractorHoverParams {
-                centrifugal: 120.,
-                centripetal: 120.,
-                prograde: 40.,
-                retrograde: 40.,
+                centrifugal: 240.,
+                centripetal: 240.,
+                prograde: 80.,
+                retrograde: 80.,
             },
             AttractorPrediction {
                 points: Vec::new(),

@@ -19,7 +19,7 @@ use crate::{
         LdtkWorld,
         ldtk::{Ldtk, LdtkEntityField, LdtkLayer, LdtkLayerData, LdtkLevel, LdtkTiles},
     },
-    logic::InGameState,
+    logic::{InGameState, MainCamera},
 };
 
 #[derive(Debug, Clone, Event, Deref, DerefMut)]
@@ -252,6 +252,7 @@ pub fn handle_load_level_event(
 
 pub fn handle_load_level_progress(
     mut commands: Commands,
+    mut camera: Single<&mut Camera, With<MainCamera>>,
     tracker: ProgressEntry<InGameState>,
     server: Res<AssetServer>,
     mut level_handles: Query<(Entity, &LevelHandle, &mut LevelSpawned), Without<LevelUnload>>,
@@ -280,7 +281,7 @@ pub fn handle_load_level_progress(
             debug!("Loaded level entity {e}!");
 
             let level = levels.get(handle.id()).ok_or("Level asset unloaded")?;
-            commands.insert_resource(ClearColor(level.bg_color));
+            camera.clear_color = ClearColorConfig::Custom(level.bg_color);
 
             commands
                 .entity(e)
