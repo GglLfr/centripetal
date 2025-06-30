@@ -198,6 +198,17 @@ enum FieldInstanceData {
         #[serde(rename = "__value")]
         value: Option<String>,
     },
+    Point {
+        #[serde(rename = "__value")]
+        value: Option<Point>,
+    },
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct Point {
+    cx: u32,
+    cy: u32,
 }
 
 #[derive(Debug, Deserialize)]
@@ -258,6 +269,9 @@ impl AssetLoader for LdtkLevelLoader {
                                                 FieldInstanceData::Float { value } => LdtkEntityField::Float(value?),
                                                 FieldInstanceData::Bool { value } => LdtkEntityField::Bool(value?),
                                                 FieldInstanceData::String { value } => LdtkEntityField::String(value?),
+                                                FieldInstanceData::Point { value } => {
+                                                    LdtkEntityField::Point(value.map(|p| uvec2(p.cx, p.cy))?)
+                                                }
                                             }))
                                         })
                                         .collect(),

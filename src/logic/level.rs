@@ -15,6 +15,7 @@ use derive_more::{Display, Error};
 use iyes_progress::ProgressEntry;
 
 use crate::{
+    PIXELS_PER_UNIT,
     asset::{
         LdtkWorld,
         ldtk::{Ldtk, LdtkEntityField, LdtkLayer, LdtkLayerData, LdtkLevel, LdtkTiles},
@@ -100,6 +101,20 @@ impl LevelEntity {
                 _ => Err(LevelEntityFieldError::WrongType),
             })
             .unwrap_or(Err(LevelEntityFieldError::NotFound))
+    }
+
+    pub fn point(&self, name: impl AsRef<str>) -> Result<UVec2, LevelEntityFieldError> {
+        self.fields
+            .get(name.as_ref())
+            .map(|f| match f {
+                LdtkEntityField::Point(value) => Ok(*value),
+                _ => Err(LevelEntityFieldError::WrongType),
+            })
+            .unwrap_or(Err(LevelEntityFieldError::NotFound))
+    }
+
+    pub fn point_px(&self, name: impl AsRef<str>) -> Result<UVec2, LevelEntityFieldError> {
+        self.point(name).map(|p| p * PIXELS_PER_UNIT + PIXELS_PER_UNIT / 2)
     }
 }
 

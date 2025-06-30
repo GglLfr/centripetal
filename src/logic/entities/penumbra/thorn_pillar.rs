@@ -1,6 +1,9 @@
 use avian2d::prelude::*;
 use bevy::{
-    ecs::{query::QueryItem, system::SystemParamItem},
+    ecs::{
+        query::QueryItem,
+        system::{SystemParamItem, lifetimeless::Write},
+    },
     prelude::*,
 };
 
@@ -14,21 +17,23 @@ use crate::{
 pub struct ThornPillar;
 impl FromLevelEntity for ThornPillar {
     type Param = ();
-    type Data = ();
+    type Data = Write<Transform>;
 
     fn from_level_entity(
         mut e: EntityCommands,
         entity: &LevelEntity,
         _: &mut SystemParamItem<Self::Param>,
-        _: QueryItem<Self::Data>,
+        mut trns: QueryItem<Self::Data>,
     ) -> Result {
         let length = entity.int("length")?;
         let ccw = entity.bool("ccw")?;
+        let facing = entity.point_px("facing")?.as_vec2();
 
+        trns.rotation = Quat::from_axis_angle(Vec3::Z, (facing - trns.translation.truncate()).to_angle());
         e.insert((
             Self,
             AttractorInitial { ccw },
-            Collider::rectangle(PIXELS_PER_UNIT, length as f32 * PIXELS_PER_UNIT),
+            Collider::rectangle(length as f32 * PIXELS_PER_UNIT as f32, PIXELS_PER_UNIT as f32 / 2.),
         ));
 
         debug!("Spawned thorn pillar {}!", e.id());

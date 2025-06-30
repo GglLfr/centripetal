@@ -76,6 +76,7 @@ pub enum LdtkEntityField {
     Float(f32),
     Bool(bool),
     String(String),
+    Point(UVec2),
 }
 
 #[derive(Debug, Copy, Clone)]

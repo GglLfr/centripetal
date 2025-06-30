@@ -37,7 +37,7 @@ impl FromLevelEntity for SelenePenumbra {
                 points: Vec::new(),
                 max_distance: 640.,
             },
-            Collider::circle(8.),
+            Collider::circle(5.),
         ));
 
         debug!("Spawned Selene {}!", e.id());
