@@ -25,4 +25,6 @@ pub struct IsPlayer;
 pub fn sync_input_map(mut world: DeferredWorld, HookContext { entity, .. }: HookContext) {
     let keybinds = (***world.resource::<Config<PlayerKeybinds>>()).clone();
     *world.entity_mut(entity).get_mut::<InputMap<PlayerAction>>().unwrap() = keybinds;
+
+    debug!("Synchronized player input map!");
 }

@@ -1,5 +1,7 @@
 use avian2d::prelude::*;
-use bevy::prelude::*;
+#[cfg(feature = "dev")]
+use bevy::log::DEFAULT_FILTER;
+use bevy::{log::LogPlugin, prelude::*};
 use bevy_ecs_tilemap::TilemapPlugin;
 use bevy_framepace::FramepacePlugin;
 
@@ -16,9 +18,9 @@ pub mod logic;
 mod config;
 pub use config::*;
 
-#[cfg_attr(not(feature = "dev"), global_allocator)]
+#[cfg_attr(not(feature = "bevy_dynamic"), global_allocator)]
 #[cfg_attr(
-    feature = "dev",
+    feature = "bevy_dynamic",
     expect(unused, reason = "Bevy dynamic linking is incompatible with Mimalloc redirection")
 )]
 static ALLOC: mimalloc_redirect::MiMalloc = mimalloc_redirect::MiMalloc;
@@ -30,11 +32,18 @@ fn main() -> AppExit {
         .insert_resource(ClearColor(Color::NONE))
         .add_plugins((
             DirsPlugin,
-            DefaultPlugins.set(ImagePlugin::default_nearest()).set(WindowPlugin {
-                // Set by `ConfigPlugin`.
-                primary_window: None,
-                ..default()
-            }),
+            DefaultPlugins
+                .set(LogPlugin {
+                    #[cfg(feature = "dev")]
+                    filter: format!("{DEFAULT_FILTER},centripetal=debug"),
+                    ..default()
+                })
+                .set(ImagePlugin::default_nearest())
+                .set(WindowPlugin {
+                    // Set by `ConfigPlugin`.
+                    primary_window: None,
+                    ..default()
+                }),
             PhysicsPlugins::default().with_length_unit(PIXELS_PER_UNIT),
             #[cfg(feature = "dev")]
             PhysicsDebugPlugin::default(),
@@ -50,6 +59,7 @@ fn main() -> AppExit {
 }
 
 fn dev_init(mut state: ResMut<NextState<GameState>>, mut load: EventWriter<LoadLevelEvent>) {
+    debug!("[TODO remove] Dev-initialize, loading `penumbra_wing_l` now!");
     state.set(GameState::InGame);
     load.write(LoadLevelEvent("penumbra_wing_l".into()));
 }

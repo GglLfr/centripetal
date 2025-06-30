@@ -60,5 +60,6 @@ features = [
 ]
 
 [features]
-default = ["dev"]
-dev = ["bevy/dynamic_linking"]
+default = ["bevy_dynamic", "dev"]
+bevy_dynamic = ["bevy/dynamic_linking"]
+dev = []

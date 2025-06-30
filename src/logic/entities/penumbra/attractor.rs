@@ -42,6 +42,7 @@ impl FromLevelEntity for Attractor {
             Collider::circle(8.),
         ));
 
+        debug!("Spawned attractor {}!", e.id());
         Ok(())
     }
 }
@@ -78,11 +79,13 @@ pub struct AttractorHoverParams {
 
 pub fn draw_attractor_radius(mut gizmos: Gizmos, attractors: Query<(&Position, &Attractor)>) {
     for (&pos, attractor) in &attractors {
-        gizmos.circle_2d(
-            Isometry2d::from_translation(*pos),
-            attractor.radius,
-            LinearRgba::new(0.67, 0.67, 0.67, 0.67),
-        );
+        gizmos
+            .circle_2d(
+                Isometry2d::from_translation(*pos),
+                attractor.radius,
+                LinearRgba::new(0.67, 0.67, 0.67, 0.67),
+            )
+            .resolution(64);
     }
 }
 

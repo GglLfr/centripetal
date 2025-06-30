@@ -227,17 +227,24 @@ pub fn handle_load_level_event(
 ) -> Result {
     let Some(event) = events.read().last() else { return Ok(()) };
     for e in &to_be_unloaded {
+        debug!("Unloading level entity {e}");
         commands.entity(e).insert(LevelUnload);
     }
 
-    commands.spawn(LevelHandle(
-        server.load(
-            world
-                .levels
-                .get(event.as_ref())
-                .ok_or_else(|| format!("Level {} not found", event.as_ref()))?,
-        ),
-    ));
+    debug!(
+        "Loading level {} as entity {}!",
+        **event,
+        commands
+            .spawn(LevelHandle(
+                server.load(
+                    world
+                        .levels
+                        .get(event.as_ref())
+                        .ok_or_else(|| format!("Level {} not found", event.as_ref()))?,
+                ),
+            ))
+            .id()
+    );
 
     state.set(InGameState::Loading);
     Ok(())
@@ -270,6 +277,8 @@ pub fn handle_load_level_progress(
         }
 
         if done && !std::mem::replace(&mut spawned.0, true) {
+            debug!("Loaded level entity {e}!");
+
             let level = levels.get(handle.id()).ok_or("Level asset unloaded")?;
             commands.insert_resource(ClearColor(level.bg_color));
 
@@ -433,7 +442,6 @@ pub fn handle_load_level_end(
     // Unload previous levels at the very last so some asset handles could be shared.
     state.set(InGameState::Resumed);
     unload_levels.extend(to_be_unloaded);
-
     for e in unload_levels.drain(..) {
         world.try_despawn(e)?;
     }
@@ -445,6 +453,9 @@ pub fn handle_load_level_end(
     for (&id, int_cells) in &mut int_cell_targets {
         world.run_system_with(id, int_cells.drain(..).as_slice())??;
     }
+
+    world.flush();
+    debug!("All levels have been loaded!");
 
     Ok(())
 }

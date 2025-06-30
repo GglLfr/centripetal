@@ -24,7 +24,6 @@ impl FromLevelEntity for SelenePenumbra {
         _: QueryItem<Self::Data>,
     ) -> Result {
         let ccw = entity.bool("ccw")?;
-
         e.insert((
             Self,
             AttractorInitial { ccw },
@@ -40,6 +39,8 @@ impl FromLevelEntity for SelenePenumbra {
             },
             Collider::circle(8.),
         ));
+
+        debug!("Spawned Selene {}!", e.id());
         Ok(())
     }
 }

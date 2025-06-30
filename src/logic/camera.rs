@@ -36,7 +36,7 @@ impl Default for CameraScale {
 pub struct MainCamera;
 
 pub fn startup_camera(mut commands: Commands) {
-    commands.spawn(MainCamera);
+    debug!("Spawned `MainCamera` as entity {}!", commands.spawn(MainCamera).id());
 }
 
 pub fn move_camera(
@@ -67,15 +67,21 @@ pub fn move_camera(
     let trns = trns.translation.truncate();
     camera_trns.translation = match target_confines {
         CameraConfines::Level => {
-            let mut rect = ortho.area;
-            rect.min += trns;
-            rect.max += trns;
-
+            let cam_bounds = ortho.area.size();
             let bounds = ***level_bounds;
-            let size_diff = bounds - rect.size();
+            let size_diff = bounds - cam_bounds;
 
-            let x = if size_diff.x < 0. { bounds.x / 2. } else { trns.x.clamp(0., size_diff.x) };
-            let y = if size_diff.y < 0. { bounds.y / 2. } else { trns.y.clamp(0., size_diff.y) };
+            let x = if size_diff.x < 0. {
+                bounds.x / 2.
+            } else {
+                trns.x.clamp(cam_bounds.x / 2., bounds.x - cam_bounds.x / 2.)
+            };
+
+            let y = if size_diff.y < 0. {
+                bounds.y / 2.
+            } else {
+                trns.y.clamp(cam_bounds.y / 2., bounds.y - cam_bounds.y / 2.)
+            };
 
             vec2(x, y)
         }
