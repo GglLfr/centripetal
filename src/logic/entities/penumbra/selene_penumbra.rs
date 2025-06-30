@@ -29,10 +29,10 @@ impl FromLevelEntity for SelenePenumbra {
             Self,
             AttractorInitial { ccw },
             AttractorHoverParams {
-                centrifugal: 40.,
-                centripetal: 40.,
-                centrifugal_intense: 120.,
-                centripetal_intense: 120.,
+                centrifugal: 120.,
+                centripetal: 120.,
+                prograde: 40.,
+                retrograde: 40.,
             },
             AttractorPrediction {
                 points: Vec::new(),
@@ -46,15 +46,15 @@ impl FromLevelEntity for SelenePenumbra {
 
 pub fn copy_player_to_hover_state(mut selene: Query<(&mut ActionState<AttractorHoverAction>, &ActionState<PlayerAction>)>) {
     for (mut hover_state, player_state) in &mut selene {
-        if let Some(data) = player_state.button_data(&PlayerAction::PenumbraHoverIntensify) {
+        if let Some(data) = player_state.axis_data(&PlayerAction::PenumbraPrograde) {
             hover_state
-                .button_data_mut_or_default(&AttractorHoverAction::Intensify)
+                .axis_data_mut_or_default(&AttractorHoverAction::Prograde)
                 .clone_from(data);
         }
 
         if let Some(data) = player_state.axis_data(&PlayerAction::PenumbraHover) {
             hover_state
-                .axis_data_mut_or_default(&AttractorHoverAction::Maneouver)
+                .axis_data_mut_or_default(&AttractorHoverAction::Hover)
                 .clone_from(data);
         }
     }

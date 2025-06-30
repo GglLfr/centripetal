@@ -170,7 +170,10 @@ impl Default for PlayerKeybinds {
             InputMap::default()
                 .with_dual_axis(PlayerAction::Move, VirtualDPad::wasd())
                 .with(PlayerAction::Attack, KeyCode::KeyZ)
-                .with(PlayerAction::PenumbraHoverIntensify, KeyCode::ShiftLeft)
+                .with_axis(
+                    PlayerAction::PenumbraPrograde,
+                    VirtualAxis::new(KeyCode::ControlLeft, KeyCode::ShiftLeft),
+                )
                 .with_axis(PlayerAction::PenumbraHover, VirtualAxis::vertical_arrow_keys()),
         )
     }

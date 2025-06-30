@@ -12,7 +12,8 @@ pub enum PlayerAction {
     #[actionlike(DualAxis)]
     Move,
     Attack,
-    PenumbraHoverIntensify,
+    #[actionlike(Axis)]
+    PenumbraPrograde,
     #[actionlike(Axis)]
     PenumbraHover,
 }

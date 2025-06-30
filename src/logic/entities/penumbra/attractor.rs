@@ -61,9 +61,10 @@ pub struct AttractorInitial {
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Reflect, Actionlike)]
 pub enum AttractorHoverAction {
-    Intensify,
     #[actionlike(Axis)]
-    Maneouver,
+    Prograde,
+    #[actionlike(Axis)]
+    Hover,
 }
 
 #[derive(Debug, Copy, Clone, Component)]
@@ -71,8 +72,8 @@ pub enum AttractorHoverAction {
 pub struct AttractorHoverParams {
     pub centrifugal: f32,
     pub centripetal: f32,
-    pub centrifugal_intense: f32,
-    pub centripetal_intense: f32,
+    pub prograde: f32,
+    pub retrograde: f32,
 }
 
 pub fn draw_attractor_radius(mut gizmos: Gizmos, attractors: Query<(&Position, &Attractor)>) {
@@ -135,21 +136,33 @@ pub fn apply_attractor_accels(
         while let Some((&pos, &accum_pos, hover, mut vel)) = attracted.fetch_next() {
             **vel += gravity_accel(*pos + *accum_pos, *attractor_pos, attractor.gravity) * dt;
             if let Some((&param, state)) = hover {
-                let intense = state.pressed(&AttractorHoverAction::Intensify);
-                let Some(axis) = state.axis_data(&AttractorHoverAction::Maneouver) else { continue };
-                if axis.value.abs() < 0.01 {
-                    continue
+                if let Some(axis) = state.axis_data(&AttractorHoverAction::Prograde) &&
+                    axis.value.abs() >= 0.01
+                {
+                    let r_vec = **vel;
+                    let r = r_vec.length();
+                    let prograde = if axis.value > 0. {
+                        param.prograde * axis.value.min(1.)
+                    } else {
+                        param.retrograde * axis.value.max(-1.)
+                    };
+
+                    **vel += prograde / r * r_vec * dt;
                 }
 
-                let hover = if axis.value > 0. {
-                    (if intense { param.centrifugal_intense } else { param.centrifugal }) * (-axis.value).max(-1.)
-                } else {
-                    (if intense { param.centripetal_intense } else { param.centripetal }) * (-axis.value).min(1.)
-                };
+                if let Some(axis) = state.axis_data(&AttractorHoverAction::Hover) &&
+                    axis.value.abs() >= 0.01
+                {
+                    let r_vec = *attractor_pos - *pos;
+                    let r = r_vec.length();
+                    let hover = if axis.value > 0. {
+                        param.centrifugal * (-axis.value).max(-1.)
+                    } else {
+                        param.centripetal * (-axis.value).min(1.)
+                    };
 
-                let r_vec = *attractor_pos - *pos;
-                let r = r_vec.length();
-                **vel += hover / r * r_vec * dt;
+                    **vel += hover / r * r_vec * dt;
+                }
             }
         }
     }
@@ -157,15 +170,15 @@ pub fn apply_attractor_accels(
 
 pub fn predict_attract_trajectory(
     time: Res<Time<Physics>>,
-    attractors: Query<(&Position, &Attractor, &AttractedEntities)>,
+    attractors: Query<(&Position, &Attractor, &Collider, &AttractedEntities)>,
     mut attracted: Query<(&Position, &LinearVelocity, &mut AttractorPrediction)>,
 ) {
-    let dt = time.delta_secs() * 3.;
-    for (&attractor_pos, attractor, attracted_entities) in &attractors {
+    let dt = time.delta_secs() / 3.;
+    for (&attractor_pos, attractor, attractor_collision, attracted_entities) in &attractors {
         let g = attractor.gravity;
         let mut attracted = attracted.iter_many_mut(&**attracted_entities);
 
-        while let Some((&pos, &vel, mut prediction)) = attracted.fetch_next() {
+        'outer: while let Some((&pos, &vel, mut prediction)) = attracted.fetch_next() {
             let max = prediction.max_distance;
             let mut accum = 0.;
 
@@ -175,11 +188,16 @@ pub fn predict_attract_trajectory(
             prediction.points.clear();
             while accum < max {
                 vel += gravity_accel(pos, *attractor_pos, g) * dt;
-
                 let new_pos = pos + vel * dt;
 
                 accum += (new_pos - pos).length();
                 pos = new_pos;
+
+                if attractor_collision.contains_point(attractor_pos, 0., pos) ||
+                    !attractor.caster.contains_point(attractor_pos, 0., pos)
+                {
+                    continue 'outer
+                }
 
                 prediction.points.push(pos);
             }

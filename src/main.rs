@@ -23,6 +23,8 @@ pub use config::*;
 )]
 static ALLOC: mimalloc_redirect::MiMalloc = mimalloc_redirect::MiMalloc;
 
+pub const PIXELS_PER_UNIT: f32 = 32.;
+
 fn main() -> AppExit {
     App::new()
         .insert_resource(ClearColor(Color::NONE))
@@ -33,7 +35,7 @@ fn main() -> AppExit {
                 primary_window: None,
                 ..default()
             }),
-            PhysicsPlugins::default().with_length_unit(16.),
+            PhysicsPlugins::default().with_length_unit(PIXELS_PER_UNIT),
             #[cfg(feature = "dev")]
             PhysicsDebugPlugin::default(),
             TilemapPlugin,
