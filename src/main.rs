@@ -25,7 +25,7 @@ pub use config::*;
 )]
 static ALLOC: mimalloc_redirect::MiMalloc = mimalloc_redirect::MiMalloc;
 
-pub const PIXELS_PER_UNIT: f32 = 32.;
+pub const PIXELS_PER_UNIT: f32 = 16.;
 
 fn main() -> AppExit {
     App::new()

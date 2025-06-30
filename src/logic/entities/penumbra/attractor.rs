@@ -131,18 +131,24 @@ pub fn apply_attractor_accels(
         &AccumulatedTranslation,
         Option<(&AttractorHoverParams, &ActionState<AttractorHoverAction>)>,
         &mut LinearVelocity,
+        &mut AngularVelocity,
     )>,
 ) {
     let dt = time.delta_secs();
     for (&attractor_pos, attractor, attracted_entities) in &attractors {
         let mut attracted = attracted.iter_many_mut(&**attracted_entities);
-        while let Some((&pos, &accum_pos, hover, mut vel)) = attracted.fetch_next() {
-            **vel += gravity_accel(*pos + *accum_pos, *attractor_pos, attractor.gravity) * dt;
+        while let Some((&pos, &accum_pos, hover, mut linvel, mut angvel)) = attracted.fetch_next() {
+            let (added_linvel, r_vec, r) = gravity_linvel(dt, *pos + *accum_pos, *attractor_pos, attractor.gravity);
+            **linvel += added_linvel;
+
+            let crs = r_vec.x * linvel.y - r_vec.y * linvel.x;
+            **angvel = -(crs / (r * r));
+
             if let Some((&param, state)) = hover {
                 if let Some(axis) = state.axis_data(&AttractorHoverAction::Prograde) &&
                     axis.value.abs() >= 0.01
                 {
-                    let r_vec = **vel;
+                    let r_vec = **linvel;
                     let r = r_vec.length();
                     let prograde = if axis.value > 0. {
                         param.prograde * axis.value.min(1.)
@@ -150,7 +156,7 @@ pub fn apply_attractor_accels(
                         param.retrograde * axis.value.max(-1.)
                     };
 
-                    **vel += prograde / r * r_vec * dt;
+                    **linvel += prograde / r * r_vec * dt;
                 }
 
                 if let Some(axis) = state.axis_data(&AttractorHoverAction::Hover) &&
@@ -164,7 +170,7 @@ pub fn apply_attractor_accels(
                         param.centripetal * (-axis.value).min(1.)
                     };
 
-                    **vel += hover / r * r_vec * dt;
+                    **linvel += hover / r * r_vec * dt;
                 }
             }
         }
@@ -190,7 +196,7 @@ pub fn predict_attract_trajectory(
 
             prediction.points.clear();
             while accum < max {
-                vel += gravity_accel(pos, *attractor_pos, g) * dt;
+                vel += gravity_linvel(dt, pos, *attractor_pos, g).0;
                 let new_pos = pos + vel * dt;
 
                 accum += (new_pos - pos).length();
@@ -222,8 +228,10 @@ pub fn draw_attract_trajectory(mut gizmos: Gizmos, attracted: Query<(&Position, 
     }
 }
 
-fn gravity_accel(pos: Vec2, attractor_pos: Vec2, gravity: f32) -> Vec2 {
+fn gravity_linvel(dt: f32, pos: Vec2, attractor_pos: Vec2, gravity: f32) -> (Vec2, Vec2, f32) {
     let r_vec = attractor_pos - pos;
     let r = r_vec.length();
-    gravity / (r * r * r) * r_vec
+    let linvel = gravity / (r * r * r) * r_vec * dt;
+
+    (linvel, r_vec, r)
 }

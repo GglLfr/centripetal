@@ -7,7 +7,7 @@ use crate::logic::entities::penumbra::{draw_attract_trajectory, draw_attractor_r
 use crate::logic::{
     LevelApp, LevelLayer,
     entities::penumbra::{
-        Attractor, AttractorHoverAction, SelenePenumbra, apply_attractor_accels, copy_player_to_hover_state,
+        Attractor, AttractorHoverAction, SelenePenumbra, ThornPillar, apply_attractor_accels, copy_player_to_hover_state,
         detect_attracted_entities, predict_attract_trajectory,
     },
 };
@@ -23,6 +23,7 @@ impl Plugin for EntitiesPlugin {
             .add_plugins(InputManagerPlugin::<AttractorHoverAction>::default())
             .register_level_entity::<Attractor>(LevelLayer::ENTITIES, "attractor")
             .register_level_entity::<SelenePenumbra>(LevelLayer::ENTITIES, "selene_penumbra")
+            .register_level_entity::<ThornPillar>(LevelLayer::ENTITIES, "thorn_pillar")
             .add_systems(PreUpdate, copy_player_to_hover_state.after(InputManagerSystem::ManualControl))
             .add_systems(
                 SubstepSchedule,
