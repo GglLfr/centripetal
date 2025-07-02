@@ -9,7 +9,7 @@ use bevy::{
 
 use crate::{
     PIXELS_PER_UNIT,
-    logic::{FromLevelEntity, LevelEntity, PenumbraEntity, entities::penumbra::AttractorInitial},
+    logic::{FromLevelEntity, LevelEntity, PenumbraEntity, entities::penumbra::AttractedInitial},
 };
 
 #[derive(Debug, Copy, Clone, Default, Component)]
@@ -32,7 +32,7 @@ impl FromLevelEntity for ThornPillar {
         trns.rotation = Quat::from_axis_angle(Vec3::Z, (facing - trns.translation.truncate()).to_angle());
         e.insert((
             Self,
-            AttractorInitial { ccw },
+            AttractedInitial { ccw },
             Collider::rectangle(length as f32 * PIXELS_PER_UNIT as f32, PIXELS_PER_UNIT as f32 / 2.),
         ));
 

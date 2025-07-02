@@ -56,7 +56,6 @@ features = [
     "keyboard",
     "mouse",
     "picking",
-    "timing",
 ]
 
 [features]

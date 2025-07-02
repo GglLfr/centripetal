@@ -16,6 +16,8 @@ pub enum PlayerAction {
     PenumbraPrograde,
     #[actionlike(Axis)]
     PenumbraHover,
+    PenumbraPrecise,
+    PenumbraLaunch,
 }
 
 #[derive(Debug, Copy, Clone, Default, Component)]

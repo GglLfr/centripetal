@@ -174,7 +174,9 @@ impl Default for PlayerKeybinds {
                     PlayerAction::PenumbraPrograde,
                     VirtualAxis::new(KeyCode::ControlLeft, KeyCode::ShiftLeft),
                 )
-                .with_axis(PlayerAction::PenumbraHover, VirtualAxis::vertical_arrow_keys()),
+                .with_axis(PlayerAction::PenumbraHover, VirtualAxis::vertical_arrow_keys())
+                .with(PlayerAction::PenumbraPrecise, KeyCode::Space)
+                .with(PlayerAction::PenumbraLaunch, KeyCode::KeyZ),
         )
     }
 }
@@ -210,6 +212,7 @@ impl Plugin for ConfigPlugin {
         .expect("`ready()` should ensure `ConfigTask::is_finished()`")
         {
             Ok((window_conf, keybind_conf)) => {
+                #[cfg_attr(feature = "dev", expect(unused_mut))]
                 let mut window = Window {
                     present_mode: window_conf.present_mode,
                     resolution: WindowResolution::new(1280., 800.),
@@ -217,6 +220,8 @@ impl Plugin for ConfigPlugin {
                     visible: false,
                     ..default()
                 };
+
+                #[cfg(not(feature = "dev"))]
                 window.set_maximized(true);
 
                 let id = world
