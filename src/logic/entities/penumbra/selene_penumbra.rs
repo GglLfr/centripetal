@@ -9,7 +9,9 @@ use leafwing_input_manager::{action_state::ActionData, prelude::*};
 
 use crate::logic::{
     CameraTarget, FromLevelEntity, IsPlayer, LevelEntity, PenumbraEntity, PlayerAction,
-    entities::penumbra::{AttractedAction, AttractedInitial, AttractedLaunch, AttractedParams, AttractedPrediction},
+    entities::penumbra::{
+        AttractedAction, AttractedInitial, AttractedLaunch, AttractedParams, AttractedPrediction, OnLaunch,
+    },
 };
 
 #[derive(Debug, Copy, Clone, Default, Component)]
@@ -35,10 +37,20 @@ impl FromLevelEntity for SelenePenumbra {
                 prograde: 80.,
                 retrograde: 80.,
                 precise_scale: 1. / 5.,
-                launches: vec![AttractedLaunch {
-                    charge: Duration::from_millis(250),
-                    damage: 1,
-                }],
+                launches: vec![
+                    AttractedLaunch {
+                        charge: Duration::from_millis(250),
+                        damage: 1,
+                    },
+                    AttractedLaunch {
+                        charge: Duration::from_millis(500),
+                        damage: 4,
+                    },
+                    AttractedLaunch {
+                        charge: Duration::from_millis(750),
+                        damage: 8,
+                    },
+                ],
                 launch_cooldown: Duration::from_secs(1),
             },
             AttractedPrediction {
@@ -46,7 +58,8 @@ impl FromLevelEntity for SelenePenumbra {
                 max_distance: 640.,
             },
             Collider::circle(5.),
-        ));
+        ))
+        .observe(on_selene_launch);
 
         debug!("Spawned Selene {}!", e.id());
         Ok(())
@@ -70,4 +83,8 @@ pub fn copy_player_to_hover_state(mut selene: Query<(&mut ActionState<AttractedA
                 });
         }
     }
+}
+
+pub fn on_selene_launch(trigger: Trigger<OnLaunch>) {
+    debug!("Selene ({}) launched without obstruction!", trigger.target());
 }

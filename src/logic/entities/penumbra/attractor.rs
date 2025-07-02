@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
 
 use avian2d::prelude::*;
 use bevy::{
@@ -106,13 +106,46 @@ pub struct AttractedLaunch {
     pub damage: u32,
 }
 
-#[derive(Debug, Clone, Event)]
-pub struct OnLaunch {
+#[derive(Debug, Clone)]
+pub struct LaunchCommand {
     pub target: AttractedLaunch,
-    pub entity: Entity,
+    pub launcher_entity: Entity,
     pub attractor_entity: Entity,
     pub attractor_pos: Vec2,
     pub hits: Vec<RayHitData>,
+}
+
+impl EntityCommand for LaunchCommand {
+    fn apply(self, mut entity: EntityWorldMut) {
+        let command = Arc::new(self);
+        let mut trigger = OnLaunch {
+            command: command.clone(),
+            hit_index: None,
+            stopped: false,
+        };
+
+        entity.world_scope(|world| {
+            for (i, hit) in command.hits.iter().enumerate() {
+                trigger.hit_index = Some(i);
+                world.trigger_targets_ref(&mut trigger, hit.entity);
+
+                if trigger.stopped {
+                    return
+                }
+            }
+        });
+
+        if !trigger.stopped {
+            entity.trigger(trigger);
+        }
+    }
+}
+
+#[derive(Debug, Clone, Event)]
+pub struct OnLaunch {
+    pub command: Arc<LaunchCommand>,
+    pub hit_index: Option<usize>,
+    pub stopped: bool,
 }
 
 #[derive(Debug, Copy, Clone, Default, Component)]
@@ -187,7 +220,6 @@ pub fn draw_attractor_radius(mut gizmos: Gizmos, attractors: Query<(&Position, &
 pub fn detect_attracted_entities(
     mut commands: Commands,
     time: Res<Time>,
-    mut events: EventWriter<OnLaunch>,
     pipeline: Res<SpatialQueryPipeline>,
     mut attractors: Query<(Entity, &Position, &Attractor, &mut AttractorEntities)>,
     mut penumbra_bodies: Query<
@@ -251,14 +283,14 @@ pub fn detect_attracted_entities(
 
                         let Ok(dir) = Dir2::new(r_vec) else { return true };
                         let mut hits = pipeline.ray_hits(*pos, dir, r, u32::MAX, true, &SpatialQueryFilter {
-                            excluded_entities: [e].into_iter().collect(),
+                            excluded_entities: [e, attractor_entity].into_iter().collect(),
                             ..SpatialQueryFilter::DEFAULT
                         });
 
                         hits.sort_unstable_by_key(|data| FloatOrd(data.distance));
-                        events.write(OnLaunch {
+                        commands.entity(e).queue(LaunchCommand {
                             target: target.clone(),
-                            entity: e,
+                            launcher_entity: e,
                             attractor_entity,
                             attractor_pos: *attractor_pos,
                             hits,

@@ -1,7 +1,9 @@
 mod attractor;
-mod thorn_pillar;
 mod selene_penumbra;
+mod thorn_pillar;
+mod thorn_ring;
 
 pub use attractor::*;
-pub use thorn_pillar::*;
 pub use selene_penumbra::*;
+pub use thorn_pillar::*;
+pub use thorn_ring::*;
