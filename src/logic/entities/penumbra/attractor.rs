@@ -148,13 +148,6 @@ pub struct OnLaunch {
     pub stopped: bool,
 }
 
-#[derive(Debug, Copy, Clone, Default, Component)]
-#[component(storage = "SparseSet")]
-pub struct AttractedBufferedVelocities {
-    pub linear: Vec2,
-    pub angular: f32,
-}
-
 pub fn update_attracted_launching(
     mut commands: Commands,
     time: Res<Time>,
@@ -227,9 +220,7 @@ pub fn detect_attracted_entities(
             Entity,
             &Position,
             &mut LinearVelocity,
-            &mut AngularVelocity,
             Option<Ref<AttractedLaunching>>,
-            Option<&AttractedBufferedVelocities>,
             Option<&AttractedInitial>,
         ),
         With<PenumbraEntity>,
@@ -241,14 +232,12 @@ pub fn detect_attracted_entities(
         tmp.clear();
         pipeline.shape_intersections_callback(&attractor.caster, *attractor_pos, 0., &SpatialQueryFilter::DEFAULT, |e| {
             if e != attractor_entity &&
-                let Ok((e, &pos, mut linvel, mut angvel, launching, buffer, initial)) = penumbra_bodies.get_mut(e)
+                let Ok((e, &pos, mut linvel, launching, initial)) = penumbra_bodies.get_mut(e)
             {
                 let r_vec = *attractor_pos - *pos;
                 let r = r_vec.length();
 
-                if let Some(&initial) = initial &&
-                    buffer.is_none()
-                {
+                if let Some(&initial) = initial {
                     let initial_speed = (attractor.gravity / r).sqrt();
                     let initial_velocity = if initial.ccw { -r_vec.perp() } else { r_vec.perp() } / r * initial_speed;
                     **linvel += initial_velocity;
@@ -257,29 +246,8 @@ pub fn detect_attracted_entities(
                 }
 
                 if let Some(launching) = launching.as_deref() {
-                    if let AttractedLaunching::Charging { .. } = launching &&
-                        buffer.is_none()
-                    {
-                        commands.entity(e).insert(AttractedBufferedVelocities {
-                            linear: std::mem::take(&mut linvel),
-                            angular: std::mem::take(&mut angvel),
-                        });
-                    } else if let AttractedLaunching::Idle { .. } = launching &&
-                        let Some(buffer) = buffer
-                    {
-                        commands.entity(e).remove::<AttractedBufferedVelocities>();
-                        **linvel = buffer.linear;
-                        **angvel = buffer.angular;
-                    } else if let AttractedLaunching::Launch { target } = launching {
-                        commands
-                            .entity(e)
-                            .remove::<AttractedBufferedVelocities>()
-                            .insert(AttractedLaunching::Idle { last_launched: now });
-
-                        if let Some(buffer) = buffer {
-                            **linvel = buffer.linear;
-                            **angvel = buffer.angular;
-                        }
+                    if let AttractedLaunching::Launch { target } = launching {
+                        commands.entity(e).insert(AttractedLaunching::Idle { last_launched: now });
 
                         let Ok(dir) = Dir2::new(r_vec) else { return true };
                         let mut hits = pipeline.ray_hits(*pos, dir, r, u32::MAX, true, &SpatialQueryFilter {
@@ -311,16 +279,13 @@ pub fn detect_attracted_entities(
 pub fn apply_attractor_accels(
     time: Res<Time<Substeps>>,
     attractors: Query<(&Position, &Attractor, &AttractorEntities)>,
-    mut attracted: Query<
-        (
-            &Position,
-            &AccumulatedTranslation,
-            Option<(&AttractedParams, &ActionState<AttractedAction>)>,
-            &mut LinearVelocity,
-            &mut AngularVelocity,
-        ),
-        Without<AttractedBufferedVelocities>,
-    >,
+    mut attracted: Query<(
+        &Position,
+        &AccumulatedTranslation,
+        Option<(&AttractedParams, &AttractedLaunching, &ActionState<AttractedAction>)>,
+        &mut LinearVelocity,
+        &mut AngularVelocity,
+    )>,
 ) {
     let dt = time.delta_secs();
     for (&attractor_pos, attractor, attracted_entities) in &attractors {
@@ -332,7 +297,7 @@ pub fn apply_attractor_accels(
             let crs = r_vec.x * linvel.y - r_vec.y * linvel.x;
             **angvel = -(crs / (r * r));
 
-            if let Some((param, state)) = hover {
+            if let Some((param, AttractedLaunching::Idle { .. }, state)) = hover {
                 let precise_scale = if state.pressed(&AttractedAction::Precise) { param.precise_scale } else { 1. };
                 if let Some(axis) = state.axis_data(&AttractedAction::Prograde) &&
                     axis.value.abs() >= 0.01
@@ -369,24 +334,14 @@ pub fn apply_attractor_accels(
 pub fn predict_attract_trajectory(
     time: Res<Time<Physics>>,
     attractors: Query<(&Position, &Attractor, &Collider, &AttractorEntities)>,
-    mut attracted: Query<(
-        &Position,
-        &LinearVelocity,
-        &mut AttractedPrediction,
-        Has<AttractedBufferedVelocities>,
-    )>,
+    mut attracted: Query<(&Position, &LinearVelocity, &mut AttractedPrediction)>,
 ) {
     let dt = time.delta_secs() / 3.;
     for (&attractor_pos, attractor, attractor_collision, attracted_entities) in &attractors {
         let g = attractor.gravity;
         let mut attracted = attracted.iter_many_mut(&**attracted_entities);
 
-        'outer: while let Some((&pos, &vel, mut prediction, buffering)) = attracted.fetch_next() {
-            if buffering {
-                prediction.points.clear();
-                continue 'outer
-            }
-
+        'outer: while let Some((&pos, &vel, mut prediction)) = attracted.fetch_next() {
             let max = prediction.max_distance;
             let mut accum = 0.;
 
