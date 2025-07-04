@@ -1,5 +1,5 @@
 use bevy::{
-    asset::{AssetPath, UntypedAssetId, VisitAssetDependencies},
+    asset::{AssetPath, UntypedAssetId, VisitAssetDependencies, uuid::Uuid},
     platform::collections::HashMap,
     prelude::*,
 };
@@ -66,6 +66,7 @@ pub enum LdtkLayerData {
 #[derive(Debug, Clone)]
 pub struct LdtkEntity {
     pub id: String,
+    pub iid: Uuid,
     pub grid_position_px: UVec2,
     pub fields: HashMap<String, LdtkEntityField>,
 }

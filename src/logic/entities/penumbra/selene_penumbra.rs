@@ -7,8 +7,11 @@ use bevy::{
 };
 
 use crate::logic::{
-    CameraTarget, FromLevelEntity, IsPlayer, LevelEntity, PenumbraEntity,
-    entities::penumbra::{AttractedInitial, AttractedLaunch, AttractedParams, AttractedPrediction, OnLaunch},
+    CameraTarget, Fields, FromLevelEntity, IsPlayer,
+    entities::{
+        Hurt,
+        penumbra::{AttractedInitial, AttractedLaunch, AttractedParams, AttractedPrediction, OnLaunch, PenumbraEntity},
+    },
 };
 
 #[derive(Debug, Copy, Clone, Default, Component)]
@@ -20,11 +23,11 @@ impl FromLevelEntity for SelenePenumbra {
 
     fn from_level_entity(
         mut e: EntityCommands,
-        entity: &LevelEntity,
+        fields: &Fields,
         _: &mut SystemParamItem<Self::Param>,
         _: QueryItem<Self::Data>,
     ) -> Result {
-        let ccw = entity.bool("ccw")?;
+        let ccw = fields.bool("ccw")?;
         e.insert((
             Self,
             AttractedInitial { ccw },
@@ -56,11 +59,16 @@ impl FromLevelEntity for SelenePenumbra {
             },
             Collider::circle(5.),
         ))
-        .observe(on_selene_launch);
+        .observe(on_selene_launch)
+        .observe(on_selene_hurt);
 
         debug!("Spawned Selene {}!", e.id());
         Ok(())
     }
+}
+
+pub fn on_selene_hurt(trigger: Trigger<Hurt>) {
+    debug!("Selene ({}) hurt by {}!", trigger.target(), trigger.event().by);
 }
 
 pub fn on_selene_launch(trigger: Trigger<OnLaunch>) {

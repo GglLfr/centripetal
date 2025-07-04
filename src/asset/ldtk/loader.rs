@@ -1,7 +1,7 @@
 use std::io;
 
 use bevy::{
-    asset::{AssetLoader, AsyncReadExt, LoadContext, ParseAssetPathError, RenderAssetUsages, io::Reader},
+    asset::{AssetLoader, AsyncReadExt, LoadContext, ParseAssetPathError, RenderAssetUsages, io::Reader, uuid::Uuid},
     image::ImageLoaderSettings,
     platform::collections::HashMap,
     prelude::*,
@@ -166,6 +166,7 @@ enum LayerInstanceData {
 struct EntityInstance {
     #[serde(rename = "__identifier")]
     id: String,
+    iid: Uuid,
     px: [u32; 2],
     field_instances: Vec<FieldInstance>,
 }
@@ -259,6 +260,7 @@ impl AssetLoader for LdtkLevelLoader {
                                 .into_iter()
                                 .map(|e| LdtkEntity {
                                     id: e.id,
+                                    iid: e.iid,
                                     grid_position_px: uvec2(e.px[0], top_px - e.px[1]),
                                     fields: e
                                         .field_instances

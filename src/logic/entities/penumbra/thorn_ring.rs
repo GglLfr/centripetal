@@ -7,7 +7,13 @@ use bevy::{
     prelude::*,
 };
 
-use crate::logic::{FromLevelEntity, LevelEntity, PenumbraEntity, entities::penumbra::AttractedInitial};
+use crate::logic::{
+    Fields, FromLevelEntity,
+    entities::{
+        Hurt,
+        penumbra::{AttractedInitial, OnLaunch, PenumbraEntity},
+    },
+};
 
 #[derive(Debug, Copy, Clone, Default, Component)]
 #[require(PenumbraEntity)]
@@ -18,13 +24,13 @@ impl FromLevelEntity for ThornRing {
 
     fn from_level_entity(
         mut e: EntityCommands,
-        entity: &LevelEntity,
+        fields: &Fields,
         _: &mut SystemParamItem<Self::Param>,
         mut trns: QueryItem<Self::Data>,
     ) -> Result {
-        let ccw = entity.bool("ccw")?;
-        let facing = entity.point_px("facing")?.as_vec2();
-        let opening = entity.float("opening")?.to_radians();
+        let ccw = fields.bool("ccw")?;
+        let facing = fields.point_px("facing")?.as_vec2();
+        let opening = fields.float("opening")?.to_radians();
 
         let pos = trns.translation.truncate();
         let radius = (facing - pos).length();
@@ -38,7 +44,10 @@ impl FromLevelEntity for ThornRing {
         }
 
         trns.rotation = Quat::from_axis_angle(Vec3::Z, (facing - trns.translation.truncate()).to_angle());
-        e.insert((Self, AttractedInitial { ccw }, Collider::polyline(vertices, None)));
+        e.insert((Self, AttractedInitial { ccw }, Collider::polyline(vertices, None)))
+            .observe(OnLaunch::collide(true, |mut e, by| {
+                e.trigger(Hurt::new(by, 1));
+            }));
 
         debug!("Spawned thorn ring {}!", e.id());
         Ok(())

@@ -2,14 +2,18 @@ use std::{sync::Arc, time::Duration};
 
 use avian2d::prelude::*;
 use bevy::{
-    ecs::{entity::MapEntities, query::QueryItem, system::SystemParamItem},
+    ecs::{
+        entity::MapEntities,
+        query::QueryItem,
+        system::{IntoObserverSystem, ObserverSystem, SystemParamItem},
+    },
     math::{FloatOrd, VectorSpace},
     prelude::*,
 };
 use leafwing_input_manager::{buttonlike::ButtonState, prelude::*};
 use serde::{Deserialize, Serialize};
 
-use crate::logic::{FromLevelEntity, LevelEntity, PenumbraEntity};
+use crate::logic::{Fields, FromLevelEntity, entities::penumbra::PenumbraEntity};
 
 #[derive(Debug, Clone, Component)]
 #[require(PenumbraEntity, AttractorEntities)]
@@ -28,13 +32,13 @@ impl FromLevelEntity for Attractor {
 
     fn from_level_entity(
         mut e: EntityCommands,
-        entity: &LevelEntity,
+        fields: &Fields,
         _: &mut SystemParamItem<Self::Param>,
         _: QueryItem<Self::Data>,
     ) -> Result {
-        let radius = entity.float("radius")?;
-        let strength = entity.float("strength")?;
-        let _level_target = entity.string("level_target").ok().to_owned();
+        let radius = fields.float("radius")?;
+        let strength = fields.float("strength")?;
+        let _level_target = fields.string("level_target").ok().to_owned();
 
         e.insert((
             Self {
@@ -71,6 +75,7 @@ pub enum AttractedAction {
     Hover,
     Precise,
     Launch,
+    Parry,
 }
 
 #[derive(Debug, Clone, Component)]
@@ -147,6 +152,21 @@ pub struct OnLaunch {
     pub command: Arc<LaunchCommand>,
     pub hit_index: Option<usize>,
     pub stopped: bool,
+}
+
+impl OnLaunch {
+    pub fn collide(
+        stop: bool,
+        mut apply: impl FnMut(EntityCommands, Entity) + 'static + Send + Sync,
+    ) -> impl ObserverSystem<Self, ()> {
+        IntoObserverSystem::<Self, (), _>::into_system(move |mut trigger: Trigger<Self>, mut commands: Commands| {
+            if stop {
+                trigger.event_mut().stopped = true;
+            }
+
+            _ = apply(commands.entity(trigger.event().command.launcher_entity), trigger.target());
+        })
+    }
 }
 
 pub fn update_attracted_launching(

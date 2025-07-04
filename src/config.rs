@@ -181,7 +181,8 @@ impl Default for PlayerKeybinds {
                 )
                 .with_axis(AttractedAction::Hover, VirtualAxis::vertical_arrow_keys())
                 .with(AttractedAction::Precise, KeyCode::Space)
-                .with(AttractedAction::Launch, KeyCode::KeyZ),
+                .with(AttractedAction::Launch, KeyCode::KeyZ)
+                .with(AttractedAction::Parry, KeyCode::KeyX),
         }
     }
 }

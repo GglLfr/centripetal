@@ -14,6 +14,38 @@ use crate::logic::{
 
 pub mod penumbra;
 
+#[derive(Debug, Copy, Clone, Component, Deref)]
+#[component(immutable)]
+pub struct Health(pub u32);
+impl Health {
+    pub fn hurt(self, amount: u32) -> Self {
+        self.change(-(amount as i32), None)
+    }
+
+    pub fn change(self, delta: i32, max: Option<MaxHealth>) -> Self {
+        Self(
+            self.saturating_add_signed(delta)
+                .min(max.as_deref().copied().unwrap_or(u32::MAX)),
+        )
+    }
+}
+
+#[derive(Debug, Copy, Clone, Component, Deref)]
+#[component(immutable)]
+pub struct MaxHealth(pub u32);
+
+#[derive(Debug, Copy, Clone, Event)]
+pub struct Hurt {
+    pub by: Entity,
+    pub amount: u32,
+}
+
+impl Hurt {
+    pub fn new(by: Entity, amount: u32) -> Self {
+        Self { by, amount }
+    }
+}
+
 #[derive(Debug, Copy, Clone, Default)]
 pub struct EntitiesPlugin;
 impl Plugin for EntitiesPlugin {

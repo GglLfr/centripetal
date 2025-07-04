@@ -1,7 +1,7 @@
 use std::borrow::Cow;
 
 use bevy::{
-    asset::{LoadState, RecursiveDependencyLoadState},
+    asset::{LoadState, RecursiveDependencyLoadState, uuid::Uuid},
     ecs::{
         query::{QueryData, QueryItem},
         system::{StaticSystemParam, SystemId, SystemParam, SystemParamItem, SystemState},
@@ -26,9 +26,12 @@ use crate::{
 #[derive(Debug, Clone, Event, Deref, DerefMut)]
 pub struct LoadLevelEvent(pub Cow<'static, str>);
 
-#[derive(Debug, Clone, Component, Deref, DerefMut)]
+#[derive(Debug, Clone, Component)]
 #[require(LevelSpawned, Transform, Visibility)]
-pub struct LevelHandle(pub Handle<LdtkLevel>);
+pub struct Level {
+    pub id: String,
+    pub handle: Handle<LdtkLevel>,
+}
 
 #[derive(Debug, Copy, Clone, Component, Deref, DerefMut)]
 pub struct LevelBounds(pub Vec2);
@@ -50,70 +53,68 @@ impl LevelLayer {
 }
 
 #[derive(Debug, Clone, Component)]
-#[require(Transform, Visibility)]
+#[require(Transform, Visibility, Fields)]
 pub struct LevelEntity {
     pub id: String,
-    pub fields: HashMap<String, LdtkEntityField>,
+    pub iid: Uuid,
 }
 
+#[derive(Debug, Clone, Default, Component, Deref, DerefMut)]
+pub struct Fields(pub HashMap<String, LdtkEntityField>);
+
 #[derive(Debug, Display, Error)]
-pub enum LevelEntityFieldError {
+pub enum FieldError {
     NotFound,
     WrongType,
 }
 
-impl LevelEntity {
-    pub fn int(&self, name: impl AsRef<str>) -> Result<u32, LevelEntityFieldError> {
-        self.fields
-            .get(name.as_ref())
+impl Fields {
+    pub fn int(&self, name: impl AsRef<str>) -> Result<u32, FieldError> {
+        self.get(name.as_ref())
             .map(|f| match f {
                 LdtkEntityField::Int(value) => Ok(*value),
-                _ => Err(LevelEntityFieldError::WrongType),
+                _ => Err(FieldError::WrongType),
             })
-            .unwrap_or(Err(LevelEntityFieldError::NotFound))
+            .unwrap_or(Err(FieldError::NotFound))
     }
 
-    pub fn float(&self, name: impl AsRef<str>) -> Result<f32, LevelEntityFieldError> {
-        self.fields
-            .get(name.as_ref())
+    pub fn float(&self, name: impl AsRef<str>) -> Result<f32, FieldError> {
+        self.get(name.as_ref())
             .map(|f| match f {
                 LdtkEntityField::Float(value) => Ok(*value),
-                _ => Err(LevelEntityFieldError::WrongType),
+                _ => Err(FieldError::WrongType),
             })
-            .unwrap_or(Err(LevelEntityFieldError::NotFound))
+            .unwrap_or(Err(FieldError::NotFound))
     }
 
-    pub fn bool(&self, name: impl AsRef<str>) -> Result<bool, LevelEntityFieldError> {
-        self.fields
-            .get(name.as_ref())
+    pub fn bool(&self, name: impl AsRef<str>) -> Result<bool, FieldError> {
+        self.get(name.as_ref())
             .map(|f| match f {
                 LdtkEntityField::Bool(value) => Ok(*value),
-                _ => Err(LevelEntityFieldError::WrongType),
+                _ => Err(FieldError::WrongType),
             })
-            .unwrap_or(Err(LevelEntityFieldError::NotFound))
+            .unwrap_or(Err(FieldError::NotFound))
     }
 
-    pub fn string(&self, name: impl AsRef<str>) -> Result<&str, LevelEntityFieldError> {
-        self.fields
-            .get(name.as_ref())
+    pub fn string(&self, name: impl AsRef<str>) -> Result<&str, FieldError> {
+        self.get(name.as_ref())
             .map(|f| match f {
                 LdtkEntityField::String(value) => Ok(value.as_ref()),
-                _ => Err(LevelEntityFieldError::WrongType),
+                _ => Err(FieldError::WrongType),
             })
-            .unwrap_or(Err(LevelEntityFieldError::NotFound))
+            .unwrap_or(Err(FieldError::NotFound))
     }
 
-    pub fn point(&self, name: impl AsRef<str>) -> Result<UVec2, LevelEntityFieldError> {
-        self.fields
-            .get(name.as_ref())
+    pub fn point(&self, name: impl AsRef<str>) -> Result<UVec2, FieldError> {
+        self.get(name.as_ref())
             .map(|f| match f {
                 LdtkEntityField::Point(value) => Ok(*value),
-                _ => Err(LevelEntityFieldError::WrongType),
+                _ => Err(FieldError::WrongType),
             })
-            .unwrap_or(Err(LevelEntityFieldError::NotFound))
+            .unwrap_or(Err(FieldError::NotFound))
     }
 
-    pub fn point_px(&self, name: impl AsRef<str>) -> Result<UVec2, LevelEntityFieldError> {
+    pub fn point_px(&self, name: impl AsRef<str>) -> Result<UVec2, FieldError> {
         self.point(name).map(|p| p * PIXELS_PER_UNIT + PIXELS_PER_UNIT / 2)
     }
 }
@@ -136,7 +137,7 @@ pub trait FromLevelEntity: 'static {
 
     fn from_level_entity(
         e: EntityCommands,
-        entity: &LevelEntity,
+        fields: &Fields,
         param: &mut SystemParamItem<Self::Param>,
         data: QueryItem<Self::Data>,
     ) -> Result;
@@ -148,7 +149,7 @@ pub trait FromLevelIntCell: 'static {
 
     fn from_level_int_cell(
         e: EntityCommands,
-        entity: &LevelIntCell,
+        cell: &LevelIntCell,
         param: &mut SystemParamItem<Self::Param>,
         data: QueryItem<Self::Data>,
     ) -> Result;
@@ -162,11 +163,11 @@ impl LevelEntities {
             InRef(e): InRef<[Entity]>,
             mut commands: Commands,
             mut param: StaticSystemParam<T::Param>,
-            mut query: Query<(Entity, &LevelEntity, T::Data)>,
+            mut query: Query<(Entity, &Fields, T::Data)>,
         ) -> Result {
             let mut query = query.iter_many_mut(e);
-            while let Some((e, entity, data)) = query.fetch_next() {
-                T::from_level_entity(commands.entity(e), entity, &mut param, data)?;
+            while let Some((e, fields, data)) = query.fetch_next() {
+                T::from_level_entity(commands.entity(e), fields, &mut param, data)?;
             }
 
             Ok(())
@@ -238,7 +239,7 @@ pub fn handle_load_level_event(
     server: Res<AssetServer>,
     world: LdtkWorld,
     mut state: ResMut<NextState<InGameState>>,
-    to_be_unloaded: Query<Entity, (With<LevelHandle>, Without<LevelUnload>)>,
+    to_be_unloaded: Query<Entity, (With<Level>, Without<LevelUnload>)>,
 ) -> Result {
     let Some(event) = events.read().last() else { return Ok(()) };
     for e in &to_be_unloaded {
@@ -246,19 +247,18 @@ pub fn handle_load_level_event(
         commands.entity(e).insert(LevelUnload);
     }
 
+    let id = String::from(event.as_ref());
+    let handle = server.load(
+        world
+            .levels
+            .get(event.as_ref())
+            .ok_or_else(|| format!("Level {} not found", event.as_ref()))?,
+    );
+
     debug!(
         "Loading level {} as entity {}!",
         **event,
-        commands
-            .spawn(LevelHandle(
-                server.load(
-                    world
-                        .levels
-                        .get(event.as_ref())
-                        .ok_or_else(|| format!("Level {} not found", event.as_ref()))?,
-                ),
-            ))
-            .id()
+        commands.spawn(Level { id, handle }).id()
     );
 
     state.set(InGameState::Loading);
@@ -270,18 +270,18 @@ pub fn handle_load_level_progress(
     mut camera: Single<&mut Camera, With<MainCamera>>,
     tracker: ProgressEntry<InGameState>,
     server: Res<AssetServer>,
-    mut level_handles: Query<(Entity, &LevelHandle, &mut LevelSpawned), Without<LevelUnload>>,
+    mut level_handles: Query<(Entity, &Level, &mut LevelSpawned), Without<LevelUnload>>,
     levels: Res<Assets<LdtkLevel>>,
     world: LdtkWorld,
 ) -> Result {
     let mut all_done = 0;
     let mut all_total = 0;
 
-    for (e, handle, mut spawned) in &mut level_handles {
+    for (e, level, mut spawned) in &mut level_handles {
         let mut done = false;
         match (
-            server.load_state(handle.id()),
-            server.recursive_dependency_load_state(handle.id()),
+            server.load_state(&level.handle),
+            server.recursive_dependency_load_state(&level.handle),
         ) {
             (LoadState::NotLoaded, ..) => Err("The level's asset handle is dropped")?,
             (LoadState::Loading, ..) | (.., RecursiveDependencyLoadState::Loading) => {}
@@ -295,14 +295,14 @@ pub fn handle_load_level_progress(
         if done && !std::mem::replace(&mut spawned.0, true) {
             debug!("Loaded level entity {e}!");
 
-            let level = levels.get(handle.id()).ok_or("Level asset unloaded")?;
-            camera.clear_color = ClearColorConfig::Custom(level.bg_color);
+            let level_asset = levels.get(&level.handle).ok_or("Level asset unloaded")?;
+            camera.clear_color = ClearColorConfig::Custom(level_asset.bg_color);
 
             commands
                 .entity(e)
-                .insert(LevelBounds(uvec2(level.width_px, level.height_px).as_vec2()));
+                .insert(LevelBounds(uvec2(level_asset.width_px, level_asset.height_px).as_vec2()));
 
-            for layer in &level.layers {
+            for layer in &level_asset.layers {
                 let mut layer_entity = commands.spawn((
                     LevelLayer { id: layer.id.clone() },
                     Transform::default(),
@@ -316,8 +316,9 @@ pub fn handle_load_level_progress(
                                 layer_children.spawn((
                                     LevelEntity {
                                         id: e.id.clone(),
-                                        fields: e.fields.clone(),
+                                        iid: e.iid,
                                     },
+                                    Fields(e.fields.clone()),
                                     Transform::from_translation(e.grid_position_px.as_vec2().extend(0.)),
                                 ));
                             }
