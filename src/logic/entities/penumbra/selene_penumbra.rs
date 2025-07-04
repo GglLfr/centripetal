@@ -5,13 +5,10 @@ use bevy::{
     ecs::{query::QueryItem, system::SystemParamItem},
     prelude::*,
 };
-use leafwing_input_manager::{action_state::ActionData, prelude::*};
 
 use crate::logic::{
-    CameraTarget, FromLevelEntity, IsPlayer, LevelEntity, PenumbraEntity, PlayerAction,
-    entities::penumbra::{
-        AttractedAction, AttractedInitial, AttractedLaunch, AttractedParams, AttractedPrediction, OnLaunch,
-    },
+    CameraTarget, FromLevelEntity, IsPlayer, LevelEntity, PenumbraEntity,
+    entities::penumbra::{AttractedInitial, AttractedLaunch, AttractedParams, AttractedPrediction, OnLaunch},
 };
 
 #[derive(Debug, Copy, Clone, Default, Component)]
@@ -63,25 +60,6 @@ impl FromLevelEntity for SelenePenumbra {
 
         debug!("Spawned Selene {}!", e.id());
         Ok(())
-    }
-}
-
-pub fn copy_player_to_hover_state(mut selene: Query<(&mut ActionState<AttractedAction>, &ActionState<PlayerAction>)>) {
-    for (mut hover_state, player_state) in &mut selene {
-        for (src, dst) in [
-            (PlayerAction::PenumbraPrograde, AttractedAction::Prograde),
-            (PlayerAction::PenumbraHover, AttractedAction::Hover),
-            (PlayerAction::PenumbraPrecise, AttractedAction::Precise),
-            (PlayerAction::PenumbraLaunch, AttractedAction::Launch),
-        ] {
-            let mut tmp = None;
-            hover_state
-                .action_data_mut_or_default(&dst)
-                .clone_from(match player_state.action_data(&src) {
-                    Some(state) => state,
-                    None => tmp.insert(ActionData::from_kind(src.input_control_kind())),
-                });
-        }
     }
 }
 

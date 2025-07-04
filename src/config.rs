@@ -18,7 +18,7 @@ use directories::ProjectDirs;
 use leafwing_input_manager::prelude::*;
 use serde::{Deserialize, Serialize};
 
-use crate::logic::PlayerAction;
+use crate::logic::{PlayerAction, entities::penumbra::AttractedAction};
 
 #[derive(Debug, Clone, Resource)]
 pub struct Dirs {
@@ -161,23 +161,28 @@ impl WindowConfig {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Deref, DerefMut)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
-pub struct PlayerKeybinds(pub InputMap<PlayerAction>);
+pub struct PlayerKeybinds {
+    pub player: InputMap<PlayerAction>,
+    pub attracted: InputMap<AttractedAction>,
+}
+
 impl Default for PlayerKeybinds {
     fn default() -> Self {
-        Self(
-            InputMap::default()
+        Self {
+            player: InputMap::default()
                 .with_dual_axis(PlayerAction::Move, VirtualDPad::wasd())
-                .with(PlayerAction::Attack, KeyCode::KeyZ)
+                .with(PlayerAction::Attack, KeyCode::KeyZ),
+            attracted: InputMap::default()
                 .with_axis(
-                    PlayerAction::PenumbraPrograde,
+                    AttractedAction::Prograde,
                     VirtualAxis::new(KeyCode::ControlLeft, KeyCode::ShiftLeft),
                 )
-                .with_axis(PlayerAction::PenumbraHover, VirtualAxis::vertical_arrow_keys())
-                .with(PlayerAction::PenumbraPrecise, KeyCode::Space)
-                .with(PlayerAction::PenumbraLaunch, KeyCode::KeyZ),
-        )
+                .with_axis(AttractedAction::Hover, VirtualAxis::vertical_arrow_keys())
+                .with(AttractedAction::Precise, KeyCode::Space)
+                .with(AttractedAction::Launch, KeyCode::KeyZ),
+        }
     }
 }
 

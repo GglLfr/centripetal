@@ -7,6 +7,7 @@ use bevy::{
     prelude::*,
 };
 use leafwing_input_manager::{buttonlike::ButtonState, prelude::*};
+use serde::{Deserialize, Serialize};
 
 use crate::logic::{FromLevelEntity, LevelEntity, PenumbraEntity};
 
@@ -62,7 +63,7 @@ pub struct AttractedInitial {
     pub ccw: bool,
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Reflect, Actionlike)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Reflect, Actionlike, Serialize, Deserialize)]
 pub enum AttractedAction {
     #[actionlike(Axis)]
     Prograde,
