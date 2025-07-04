@@ -126,7 +126,7 @@ impl AssetLoader for SpriteSheetLoader {
         let (page, sprite) = receiver.recv().await.map_err(|_| SpriteSheetError::Closed)??;
 
         root.frames
-            .sort_unstable_by_key(|frame| u32::from_str_radix(&frame.filename, 10).unwrap_or(0));
+            .sort_unstable_by_key(|frame| frame.filename.parse::<u32>().unwrap_or(0));
 
         let frames = root
             .frames

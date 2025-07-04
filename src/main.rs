@@ -1,3 +1,5 @@
+#![allow(clippy::type_complexity)]
+
 use avian2d::prelude::*;
 #[cfg(feature = "dev")]
 use bevy::log::DEFAULT_FILTER;

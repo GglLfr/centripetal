@@ -221,7 +221,7 @@ pub fn detect_attracted_entities(
             Entity,
             &Position,
             &mut LinearVelocity,
-            Option<Ref<AttractedLaunching>>,
+            Option<&AttractedLaunching>,
             Option<&AttractedInitial>,
         ),
         With<PenumbraEntity>,
@@ -246,25 +246,23 @@ pub fn detect_attracted_entities(
                     commands.entity(e).remove::<AttractedInitial>();
                 }
 
-                if let Some(launching) = launching.as_deref() {
-                    if let AttractedLaunching::Launch { target } = launching {
-                        commands.entity(e).insert(AttractedLaunching::Idle { last_launched: now });
+                if let Some(AttractedLaunching::Launch { target }) = launching {
+                    commands.entity(e).insert(AttractedLaunching::Idle { last_launched: now });
 
-                        let Ok(dir) = Dir2::new(r_vec) else { return true };
-                        let mut hits = pipeline.ray_hits(*pos, dir, r, u32::MAX, true, &SpatialQueryFilter {
-                            excluded_entities: [e, attractor_entity].into_iter().collect(),
-                            ..SpatialQueryFilter::DEFAULT
-                        });
+                    let Ok(dir) = Dir2::new(r_vec) else { return true };
+                    let mut hits = pipeline.ray_hits(*pos, dir, r, u32::MAX, true, &SpatialQueryFilter {
+                        excluded_entities: [e, attractor_entity].into_iter().collect(),
+                        ..SpatialQueryFilter::DEFAULT
+                    });
 
-                        hits.sort_unstable_by_key(|data| FloatOrd(data.distance));
-                        commands.entity(e).queue(LaunchCommand {
-                            target: target.clone(),
-                            launcher_entity: e,
-                            attractor_entity,
-                            attractor_pos: *attractor_pos,
-                            hits,
-                        });
-                    }
+                    hits.sort_unstable_by_key(|data| FloatOrd(data.distance));
+                    commands.entity(e).queue(LaunchCommand {
+                        target: target.clone(),
+                        launcher_entity: e,
+                        attractor_entity,
+                        attractor_pos: *attractor_pos,
+                        hits,
+                    });
                 }
 
                 tmp.push(e);
