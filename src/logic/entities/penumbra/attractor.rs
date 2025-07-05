@@ -23,6 +23,19 @@ pub struct Attractor {
     pub caster: Collider,
 }
 
+impl Attractor {
+    pub fn bundle(radius: f32, strength: f32) -> impl Bundle {
+        (
+            Self {
+                radius,
+                gravity: strength * strength * radius,
+                caster: Collider::circle(radius),
+            },
+            Collider::circle(8.),
+        )
+    }
+}
+
 #[derive(Debug, Clone, Default, Component, MapEntities, Deref, DerefMut)]
 pub struct AttractorEntities(#[entities] pub Vec<Entity>);
 
@@ -40,14 +53,7 @@ impl FromLevelEntity for Attractor {
         let strength = fields.float("strength")?;
         let _level_target = fields.string("level_target").ok().to_owned();
 
-        e.insert((
-            Self {
-                radius,
-                gravity: strength * strength * radius,
-                caster: Collider::circle(radius),
-            },
-            Collider::circle(8.),
-        ));
+        e.insert(Self::bundle(radius, strength));
 
         debug!("Spawned attractor {}!", e.id());
         Ok(())

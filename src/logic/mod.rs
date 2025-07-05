@@ -43,9 +43,9 @@ impl Plugin for LogicPlugin {
                 ProgressPlugin::<InGameState>::new().with_state_transition(InGameState::Loading, InGameState::Resumed),
             )
             .add_event::<LoadLevelEvent>()
-            .init_resource::<Levels>()
-            .init_resource::<LevelEntities>()
-            .init_resource::<LevelIntCells>()
+            .init_resource::<RegisteredLevels>()
+            .init_resource::<RegisteredLevelEntities>()
+            .init_resource::<RegisteredLevelIntCells>()
             .add_plugins((EntitiesPlugin, LevelsPlugin))
             .add_systems(
                 Update,
