@@ -128,6 +128,7 @@ struct Level {
     #[serde(rename = "pxHei")]
     height_px: u32,
     layer_instances: Vec<LayerInstance>,
+    field_instances: Vec<FieldInstance>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -240,10 +241,26 @@ impl AssetLoader for LdtkLevelLoader {
         let level: Level = unblock(move || serde_json::from_str(&file)).await?;
         let base_path = load_context.asset_path().parent().ok_or(LdtkError::MissingParentDirectory)?;
 
+        let fields = |field_instances: Vec<FieldInstance>| {
+            field_instances
+                .into_iter()
+                .filter_map(|f| {
+                    Some((f.id, match f.data {
+                        FieldInstanceData::Int { value } => LdtkEntityField::Int(value?),
+                        FieldInstanceData::Float { value } => LdtkEntityField::Float(value?),
+                        FieldInstanceData::Bool { value } => LdtkEntityField::Bool(value?),
+                        FieldInstanceData::String { value } => LdtkEntityField::String(value?),
+                        FieldInstanceData::Point { value } => LdtkEntityField::Point(value.map(|p| uvec2(p.cx, p.cy))?),
+                    }))
+                })
+                .collect()
+        };
+
         Ok(LdtkLevel {
             bg_color: level.bg_color.into(),
             width_px: level.width_px,
             height_px: level.height_px,
+            fields: fields(level.field_instances),
             layers: level.layer_instances.into_iter().try_fold(Vec::new(), |mut out, layer| {
                 // Convert Y+ bottom to Y+ top.
                 let top_grid = layer.height - 1;
@@ -262,21 +279,7 @@ impl AssetLoader for LdtkLevelLoader {
                                     id: e.id,
                                     iid: e.iid,
                                     grid_position_px: uvec2(e.px[0], top_px - e.px[1]),
-                                    fields: e
-                                        .field_instances
-                                        .into_iter()
-                                        .filter_map(|f| {
-                                            Some((f.id, match f.data {
-                                                FieldInstanceData::Int { value } => LdtkEntityField::Int(value?),
-                                                FieldInstanceData::Float { value } => LdtkEntityField::Float(value?),
-                                                FieldInstanceData::Bool { value } => LdtkEntityField::Bool(value?),
-                                                FieldInstanceData::String { value } => LdtkEntityField::String(value?),
-                                                FieldInstanceData::Point { value } => {
-                                                    LdtkEntityField::Point(value.map(|p| uvec2(p.cx, p.cy))?)
-                                                }
-                                            }))
-                                        })
-                                        .collect(),
+                                    fields: fields(e.field_instances),
                                 })
                                 .collect(),
                         ),

@@ -26,6 +26,7 @@ pub struct LdtkLevel {
     pub bg_color: Color,
     pub width_px: u32,
     pub height_px: u32,
+    pub fields: HashMap<String, LdtkEntityField>,
     pub layers: Vec<LdtkLayer>,
 }
 

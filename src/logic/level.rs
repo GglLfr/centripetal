@@ -6,7 +6,7 @@ use bevy::{
         query::{QueryData, QueryItem},
         system::{StaticSystemParam, SystemId, SystemParam, SystemParamItem, SystemState},
     },
-    platform::collections::HashMap,
+    platform::collections::{HashMap, HashSet},
     prelude::*,
     render::sync_world::SyncToRenderWorld,
 };
@@ -131,6 +131,18 @@ pub struct LevelIntCell {
     pub y: u32,
 }
 
+pub trait FromLevel: 'static {
+    type Param: 'static + SystemParam;
+    type Data: 'static + QueryData;
+
+    fn from_level(
+        e: EntityCommands,
+        fields: &Fields,
+        param: SystemParamItem<Self::Param>,
+        data: QueryItem<Self::Data>,
+    ) -> Result;
+}
+
 pub trait FromLevelEntity: 'static {
     type Param: 'static + SystemParam;
     type Data: 'static + QueryData;
@@ -153,6 +165,24 @@ pub trait FromLevelIntCell: 'static {
         param: &mut SystemParamItem<Self::Param>,
         data: QueryItem<Self::Data>,
     ) -> Result;
+}
+
+#[derive(Debug, Clone, Default, Resource)]
+pub struct Levels(HashMap<String, SystemId<In<Entity>, Result>>);
+impl Levels {
+    pub fn register<T: FromLevel>(&mut self, world: &mut World, level: impl Into<String>) {
+        fn spawn<T: FromLevel>(
+            In(e): In<Entity>,
+            mut commands: Commands,
+            param: StaticSystemParam<T::Param>,
+            mut query: Query<(Entity, &Fields, T::Data)>,
+        ) -> Result {
+            let (e, fields, data) = query.get_mut(e)?;
+            T::from_level(commands.entity(e), fields, param.into_inner(), data)
+        }
+
+        self.0.insert(level.into(), world.register_system(spawn::<T>));
+    }
 }
 
 #[derive(Debug, Clone, Default, Resource)]
@@ -206,6 +236,8 @@ impl LevelIntCells {
 }
 
 pub trait LevelApp {
+    fn register_level<T: FromLevel>(&mut self, level: impl Into<String>) -> &mut Self;
+
     fn register_level_entity<T: FromLevelEntity>(
         &mut self,
         layer: impl AsRef<str>,
@@ -216,6 +248,12 @@ pub trait LevelApp {
 }
 
 impl LevelApp for App {
+    fn register_level<T: FromLevel>(&mut self, level: impl Into<String>) -> &mut Self {
+        self.world_mut()
+            .resource_scope(|world, mut entities: Mut<Levels>| entities.register::<T>(world, level));
+        self
+    }
+
     fn register_level_entity<T: FromLevelEntity>(
         &mut self,
         layer: impl AsRef<str>,
@@ -298,9 +336,10 @@ pub fn handle_load_level_progress(
             let level_asset = levels.get(&level.handle).ok_or("Level asset unloaded")?;
             camera.clear_color = ClearColorConfig::Custom(level_asset.bg_color);
 
-            commands
-                .entity(e)
-                .insert(LevelBounds(uvec2(level_asset.width_px, level_asset.height_px).as_vec2()));
+            commands.entity(e).insert((
+                LevelBounds(uvec2(level_asset.width_px, level_asset.height_px).as_vec2()),
+                Fields(level_asset.fields.clone()),
+            ));
 
             for layer in &level_asset.layers {
                 let mut layer_entity = commands.spawn((
@@ -423,22 +462,40 @@ fn spawn_tilemap(layer_entity: &mut EntityCommands, tiles: &LdtkTiles, layer: &L
 pub fn handle_load_level_end(
     world: &mut World,
     state: &mut SystemState<(
+        Res<Levels>,
         Res<LevelEntities>,
         Res<LevelIntCells>,
-        Query<(&LevelLayer, &Children), Added<LevelLayer>>,
+        Query<(&LevelLayer, &Children, &ChildOf), Added<LevelLayer>>,
+        Query<&Level>,
         Query<(Entity, &LevelEntity)>,
         Query<(Entity, &LevelIntCell)>,
         ResMut<NextState<InGameState>>,
         Query<Entity, With<LevelUnload>>,
     )>,
+    mut level_targets: Local<HashSet<(SystemId<In<Entity>, Result>, Entity)>>,
     mut entity_targets: Local<HashMap<SystemId<InRef<[Entity]>, Result>, Vec<Entity>>>,
     mut int_cell_targets: Local<HashMap<SystemId<InRef<[Entity]>, Result>, Vec<Entity>>>,
     mut unload_levels: Local<Vec<Entity>>,
 ) -> Result {
-    let (entity_creators, int_cell_creators, spawned_layers, entities, int_cells, mut state, to_be_unloaded) =
-        state.get_mut(world);
+    let (
+        level_creators,
+        entity_creators,
+        int_cell_creators,
+        spawned_layers,
+        levels,
+        entities,
+        int_cells,
+        mut state,
+        to_be_unloaded,
+    ) = state.get_mut(world);
 
-    for (layer, layer_children) in &spawned_layers {
+    for (layer, layer_children, child_of) in &spawned_layers {
+        if let Ok(level) = levels.get(child_of.parent()) &&
+            let Some(&creator) = level_creators.0.get(&level.id)
+        {
+            level_targets.insert((creator, child_of.parent()));
+        }
+
         if let Some(creators) = entity_creators.0.get(&layer.id) {
             for (entity_id, entity) in entities.iter_many(layer_children) {
                 if let Some(&create) = creators.get(&entity.id) {
@@ -469,6 +526,10 @@ pub fn handle_load_level_end(
 
     for (&id, int_cells) in &mut int_cell_targets {
         world.run_system_with(id, int_cells.drain(..).as_slice())??;
+    }
+
+    for (id, level) in level_targets.drain() {
+        world.run_system_with(id, level)??;
     }
 
     world.flush();

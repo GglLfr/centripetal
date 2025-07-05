@@ -2,9 +2,10 @@ use bevy::{prelude::*, render::camera::CameraUpdateSystem};
 use iyes_progress::ProgressPlugin;
 use leafwing_input_manager::prelude::*;
 
-use crate::logic::entities::EntitiesPlugin;
+use crate::logic::{entities::EntitiesPlugin, levels::LevelsPlugin};
 
 pub mod entities;
+pub mod levels;
 
 mod camera;
 mod control;
@@ -42,9 +43,10 @@ impl Plugin for LogicPlugin {
                 ProgressPlugin::<InGameState>::new().with_state_transition(InGameState::Loading, InGameState::Resumed),
             )
             .add_event::<LoadLevelEvent>()
+            .init_resource::<Levels>()
             .init_resource::<LevelEntities>()
             .init_resource::<LevelIntCells>()
-            .add_plugins(EntitiesPlugin)
+            .add_plugins((EntitiesPlugin, LevelsPlugin))
             .add_systems(
                 Update,
                 (
