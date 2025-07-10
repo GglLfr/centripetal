@@ -2,7 +2,10 @@ use bevy::{prelude::*, render::camera::CameraUpdateSystem};
 use iyes_progress::ProgressPlugin;
 use leafwing_input_manager::prelude::*;
 
-use crate::logic::{entities::EntitiesPlugin, levels::LevelsPlugin};
+use crate::{
+    SaveApp,
+    logic::{entities::EntitiesPlugin, levels::LevelsPlugin},
+};
 
 pub mod entities;
 pub mod levels;
@@ -42,7 +45,6 @@ impl Plugin for LogicPlugin {
             .add_plugins(
                 ProgressPlugin::<InGameState>::new().with_state_transition(InGameState::Loading, InGameState::Resumed),
             )
-            .init_resource::<LoadLevel>()
             .init_resource::<RegisteredLevels>()
             .init_resource::<RegisteredLevelEntities>()
             .init_resource::<RegisteredLevelIntCells>()
@@ -50,9 +52,9 @@ impl Plugin for LogicPlugin {
             .add_systems(
                 Update,
                 (
-                    handle_load_level_event.run_if(in_state(InGameState::Resumed)),
+                    handle_load_level_begin.run_if(in_state(InGameState::Resumed)),
                     handle_load_level_progress
-                        .after(handle_load_level_event)
+                        .after(handle_load_level_begin)
                         .run_if(in_state(InGameState::Loading)),
                 ),
             )
@@ -64,6 +66,7 @@ impl Plugin for LogicPlugin {
                     .run_if(in_state(InGameState::Resumed))
                     .after(CameraUpdateSystem)
                     .before(TransformSystem::TransformPropagate),
-            );
+            )
+            .save_resource::<LoadLevel>();
     }
 }

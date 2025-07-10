@@ -186,8 +186,8 @@ pub fn update_attracted_launching(
         if param.launches.is_empty() {
             continue
         }
-        let Some(data) = state.button_data(&AttractedAction::Launch) else { continue };
 
+        let Some(data) = state.button_data(&AttractedAction::Launch) else { continue };
         let target = if let &AttractedLaunching::Charging { started } = launching {
             let mut duration = now - started;
             let mut target = None;

@@ -11,6 +11,7 @@ use bevy::{
 use bevy_ecs_tilemap::prelude::*;
 use derive_more::{Display, Error};
 use iyes_progress::ProgressEntry;
+use serde::{Deserialize, Serialize};
 
 use crate::{
     PIXELS_PER_UNIT,
@@ -21,18 +22,8 @@ use crate::{
     logic::{CameraQuery, InGameState},
 };
 
-#[derive(Debug, Clone, Default, Resource)]
-pub enum LoadLevel {
-    #[default]
-    None,
-    Pending(String),
-}
-
-impl LoadLevel {
-    pub fn set(&mut self, next: impl Into<String>) {
-        *self = LoadLevel::Pending(next.into());
-    }
-}
+#[derive(Debug, Clone, Resource, TypePath, Serialize, Deserialize, Deref, DerefMut)]
+pub struct LoadLevel(pub String);
 
 #[derive(Debug, Clone, Component)]
 #[require(LevelSpawned, Transform, Visibility)]
@@ -279,38 +270,39 @@ impl LevelApp for App {
     }
 }
 
-pub fn handle_load_level_event(
+pub fn handle_load_level_begin(
     mut commands: Commands,
-    mut next: ResMut<LoadLevel>,
+    next: Option<Res<LoadLevel>>,
     server: Res<AssetServer>,
     world: LdtkWorld,
     mut state: ResMut<NextState<InGameState>>,
-    to_be_unloaded: Query<Entity, (With<Level>, Without<LevelUnload>)>,
+    to_be_unloaded: Query<(Entity, &Level), Without<LevelUnload>>,
 ) -> Result {
-    let Some(Some(next)) = next.is_changed().then(|| match std::mem::take(&mut *next) {
-        LoadLevel::None => None,
-        LoadLevel::Pending(next) => Some(next),
-    }) else {
+    let Some(next) = next.as_ref().and_then(|next| next.is_changed().then_some(next.as_str())) else {
         return Ok(())
     };
 
-    for unloaded in &to_be_unloaded {
-        debug!("Unloading level entity {unloaded}");
-        commands.entity(unloaded).insert(LevelUnload);
+    let mut identity = false;
+    for (e, level) in &to_be_unloaded {
+        if level.id == next {
+            warn!("Tried reloading level {next}, ignoring!");
+            identity = true;
+        } else {
+            debug!("Unloading level entity {e}.");
+            commands.entity(e).insert(LevelUnload);
+        }
     }
 
-    let handle = server.load(world.levels.get(&next).ok_or_else(|| format!("Level {next} not found"))?);
-    debug!(
-        "Loading level {next} as entity {}!",
-        commands
-            .spawn(Level {
-                id: next.clone(),
-                handle
-            })
-            .id()
-    );
+    if !identity {
+        let handle = server.load(world.levels.get(next).ok_or_else(|| format!("Level {next} not found"))?);
+        debug!(
+            "Loading level {next} as entity {}!",
+            commands.spawn(Level { id: next.into(), handle }).id()
+        );
 
-    state.set(InGameState::Loading);
+        state.set(InGameState::Loading);
+    }
+
     Ok(())
 }
 

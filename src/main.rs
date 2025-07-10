@@ -18,7 +18,9 @@ pub mod gfx;
 pub mod logic;
 
 mod config;
+mod save;
 pub use config::*;
+pub use save::*;
 
 #[cfg_attr(not(feature = "bevy_dynamic"), global_allocator)]
 #[cfg_attr(
@@ -51,17 +53,19 @@ fn main() -> AppExit {
             PhysicsDebugPlugin::default(),
             TilemapPlugin,
             FramepacePlugin,
+            ConfigPlugin,
+            SavePlugin,
             SetupAssetPlugin,
             LogicPlugin,
             GfxPlugin,
-            ConfigPlugin,
         ))
         .add_systems(OnEnter(GameState::Menu), dev_init)
         .run()
 }
 
-fn dev_init(mut state: ResMut<NextState<GameState>>, mut level: ResMut<LoadLevel>) {
+fn dev_init(mut commands: Commands, mut state: ResMut<NextState<GameState>>) {
     debug!("[TODO remove] Dev-initialize, loading `penumbra_wing_l` now!");
     state.set(GameState::InGame);
-    level.set("penumbra_wing_l");
+
+    commands.queue(ApplySave::default().with(LoadLevel("penumbra_wing_l".into())));
 }

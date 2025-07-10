@@ -19,6 +19,7 @@ guillotiere = "0.6"
 iyes_progress = { version = "0.14", features = ["assets", "async"] }
 mimalloc-redirect = "0.1"
 serde = { version = "1", features = ["derive"] }
+serde_flexitos = "0.2"
 serde_json = "1"
 
 [dependencies.bevy]
@@ -61,4 +62,4 @@ features = [
 [features]
 default = ["bevy_dynamic", "dev"]
 bevy_dynamic = ["bevy/dynamic_linking"]
-dev = []
+dev = ["bevy/track_location"]
