@@ -5,10 +5,10 @@ use leafwing_input_manager::prelude::*;
 #[cfg(feature = "dev")]
 use crate::logic::entities::penumbra::{draw_attract_trajectory, draw_attractor_radius};
 use crate::logic::{
-    LevelApp,
+    InGameState, LevelApp,
     entities::penumbra::{
         AttractedAction, Attractor, SelenePenumbra, ThornPillar, ThornRing, apply_attractor_accels,
-        detect_attracted_entities, predict_attract_trajectory, update_attracted_launching,
+        detect_attracted_entities, predict_attract_trajectory, remove_attracted_initials, update_attracted_launching,
     },
 };
 
@@ -64,7 +64,11 @@ impl Plugin for EntitiesPlugin {
                 PhysicsSchedule,
                 (
                     predict_attract_trajectory.after(SolverSet::ApplyTranslation),
-                    detect_attracted_entities.in_set(PhysicsStepSet::SpatialQuery),
+                    (detect_attracted_entities, remove_attracted_initials)
+                        .chain()
+                        .in_set(PhysicsStepSet::SpatialQuery)
+                        .after(update_spatial_query_pipeline)
+                        .run_if(in_state(InGameState::Resumed)),
                 )
                     .ambiguous_with_all(),
             );

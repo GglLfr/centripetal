@@ -1,9 +1,8 @@
-use std::{sync::Arc, time::Duration};
+use std::time::Duration;
 
 use avian2d::prelude::*;
 use bevy::{
     ecs::{
-        entity::MapEntities,
         query::QueryItem,
         system::{IntoObserverSystem, ObserverSystem, SystemParamItem},
     },
@@ -36,8 +35,8 @@ impl Attractor {
     }
 }
 
-#[derive(Debug, Clone, Default, Component, MapEntities, Deref, DerefMut)]
-pub struct AttractorEntities(#[entities] pub Vec<Entity>);
+#[derive(Debug, Clone, Default, Component, Deref, DerefMut)]
+pub struct AttractorEntities(pub Vec<Entity>);
 
 impl FromLevelEntity for Attractor {
     type Param = ();
@@ -122,23 +121,24 @@ pub struct AttractedLaunch {
 pub struct LaunchCommand {
     pub target: AttractedLaunch,
     pub launcher_entity: Entity,
+    pub launcher_pos: Vec2,
     pub attractor_entity: Entity,
     pub attractor_pos: Vec2,
-    pub hits: Vec<RayHitData>,
+    hits: Vec<RayHitData>,
 }
 
 impl EntityCommand for LaunchCommand {
-    fn apply(self, mut entity: EntityWorldMut) {
-        let command = Arc::new(self);
+    fn apply(mut self, mut entity: EntityWorldMut) {
+        let hits = std::mem::take(&mut self.hits);
         let mut trigger = OnLaunch {
-            command: command.clone(),
-            hit_index: None,
+            command: self,
+            hit: None,
             stopped: false,
         };
 
         entity.world_scope(|world| {
-            for (i, hit) in command.hits.iter().enumerate() {
-                trigger.hit_index = Some(i);
+            for (i, &hit) in hits.iter().enumerate() {
+                trigger.hit = Some((i, hit));
                 world.trigger_targets_ref(&mut trigger, hit.entity);
 
                 if trigger.stopped {
@@ -153,10 +153,11 @@ impl EntityCommand for LaunchCommand {
     }
 }
 
-#[derive(Debug, Clone, Event)]
+#[derive(Debug, Clone, Event, Deref)]
 pub struct OnLaunch {
-    pub command: Arc<LaunchCommand>,
-    pub hit_index: Option<usize>,
+    #[deref]
+    command: LaunchCommand,
+    pub hit: Option<(usize, RayHitData)>,
     pub stopped: bool,
 }
 
@@ -170,7 +171,7 @@ impl OnLaunch {
                 trigger.event_mut().stopped = true;
             }
 
-            _ = apply(commands.entity(trigger.event().command.launcher_entity), trigger.target());
+            apply(commands.entity(trigger.event().command.launcher_entity), trigger.target());
         })
     }
 }
@@ -268,8 +269,6 @@ pub fn detect_attracted_entities(
                     let initial_speed = (attractor.gravity / r).sqrt();
                     let initial_velocity = if initial.ccw { -r_vec.perp() } else { r_vec.perp() } / r * initial_speed;
                     **linvel += initial_velocity;
-
-                    commands.entity(e).remove::<AttractedInitial>();
                 }
 
                 if let Some(AttractedLaunching::Launch { target }) = launching {
@@ -285,6 +284,7 @@ pub fn detect_attracted_entities(
                     commands.entity(e).queue(LaunchCommand {
                         target: target.clone(),
                         launcher_entity: e,
+                        launcher_pos: *pos,
                         attractor_entity,
                         attractor_pos: *attractor_pos,
                         hits,
@@ -298,6 +298,12 @@ pub fn detect_attracted_entities(
         });
 
         std::mem::swap(&mut **attracted, &mut *tmp);
+    }
+}
+
+pub fn remove_attracted_initials(mut commands: Commands, query: Query<Entity, With<AttractedInitial>>) {
+    for e in &query {
+        commands.entity(e).remove::<AttractedInitial>();
     }
 }
 

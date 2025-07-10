@@ -20,13 +20,12 @@ use crate::{
         LdtkWorld,
         ldtk::{Ldtk, LdtkEntityField, LdtkLayer, LdtkLayerData, LdtkLevel, LdtkTiles},
     },
-    logic::{InGameState, MainCamera},
+    logic::{CameraQuery, InGameState},
 };
 
 #[derive(Debug, Clone, Event, Deref, DerefMut)]
 pub struct LoadLevelEvent(pub Cow<'static, str>);
 
-/// Most commonly accessed via [`Single<Level, Without<LevelUnload>>`].
 #[derive(Debug, Clone, Component)]
 #[require(LevelSpawned, Transform, Visibility)]
 pub struct Level {
@@ -42,6 +41,11 @@ pub struct LevelLayers(pub HashMap<String, Entity>);
 
 #[derive(Debug, Clone, Default, Component, Deref, DerefMut)]
 pub struct LevelEntities(pub HashMap<Uuid, Entity>);
+impl LevelEntities {
+    pub fn get(&self, uuid: Uuid) -> Result<Entity, &'static str> {
+        self.0.get(&uuid).copied().ok_or("Entity not found!")
+    }
+}
 
 #[derive(Debug, Copy, Clone, Component, Default)]
 pub struct LevelSpawned(bool);
@@ -273,10 +277,10 @@ pub fn handle_load_level_event(
     server: Res<AssetServer>,
     world: LdtkWorld,
     mut state: ResMut<NextState<InGameState>>,
-    to_be_unloaded: Option<Single<Entity, (With<Level>, Without<LevelUnload>)>>,
+    to_be_unloaded: Query<Entity, (With<Level>, Without<LevelUnload>)>,
 ) -> Result {
     let Some(event) = events.read().last() else { return Ok(()) };
-    if let Some(unloaded) = to_be_unloaded.map(Single::into_inner) {
+    for unloaded in &to_be_unloaded {
         debug!("Unloading level entity {unloaded}");
         commands.entity(unloaded).insert(LevelUnload);
     }
@@ -301,14 +305,14 @@ pub fn handle_load_level_event(
 
 pub fn handle_load_level_progress(
     mut commands: Commands,
-    mut camera: Single<&mut Camera, With<MainCamera>>,
+    mut camera: CameraQuery<&mut Camera>,
     tracker: ProgressEntry<InGameState>,
     server: Res<AssetServer>,
-    level_handle: Single<(Entity, &Level, &mut LevelSpawned), Without<LevelUnload>>,
+    level_handle: Query<(Entity, &Level, &mut LevelSpawned), Without<LevelUnload>>,
     levels: Res<Assets<LdtkLevel>>,
     world: LdtkWorld,
 ) -> Result {
-    let (e, level, mut spawned) = level_handle.into_inner();
+    let (e, level, mut spawned) = level_handle.single_inner()?;
     let mut done = false;
     match (
         server.load_state(&level.handle),
@@ -470,12 +474,12 @@ pub fn handle_load_level_end(
         Query<(Entity, &LevelEntity)>,
         Query<(Entity, &LevelIntCell)>,
         ResMut<NextState<InGameState>>,
-        Option<Single<Entity, With<LevelUnload>>>,
+        Query<Entity, With<LevelUnload>>,
     )>,
     mut level_targets: Local<HashSet<(SystemId<In<Entity>, Result>, Entity)>>,
     mut entity_targets: Local<HashMap<SystemId<InRef<[Entity]>, Result>, Vec<Entity>>>,
     mut int_cell_targets: Local<HashMap<SystemId<InRef<[Entity]>, Result>, Vec<Entity>>>,
-    mut unload_level: Local<Option<Entity>>,
+    mut unload_levels: Local<Vec<Entity>>,
 ) -> Result {
     let (
         level_creators,
@@ -511,11 +515,11 @@ pub fn handle_load_level_end(
         }
     }
 
-    // Unload previous levels at the very last so some asset handles could be shared.
     state.set(InGameState::Resumed);
 
-    *unload_level = to_be_unloaded.map(Single::into_inner);
-    if let Some(unload) = unload_level.take() {
+    // Unload previous levels at the very last so some asset handles could be shared.
+    unload_levels.extend(to_be_unloaded.into_iter());
+    for unload in unload_levels.drain(..) {
         world.try_despawn(unload)?;
     }
 
