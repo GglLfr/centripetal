@@ -10,7 +10,7 @@ use bevy_framepace::FramepacePlugin;
 use crate::{
     asset::SetupAssetPlugin,
     gfx::GfxPlugin,
-    logic::{GameState, LoadLevelEvent, LogicPlugin},
+    logic::{GameState, LoadLevel, LogicPlugin},
 };
 
 pub mod asset;
@@ -60,8 +60,8 @@ fn main() -> AppExit {
         .run()
 }
 
-fn dev_init(mut state: ResMut<NextState<GameState>>, mut load: EventWriter<LoadLevelEvent>) {
+fn dev_init(mut state: ResMut<NextState<GameState>>, mut level: ResMut<LoadLevel>) {
     debug!("[TODO remove] Dev-initialize, loading `penumbra_wing_l` now!");
     state.set(GameState::InGame);
-    load.write(LoadLevelEvent("penumbra_wing_l".into()));
+    level.set("penumbra_wing_l");
 }

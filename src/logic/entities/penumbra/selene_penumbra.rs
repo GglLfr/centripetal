@@ -32,8 +32,8 @@ impl FromLevelEntity for SelenePenumbra {
             Self,
             AttractedInitial { ccw },
             AttractedParams {
-                centrifugal: 240.,
-                centripetal: 240.,
+                ascend: 240.,
+                descend: 240.,
                 prograde: 80.,
                 retrograde: 80.,
                 precise_scale: 1. / 5.,

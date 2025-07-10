@@ -1,5 +1,3 @@
-use std::borrow::Cow;
-
 use bevy::{
     asset::{LoadState, RecursiveDependencyLoadState, uuid::Uuid},
     ecs::{
@@ -23,8 +21,18 @@ use crate::{
     logic::{CameraQuery, InGameState},
 };
 
-#[derive(Debug, Clone, Event, Deref, DerefMut)]
-pub struct LoadLevelEvent(pub Cow<'static, str>);
+#[derive(Debug, Clone, Default, Resource)]
+pub enum LoadLevel {
+    #[default]
+    None,
+    Pending(String),
+}
+
+impl LoadLevel {
+    pub fn set(&mut self, next: impl Into<String>) {
+        *self = LoadLevel::Pending(next.into());
+    }
+}
 
 #[derive(Debug, Clone, Component)]
 #[require(LevelSpawned, Transform, Visibility)]
@@ -273,30 +281,33 @@ impl LevelApp for App {
 
 pub fn handle_load_level_event(
     mut commands: Commands,
-    mut events: EventReader<LoadLevelEvent>,
+    mut next: ResMut<LoadLevel>,
     server: Res<AssetServer>,
     world: LdtkWorld,
     mut state: ResMut<NextState<InGameState>>,
     to_be_unloaded: Query<Entity, (With<Level>, Without<LevelUnload>)>,
 ) -> Result {
-    let Some(event) = events.read().last() else { return Ok(()) };
+    let Some(Some(next)) = next.is_changed().then(|| match std::mem::take(&mut *next) {
+        LoadLevel::None => None,
+        LoadLevel::Pending(next) => Some(next),
+    }) else {
+        return Ok(())
+    };
+
     for unloaded in &to_be_unloaded {
         debug!("Unloading level entity {unloaded}");
         commands.entity(unloaded).insert(LevelUnload);
     }
 
-    let id = String::from(event.as_ref());
-    let handle = server.load(
-        world
-            .levels
-            .get(event.as_ref())
-            .ok_or_else(|| format!("Level {} not found", event.as_ref()))?,
-    );
-
+    let handle = server.load(world.levels.get(&next).ok_or_else(|| format!("Level {next} not found"))?);
     debug!(
-        "Loading level {} as entity {}!",
-        **event,
-        commands.spawn(Level { id, handle }).id()
+        "Loading level {next} as entity {}!",
+        commands
+            .spawn(Level {
+                id: next.clone(),
+                handle
+            })
+            .id()
     );
 
     state.set(InGameState::Loading);

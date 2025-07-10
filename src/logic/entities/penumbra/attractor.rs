@@ -86,8 +86,8 @@ pub enum AttractedAction {
 #[derive(Debug, Clone, Component)]
 #[require(ActionState<AttractedAction>, AttractedLaunching)]
 pub struct AttractedParams {
-    pub centrifugal: f32,
-    pub centripetal: f32,
+    pub ascend: f32,
+    pub descend: f32,
     pub prograde: f32,
     pub retrograde: f32,
     pub precise_scale: f32,
@@ -350,9 +350,9 @@ pub fn apply_attractor_accels(
                     let r_vec = *attractor_pos - *pos;
                     let r = r_vec.length();
                     let hover = if axis.value > 0. {
-                        param.centrifugal * (-axis.value).max(-1.)
+                        param.ascend * (-axis.value).max(-1.)
                     } else {
-                        param.centripetal * (-axis.value).min(1.)
+                        param.descend * (-axis.value).min(1.)
                     } * precise_scale;
 
                     **linvel += hover / r * r_vec * dt;
