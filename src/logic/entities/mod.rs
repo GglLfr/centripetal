@@ -7,7 +7,7 @@ use crate::logic::entities::penumbra::{draw_attract_trajectory, draw_attractor_r
 use crate::logic::{
     LevelApp,
     entities::penumbra::{
-        AttractedAction, Attractor, SelenePenumbra, ThornPillar, ThornRing, apply_attractor_accels,
+        AttractedAction, Attractor, GenericPenumbra, SelenePenumbra, ThornPillar, ThornRing, apply_attractor_accels,
         detect_attracted_entities, predict_attract_trajectory, remove_attracted_initials, update_attracted_launching,
     },
 };
@@ -53,6 +53,7 @@ impl Plugin for EntitiesPlugin {
         app.add_plugins(InputManagerPlugin::<AttractedAction>::default())
             .register_level_entity::<Attractor>("attractor")
             .register_level_entity::<SelenePenumbra>("selene_penumbra")
+            .register_level_entity::<GenericPenumbra>("generic_penumbra")
             .register_level_entity::<ThornPillar>("thorn_pillar")
             .register_level_entity::<ThornRing>("thorn_ring")
             .add_systems(Update, update_attracted_launching)
