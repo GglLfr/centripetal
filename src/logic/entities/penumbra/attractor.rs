@@ -207,22 +207,28 @@ pub fn update_attracted_launching(
             None
         };
 
-        commands.entity(e).insert(match (data.state, target, launching) {
-            (ButtonState::JustPressed, None, AttractedLaunching::Idle { last_launched: last })
-                if now - *last >= param.launch_cooldown =>
-            {
-                AttractedLaunching::Charging { started: now }
-            }
-            (ButtonState::Pressed, Some((target, true)), AttractedLaunching::Charging { .. }) |
-            (ButtonState::JustReleased, Some((target, ..)), AttractedLaunching::Charging { .. }) => {
-                AttractedLaunching::Launch { target }
-            }
-            (ButtonState::Released, Some(..), AttractedLaunching::Charging { .. }) |
-            (ButtonState::JustReleased, .., AttractedLaunching::Charging { .. }) => {
-                AttractedLaunching::Idle { last_launched: now }
-            }
-            _ => continue,
-        });
+        commands.entity(e).insert(
+            match (
+                if state.action_disabled(&AttractedAction::Launch) { ButtonState::Released } else { data.state },
+                target,
+                launching,
+            ) {
+                (ButtonState::JustPressed, None, AttractedLaunching::Idle { last_launched: last })
+                    if now - *last >= param.launch_cooldown =>
+                {
+                    AttractedLaunching::Charging { started: now }
+                }
+                (ButtonState::Pressed, Some((target, true)), AttractedLaunching::Charging { .. }) |
+                (ButtonState::JustReleased, Some((target, ..)), AttractedLaunching::Charging { .. }) => {
+                    AttractedLaunching::Launch { target }
+                }
+                (ButtonState::Released, Some(..), AttractedLaunching::Charging { .. }) |
+                (ButtonState::JustReleased, .., AttractedLaunching::Charging { .. }) => {
+                    AttractedLaunching::Idle { last_launched: now }
+                }
+                _ => continue,
+            },
+        );
     }
 }
 
@@ -339,29 +345,30 @@ pub fn apply_attractor_accels(
 
             if let Some((param, AttractedLaunching::Idle { .. }, state)) = hover {
                 let precise_scale = if state.pressed(&AttractedAction::Precise) { param.precise_scale } else { 1. };
-                if let Some(axis) = state.axis_data(&AttractedAction::Prograde) &&
-                    axis.value.abs() >= 0.01
+
                 {
+                    let prograde_value = state.clamped_value(&AttractedAction::Prograde);
+
                     let r_vec = *linear_velocity;
                     let r = r_vec.length();
-                    let prograde = if axis.value > 0. {
-                        param.prograde * axis.value.min(1.)
+                    let prograde = if prograde_value > 0. {
+                        param.prograde * prograde_value.min(1.)
                     } else {
-                        param.retrograde * axis.value.max(-1.)
+                        param.retrograde * prograde_value.max(-1.)
                     } * precise_scale;
 
                     *linear_velocity += prograde / r * r_vec * dt;
                 }
 
-                if let Some(axis) = state.axis_data(&AttractedAction::Hover) &&
-                    axis.value.abs() >= 0.01
                 {
+                    let hover_value = state.clamped_value(&AttractedAction::Hover);
+
                     let r_vec = *attractor_pos - *pos;
                     let r = r_vec.length();
-                    let hover = if axis.value > 0. {
-                        param.ascend * (-axis.value).max(-1.)
+                    let hover = if hover_value > 0. {
+                        param.ascend * (-hover_value).max(-1.)
                     } else {
-                        param.descend * (-axis.value).min(1.)
+                        param.descend * (-hover_value).min(1.)
                     } * precise_scale;
 
                     *linear_velocity += hover / r * r_vec * dt;
