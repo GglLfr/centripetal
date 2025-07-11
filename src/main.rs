@@ -9,12 +9,10 @@ use bevy_framepace::FramepacePlugin;
 
 use crate::{
     asset::SetupAssetPlugin,
-    gfx::GfxPlugin,
     logic::{GameState, LoadLevel, LogicPlugin},
 };
 
 pub mod asset;
-pub mod gfx;
 pub mod logic;
 
 mod config;
@@ -57,7 +55,6 @@ fn main() -> AppExit {
             SavePlugin,
             SetupAssetPlugin,
             LogicPlugin,
-            GfxPlugin,
         ))
         .add_systems(OnEnter(GameState::Menu), dev_init)
         .run()
