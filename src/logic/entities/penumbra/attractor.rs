@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use avian2d::prelude::*;
+use avian2d::{dynamics::solver::solver_body::SolverBody, prelude::*};
 use bevy::{
     ecs::{
         query::QueryItem,
@@ -258,44 +258,48 @@ pub fn detect_attracted_entities(
     let now = time.elapsed();
     for (attractor_entity, &attractor_pos, attractor, mut attracted) in &mut attractors {
         tmp.clear();
-        pipeline.shape_intersections_callback(&attractor.caster, *attractor_pos, 0., &SpatialQueryFilter::DEFAULT, |e| {
-            if e != attractor_entity &&
-                let Ok((e, &pos, mut linvel, launching, initial)) = penumbra_bodies.get_mut(e)
-            {
-                let r_vec = *attractor_pos - *pos;
-                let r = r_vec.length();
+        pipeline.shape_intersections_callback(
+            &attractor.caster,
+            *attractor_pos,
+            0.,
+            &SpatialQueryFilter::from_excluded_entities([attractor_entity]),
+            |e| {
+                if let Ok((e, &pos, mut linvel, launching, initial)) = penumbra_bodies.get_mut(e) {
+                    let r_vec = *attractor_pos - *pos;
+                    let r = r_vec.length();
 
-                if let Some(&initial) = initial {
-                    let initial_speed = (attractor.gravity / r).sqrt();
-                    let initial_velocity = if initial.ccw { -r_vec.perp() } else { r_vec.perp() } / r * initial_speed;
-                    **linvel += initial_velocity;
+                    if let Some(&initial) = initial {
+                        let initial_speed = (attractor.gravity / r).sqrt();
+                        let initial_velocity = if initial.ccw { -r_vec.perp() } else { r_vec.perp() } / r * initial_speed;
+                        **linvel += initial_velocity;
+                    }
+
+                    if let Some(AttractedLaunching::Launch { target }) = launching {
+                        commands.entity(e).insert(AttractedLaunching::Idle { last_launched: now });
+
+                        let Ok(dir) = Dir2::new(r_vec) else { return true };
+                        let mut hits = pipeline.ray_hits(*pos, dir, r, u32::MAX, true, &SpatialQueryFilter {
+                            excluded_entities: [e, attractor_entity].into_iter().collect(),
+                            ..SpatialQueryFilter::DEFAULT
+                        });
+
+                        hits.sort_unstable_by_key(|data| FloatOrd(data.distance));
+                        commands.entity(e).queue(LaunchCommand {
+                            target: target.clone(),
+                            launcher_entity: e,
+                            launcher_pos: *pos,
+                            attractor_entity,
+                            attractor_pos: *attractor_pos,
+                            hits,
+                        });
+                    }
+
+                    tmp.push(e);
                 }
 
-                if let Some(AttractedLaunching::Launch { target }) = launching {
-                    commands.entity(e).insert(AttractedLaunching::Idle { last_launched: now });
-
-                    let Ok(dir) = Dir2::new(r_vec) else { return true };
-                    let mut hits = pipeline.ray_hits(*pos, dir, r, u32::MAX, true, &SpatialQueryFilter {
-                        excluded_entities: [e, attractor_entity].into_iter().collect(),
-                        ..SpatialQueryFilter::DEFAULT
-                    });
-
-                    hits.sort_unstable_by_key(|data| FloatOrd(data.distance));
-                    commands.entity(e).queue(LaunchCommand {
-                        target: target.clone(),
-                        launcher_entity: e,
-                        launcher_pos: *pos,
-                        attractor_entity,
-                        attractor_pos: *attractor_pos,
-                        hits,
-                    });
-                }
-
-                tmp.push(e);
-            }
-
-            true
-        });
+                true
+            },
+        );
 
         std::mem::swap(&mut **attracted, &mut *tmp);
     }
@@ -312,28 +316,33 @@ pub fn apply_attractor_accels(
     attractors: Query<(&Position, &Attractor, &AttractorEntities)>,
     mut attracted: Query<(
         &Position,
-        &AccumulatedTranslation,
+        &mut SolverBody,
         Option<(&AttractedParams, &AttractedLaunching, &ActionState<AttractedAction>)>,
-        &mut LinearVelocity,
-        &mut AngularVelocity,
     )>,
 ) {
     let dt = time.delta_secs();
     for (&attractor_pos, attractor, attracted_entities) in &attractors {
         let mut attracted = attracted.iter_many_mut(&**attracted_entities);
-        while let Some((&pos, &accum_pos, hover, mut linvel, mut angvel)) = attracted.fetch_next() {
-            let (added_linvel, r_vec, r) = gravity_linvel(dt, *pos + *accum_pos, *attractor_pos, attractor.gravity);
-            **linvel += added_linvel;
+        while let Some((&pos, body, hover)) = attracted.fetch_next() {
+            let SolverBody {
+                linear_velocity,
+                angular_velocity,
+                delta_position,
+                ..
+            } = body.into_inner();
 
-            let crs = r_vec.x * linvel.y - r_vec.y * linvel.x;
-            **angvel = -(crs / (r * r));
+            let (added_linvel, r_vec, r) = gravity_linvel(dt, *pos + *delta_position, *attractor_pos, attractor.gravity);
+            *linear_velocity += added_linvel;
+
+            let crs = r_vec.x * linear_velocity.y - r_vec.y * linear_velocity.x;
+            *angular_velocity = -(crs / (r * r));
 
             if let Some((param, AttractedLaunching::Idle { .. }, state)) = hover {
                 let precise_scale = if state.pressed(&AttractedAction::Precise) { param.precise_scale } else { 1. };
                 if let Some(axis) = state.axis_data(&AttractedAction::Prograde) &&
                     axis.value.abs() >= 0.01
                 {
-                    let r_vec = **linvel;
+                    let r_vec = *linear_velocity;
                     let r = r_vec.length();
                     let prograde = if axis.value > 0. {
                         param.prograde * axis.value.min(1.)
@@ -341,7 +350,7 @@ pub fn apply_attractor_accels(
                         param.retrograde * axis.value.max(-1.)
                     } * precise_scale;
 
-                    **linvel += prograde / r * r_vec * dt;
+                    *linear_velocity += prograde / r * r_vec * dt;
                 }
 
                 if let Some(axis) = state.axis_data(&AttractedAction::Hover) &&
@@ -355,7 +364,7 @@ pub fn apply_attractor_accels(
                         param.descend * (-axis.value).min(1.)
                     } * precise_scale;
 
-                    **linvel += hover / r * r_vec * dt;
+                    *linear_velocity += hover / r * r_vec * dt;
                 }
             }
         }

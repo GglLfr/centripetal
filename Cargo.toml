@@ -63,3 +63,6 @@ features = [
 default = ["bevy_dynamic", "dev"]
 bevy_dynamic = ["bevy/dynamic_linking"]
 dev = ["bevy/track_location"]
+
+[patch.crates-io]
+avian2d = { git = "https://github.com/Jondolf/avian" }

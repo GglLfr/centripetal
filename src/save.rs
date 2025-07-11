@@ -103,7 +103,7 @@ impl Plugin for SavePlugin {
 
         match fs::create_dir(&base_dir) {
             Ok(()) => {}
-            Err(e) if e.kind() != io::ErrorKind::AlreadyExists => {}
+            Err(e) if e.kind() == io::ErrorKind::AlreadyExists => {}
             Err(e) => panic!("{e}"),
         }
 
