@@ -15,6 +15,8 @@ use crate::graphics::SpriteError;
 
 #[derive(Debug, Clone, Asset, TypePath)]
 pub struct SpriteSheet {
+    pub page: Handle<Image>,
+    pub sprite: TextureAtlas,
     pub frames: Vec<Sprite>,
     pub durations: Vec<Duration>,
     pub tags: HashMap<String, (Range<usize>, Direction)>,
@@ -133,8 +135,11 @@ impl AssetLoader for SpriteSheetLoader {
                 let sprite_center = sprite_location + sprite_size / 2.;
 
                 Sprite {
-                    image: page.clone(),
-                    texture_atlas: Some(sprite.clone()),
+                    image: page.clone_weak(),
+                    texture_atlas: Some(TextureAtlas {
+                        layout: sprite.layout.clone_weak(),
+                        index: sprite.index,
+                    }),
                     color: Color::WHITE,
                     flip_x: false,
                     flip_y: false,
@@ -155,7 +160,13 @@ impl AssetLoader for SpriteSheetLoader {
             .map(|tag| (tag.name, (tag.from..tag.to, tag.direction)))
             .collect();
 
-        Ok(SpriteSheet { frames, durations, tags })
+        Ok(SpriteSheet {
+            page,
+            sprite,
+            frames,
+            durations,
+            tags,
+        })
     }
 
     fn extensions(&self) -> &[&str] {
