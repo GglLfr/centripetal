@@ -124,8 +124,9 @@ unsafe impl<D: 'static + QueryData> SystemParam for CameraQuery<'_, D> {
     }),
     Camera {
         clear_color: ClearColorConfig::Custom(Color::NONE),
+        hdr: true,
         ..default()
-    }
+    },
 )]
 pub struct MainCamera;
 

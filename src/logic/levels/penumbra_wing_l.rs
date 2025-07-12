@@ -48,7 +48,7 @@ impl FromLevel for State {
     ) -> Result {
         if !**cutscene_shown {
             let mut commands = e.commands();
-            for iid in [SELENE, CENTRAL_ATTRACTOR, HOVER_TARGET] {
+            for iid in [SELENE, ATTRACTOR, RINGS[0], RINGS[1], HOVER_TARGET] {
                 commands.get_entity(entities.get(iid)?)?.queue(disable);
             }
 
@@ -63,7 +63,11 @@ impl FromLevel for State {
 }
 
 pub const SELENE: Uuid = uuid!("332e5310-3740-11f0-b0d1-4b444b848a1e");
-pub const CENTRAL_ATTRACTOR: Uuid = uuid!("8226eab0-3740-11f0-b0d1-31c3cf318fb2");
+pub const ATTRACTOR: Uuid = uuid!("8226eab0-3740-11f0-b0d1-31c3cf318fb2");
+pub const RINGS: [Uuid; 2] = [
+    uuid!("483defc0-3740-11f0-bea9-1bca02df9366"),
+    uuid!("516847d0-3740-11f0-bea9-db42cbfffb80"),
+];
 pub const HOVER_TARGET: Uuid = uuid!("ddc89020-3740-11f0-bea9-17dccf039850");
 
 pub const SPAWN_ATTRACTOR_DURATION: Duration = Duration::from_secs(2);
@@ -78,7 +82,7 @@ pub fn update(
     let (mut level, entities) = level.into_inner();
 
     let selene = entities.get(SELENE)?;
-    let attractor = entities.get(CENTRAL_ATTRACTOR)?;
+    let attractor = entities.get(ATTRACTOR)?;
     let hover_target = entities.get(HOVER_TARGET)?;
 
     match *level {
@@ -97,13 +101,25 @@ pub fn update(
                     .get_entity(hover_target)?
                     .queue(enable)
                     .insert(CollisionEventsEnabled)
-                    .observe(move |trigger: Trigger<OnCollisionStart>, mut commands: Commands| -> Result {
-                        if trigger.body.is_some_and(|body| body == selene) {
-                            commands.get_entity(trigger.target())?.despawn();
-                        }
+                    .observe(
+                        move |trigger: Trigger<OnCollisionStart>,
+                              mut commands: Commands,
+                              level: Single<&mut State, Without<LevelUnload>>,
+                              mut state: Query<&mut ActionState<AttractedAction>>|
+                              -> Result {
+                            if trigger.body.is_some_and(|body| body == selene) {
+                                // Stop observing and despawn the generic entity.
+                                commands.entity(trigger.observer()).despawn();
+                                commands.get_entity(trigger.target())?.despawn();
 
-                        Ok(())
-                    });
+                                // Enable accelerating.
+                                *level.into_inner() = State::TutorialAccelerate;
+                                state.get_mut(selene)?.enable_action(&AttractedAction::Prograde);
+                            }
+
+                            Ok(())
+                        },
+                    );
 
                 commands
                     .get_entity(selene)?

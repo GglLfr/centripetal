@@ -1,3 +1,4 @@
+use async_channel::{Receiver, Sender};
 use bevy::{
     asset::RenderAssetUsages,
     ecs::system::SystemState,
@@ -13,6 +14,7 @@ use bevy::{
         renderer::{RenderDevice, RenderQueue},
         texture::GpuImage,
     },
+    tasks::ComputeTaskPool,
 };
 use derive_more::{Display, Error};
 use guillotiere::{SimpleAtlasAllocator, euclid::Size2D};
@@ -165,6 +167,25 @@ impl std::fmt::Debug for Page {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Page").field("layout", &self.layout).finish()
     }
+}
+
+pub fn pack_incoming_sprites(
+    receiver: Receiver<(Image, Sender<Result<(Handle<Image>, TextureAtlas), SpriteError>>)>,
+) -> impl System<In = (), Out = ()> {
+    IntoSystem::into_system(
+        move |mut sprites: ResMut<Sprites>,
+              mut images: ResMut<Assets<Image>>,
+              mut layouts: ResMut<Assets<TextureAtlasLayout>>| {
+            ComputeTaskPool::get().scope(|scope| {
+                while let Ok((image, sender)) = receiver.try_recv() {
+                    let result = sprites.pack(image, &mut images, &mut layouts);
+                    scope.spawn(async move {
+                        _ = sender.send(result).await;
+                    });
+                }
+            });
+        },
+    )
 }
 
 #[derive(Debug, Default, Resource)]

@@ -4,15 +4,17 @@ use avian2d::prelude::*;
 #[cfg(feature = "dev")]
 use bevy::log::DEFAULT_FILTER;
 use bevy::{log::LogPlugin, prelude::*};
-use bevy_ecs_tilemap::TilemapPlugin;
+use bevy_asset_loader::prelude::*;
+use bevy_ecs_tilemap::prelude::*;
 use bevy_framepace::FramepacePlugin;
+use iyes_progress::prelude::*;
 
 use crate::{
-    asset::SetupAssetPlugin,
-    logic::{GameState, LoadLevel, LogicPlugin},
+    graphics::{GraphicsPlugin, SpriteSheet},
+    logic::{GameState, Ldtk, LoadLevel, LogicPlugin},
 };
 
-pub mod asset;
+pub mod graphics;
 pub mod logic;
 
 mod config;
@@ -28,6 +30,22 @@ pub use save::*;
 static ALLOC: mimalloc_redirect::MiMalloc = mimalloc_redirect::MiMalloc;
 
 pub const PIXELS_PER_UNIT: u32 = 16;
+
+#[derive(Debug, Clone, Resource, AssetCollection, Deref, DerefMut)]
+pub struct WorldHandle {
+    #[asset(path = "levels/world.ldtk")]
+    pub handle: Handle<Ldtk>,
+}
+
+#[derive(Debug, Clone, Resource, AssetCollection)]
+pub struct SpriteSheets {
+    // Visual effects.
+    #[asset(path = "effects/grand_attractor_spawned.json")]
+    pub grand_attractor_spawned: Handle<SpriteSheet>,
+    // Entities.
+    #[asset(path = "entities/selene/selene.json")]
+    pub selene: Handle<SpriteSheet>,
+}
 
 fn main() -> AppExit {
     App::new()
@@ -53,9 +71,15 @@ fn main() -> AppExit {
             FramepacePlugin,
             ConfigPlugin,
             SavePlugin,
-            SetupAssetPlugin,
+            GraphicsPlugin,
             LogicPlugin,
         ))
+        .add_loading_state(
+            LoadingState::new(GameState::Loading)
+                .load_collection::<WorldHandle>()
+                .load_collection::<SpriteSheets>(),
+        )
+        .add_plugins(ProgressPlugin::<GameState>::new().with_state_transition(GameState::Loading, GameState::Menu))
         .add_systems(OnEnter(GameState::Menu), dev_init)
         .run()
 }

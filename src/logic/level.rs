@@ -15,11 +15,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     PIXELS_PER_UNIT,
-    asset::{
-        LdtkWorld,
-        ldtk::{Ldtk, LdtkEntityField, LdtkLayer, LdtkLayerData, LdtkLevel, LdtkTiles},
-    },
-    logic::{CameraQuery, InGameState},
+    logic::{CameraQuery, InGameState, Ldtk, LdtkEntityField, LdtkLayer, LdtkLayerData, LdtkLevel, LdtkTiles, LdtkWorld},
 };
 
 #[derive(Debug, Clone, Resource, TypePath, Serialize, Deserialize, Deref, DerefMut)]

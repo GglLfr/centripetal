@@ -1,9 +1,11 @@
-use bevy::{prelude::*, render::camera::CameraUpdateSystem};
+use std::ops::Deref;
+
+use bevy::{ecs::system::SystemParam, prelude::*, render::camera::CameraUpdateSystem};
 use iyes_progress::ProgressPlugin;
 use leafwing_input_manager::prelude::*;
 
 use crate::{
-    SaveApp,
+    SaveApp, WorldHandle,
     logic::{entities::EntitiesPlugin, levels::LevelsPlugin},
 };
 
@@ -12,11 +14,33 @@ pub mod levels;
 
 mod camera;
 mod control;
+mod ldtk;
 mod level;
 
 pub use camera::*;
 pub use control::*;
+pub use ldtk::*;
 pub use level::*;
+
+#[derive(SystemParam)]
+pub struct LdtkWorld<'w> {
+    handle: Res<'w, WorldHandle>,
+    worlds: Res<'w, Assets<Ldtk>>,
+}
+
+impl LdtkWorld<'_> {
+    pub fn get(&self) -> &Ldtk {
+        self.worlds.get(self.handle.id()).expect("The LDtk world is unloaded")
+    }
+}
+
+impl Deref for LdtkWorld<'_> {
+    type Target = Ldtk;
+
+    fn deref(&self) -> &Self::Target {
+        self.get()
+    }
+}
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug, Hash, Default, States)]
 pub enum GameState {
@@ -48,7 +72,7 @@ impl Plugin for LogicPlugin {
             .init_resource::<RegisteredLevels>()
             .init_resource::<RegisteredLevelEntities>()
             .init_resource::<RegisteredLevelIntCells>()
-            .add_plugins((EntitiesPlugin, LevelsPlugin))
+            .add_plugins((LdtkPlugin, EntitiesPlugin, LevelsPlugin))
             .add_systems(
                 Update,
                 (
