@@ -16,9 +16,10 @@ use leafwing_input_manager::prelude::*;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    SaveApp,
+    SaveApp, SpriteSheets,
+    graphics::{Animation, EntityColor, OnAnimateDone},
     logic::{
-        CameraTarget, Fields, FromLevel, LevelApp, LevelEntities, LevelUnload,
+        CameraTarget, Fields, FromLevel, InGameState, LevelApp, LevelEntities, LevelUnload,
         entities::penumbra::AttractedAction,
         levels::{disable, enable},
     },
@@ -76,6 +77,7 @@ pub const SPAWN_SELENE_DURATION: Duration = Duration::from_secs(2);
 pub fn update(
     mut commands: Commands,
     time: Res<Time>,
+    sprite_sheets: Res<SpriteSheets>,
     level: Single<(&mut State, &LevelEntities), Without<LevelUnload>>,
 ) -> Result {
     let now = time.elapsed();
@@ -89,7 +91,21 @@ pub fn update(
         State::Init => *level = State::Begin { started: now },
         State::Begin { started } => {
             if now - started >= SPAWN_ATTRACTOR_DURATION {
-                commands.get_entity(attractor)?.queue(enable).insert(CameraTarget);
+                commands
+                    .get_entity(attractor)?
+                    .queue(enable)
+                    .insert(CameraTarget)
+                    .with_children(|children| {
+                        children
+                            .spawn((
+                                Animation::new(sprite_sheets.grand_attractor_spawned.clone(), "anim"),
+                                EntityColor(Color::linear_rgba(1., 2., 24., 1.)),
+                            ))
+                            .observe(|trigger: Trigger<OnAnimateDone>, mut commands: Commands| {
+                                commands.entity(trigger.target()).despawn();
+                            });
+                    });
+
                 *level = State::AttractorSpawned { at: now };
             }
         }
@@ -149,6 +165,6 @@ pub fn update(
 
 pub(super) fn plugin(app: &mut App) {
     app.register_level::<State>("penumbra_wing_l")
-        .add_systems(Update, update)
+        .add_systems(Update, update.run_if(in_state(InGameState::Resumed)))
         .save_resource_init::<IntroShown>();
 }

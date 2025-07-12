@@ -18,7 +18,7 @@ pub fn disable(mut e: EntityWorldMut) {
 pub fn enable(mut e: EntityWorldMut) {
     // HACK: Avian currently breaks with disabled entities. This method restarts the whole mechanism.
     if let Some(Disabled) = e.take::<Disabled>() &&
-        let Some(body) = e.take::<(RigidBody, Collider, Transform)>()
+        let Some(body) = e.take::<(RigidBody, Collider, Transform, GlobalTransform)>()
     {
         e.remove_recursive::<Children, Disabled>();
         e.remove_with_requires::<(RigidBody, Collider, Transform)>();

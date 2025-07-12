@@ -1,4 +1,5 @@
 use bevy::{
+    core_pipeline::bloom::Bloom,
     ecs::{
         archetype::Archetype,
         component::Tick,
@@ -126,6 +127,10 @@ unsafe impl<D: 'static + QueryData> SystemParam for CameraQuery<'_, D> {
         clear_color: ClearColorConfig::Custom(Color::NONE),
         hdr: true,
         ..default()
+    },
+    Bloom {
+        intensity: 0.5,
+        ..Bloom::NATURAL
     },
 )]
 pub struct MainCamera;

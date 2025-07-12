@@ -3,13 +3,23 @@ use bevy::{
     render::{Render, RenderApp, render_asset::prepare_assets, texture::GpuImage},
 };
 
+mod animation;
 mod sprite_drawer;
 mod sprite_sheet;
 mod sprites;
 
+pub use animation::*;
 pub use sprite_drawer::*;
 pub use sprite_sheet::*;
 pub use sprites::*;
+
+#[derive(Debug, Copy, Clone, Component, Deref, DerefMut)]
+pub struct EntityColor(pub Color);
+impl Default for EntityColor {
+    fn default() -> Self {
+        Self(Color::WHITE)
+    }
+}
 
 #[derive(Debug, Copy, Clone, Default)]
 pub struct GraphicsPlugin;
@@ -17,7 +27,9 @@ impl Plugin for GraphicsPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(
             PostUpdate,
-            flush_drawer_to_children.before(TransformSystem::TransformPropagate),
+            (update_animations, draw_animations, flush_drawer_to_children)
+                .chain()
+                .before(TransformSystem::TransformPropagate),
         );
 
         if let Some(render_app) = app.get_sub_app_mut(RenderApp) {

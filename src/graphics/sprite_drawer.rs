@@ -4,6 +4,7 @@ use bevy::prelude::*;
 use vec_belt::VecBelt;
 
 #[derive(Component)]
+#[require(Transform, Visibility)]
 pub struct SpriteDrawer {
     queued: VecBelt<Draw>,
 }

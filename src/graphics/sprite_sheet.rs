@@ -19,7 +19,7 @@ pub struct SpriteSheet {
     pub sprite: TextureAtlas,
     pub frames: Vec<Sprite>,
     pub durations: Vec<Duration>,
-    pub tags: HashMap<String, (Range<usize>, Direction)>,
+    pub tags: HashMap<String, Range<usize>>,
 }
 
 #[derive(Debug, Copy, Clone, Default, Deserialize)]
@@ -88,7 +88,6 @@ struct Tag {
     name: String,
     from: usize,
     to: usize,
-    direction: Direction,
 }
 
 #[derive(Debug, Clone)]
@@ -143,23 +142,18 @@ impl AssetLoader for SpriteSheetLoader {
                     color: Color::WHITE,
                     flip_x: false,
                     flip_y: false,
-                    custom_size: None,
+                    custom_size: Some(frame_size),
                     rect: Some(Rect {
                         min: frame_location,
                         max: frame_location + frame_size,
                     }),
-                    anchor: Anchor::Custom((source_center - sprite_center) / sprite_size),
+                    anchor: Anchor::Custom((source_center - sprite_center) / sprite_size * vec2(1., -1.)),
                     image_mode: SpriteImageMode::Auto,
                 }
             })
             .collect();
 
-        let tags = meta
-            .frame_tags
-            .into_iter()
-            .map(|tag| (tag.name, (tag.from..tag.to, tag.direction)))
-            .collect();
-
+        let tags = meta.frame_tags.into_iter().map(|tag| (tag.name, tag.from..tag.to)).collect();
         Ok(SpriteSheet {
             page,
             sprite,
