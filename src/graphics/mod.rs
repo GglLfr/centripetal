@@ -25,7 +25,7 @@ impl Default for EntityColor {
 pub struct GraphicsPlugin;
 impl Plugin for GraphicsPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(
+        app.init_asset::<SpriteSection>().init_asset::<SpriteSheet>().add_systems(
             PostUpdate,
             (update_animations, draw_animations, flush_drawer_to_children)
                 .chain()
@@ -39,11 +39,12 @@ impl Plugin for GraphicsPlugin {
                 .add_systems(Render, prepare_pending_sprites.after(prepare_assets::<GpuImage>));
         }
     }
+
     fn finish(&self, app: &mut App) {
         let (sender, receiver) = async_channel::bounded(8);
         app.init_resource::<Sprites>()
-            .init_asset::<SpriteSheet>()
-            .register_asset_loader(SpriteSheetLoader(sender))
+            .register_asset_loader(SpriteSheetLoader(sender.clone()))
+            .register_asset_loader(SpriteSectionLoader(sender))
             .add_systems(PreUpdate, pack_incoming_sprites(receiver));
     }
 }

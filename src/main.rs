@@ -10,12 +10,13 @@ use bevy_framepace::FramepacePlugin;
 use iyes_progress::prelude::*;
 
 use crate::{
-    graphics::{GraphicsPlugin, SpriteSheet},
+    graphics::{GraphicsPlugin, SpriteSection, SpriteSheet},
     logic::{GameState, Ldtk, LoadLevel, LogicPlugin},
 };
 
 pub mod graphics;
 pub mod logic;
+pub mod math;
 
 mod config;
 mod save;
@@ -38,10 +39,14 @@ pub struct WorldHandle {
 }
 
 #[derive(Debug, Clone, Resource, AssetCollection)]
-pub struct SpriteSheets {
+pub struct Sprites {
     // Visual effects.
     #[asset(path = "effects/grand_attractor_spawned.json")]
     pub grand_attractor_spawned: Handle<SpriteSheet>,
+    #[asset(path = "effects/ring_8.png")]
+    pub ring_8: Handle<SpriteSection>,
+    #[asset(path = "effects/ring_16.png")]
+    pub ring_16: Handle<SpriteSection>,
     // Entities.
     #[asset(path = "entities/selene/selene.json")]
     pub selene: Handle<SpriteSheet>,
@@ -77,7 +82,7 @@ fn main() -> AppExit {
         .add_loading_state(
             LoadingState::new(GameState::Loading)
                 .load_collection::<WorldHandle>()
-                .load_collection::<SpriteSheets>(),
+                .load_collection::<Sprites>(),
         )
         .add_plugins(ProgressPlugin::<GameState>::new().with_state_transition(GameState::Loading, GameState::Menu))
         .add_systems(OnEnter(GameState::Menu), dev_init)

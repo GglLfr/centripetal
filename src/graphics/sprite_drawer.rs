@@ -1,6 +1,6 @@
 use std::ops::Deref;
 
-use bevy::prelude::*;
+use bevy::{asset::weak_handle, prelude::*};
 use vec_belt::VecBelt;
 
 #[derive(Component)]
@@ -20,10 +20,11 @@ impl SpriteDrawer {
         self.queued.append([conf]);
     }
 
-    pub fn draw_at(&self, pos: impl Into<Vec3>, rot: impl Into<Rot2>, sprite: Sprite) {
+    pub fn draw_at(&self, pos: impl Into<Vec3>, rot: impl Into<Rot2>, size: impl Into<Option<Vec2>>, sprite: Sprite) {
         self.draw(Draw {
             pos: pos.into(),
             rot: rot.into(),
+            size: size.into(),
             sprite,
         });
     }
@@ -33,6 +34,7 @@ impl SpriteDrawer {
 pub struct Draw {
     pub pos: Vec3,
     pub rot: Rot2,
+    pub size: Option<Vec2>,
     pub sprite: Sprite,
 }
 
@@ -56,6 +58,10 @@ pub fn flush_drawer_to_children(
 
                 if let Some((mut sprite, mut trns)) = sprites.fetch_next() {
                     *sprite = draw.sprite;
+                    if let Some(size) = draw.size {
+                        sprite.custom_size = Some(size);
+                    }
+
                     *trns = transform;
                 } else {
                     drawer_entity.with_child((draw.sprite, transform));
@@ -64,7 +70,7 @@ pub fn flush_drawer_to_children(
         });
 
         while let Some((mut leftover_sprite, ..)) = sprites.fetch_next() {
-            leftover_sprite.image = Handle::Weak(AssetId::invalid());
+            leftover_sprite.image = const { weak_handle!("68b49790-e39e-497c-ab88-af97bac6e172") };
         }
     }
 }

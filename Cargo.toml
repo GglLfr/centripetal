@@ -15,6 +15,7 @@ bevy_framepace = "0.19"
 blocking = "1"
 derive_more = { version = "2", features = ["error", "from", "display"] }
 directories = "6"
+fastrand = "2"
 guillotiere = "0.6"
 iyes_progress = { version = "0.14", features = ["assets", "async"] }
 mimalloc-redirect = "0.1"

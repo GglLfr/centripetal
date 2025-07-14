@@ -16,11 +16,13 @@ mod camera;
 mod control;
 mod ldtk;
 mod level;
+mod timed;
 
 pub use camera::*;
 pub use control::*;
 pub use ldtk::*;
 pub use level::*;
+pub use timed::*;
 
 #[derive(SystemParam)]
 pub struct LdtkWorld<'w> {
@@ -91,6 +93,7 @@ impl Plugin for LogicPlugin {
                     .after(CameraUpdateSystem)
                     .before(TransformSystem::TransformPropagate),
             )
+            .add_systems(PreUpdate, update_timed)
             .save_resource::<LoadLevel>();
     }
 }

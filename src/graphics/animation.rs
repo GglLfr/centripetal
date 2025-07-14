@@ -5,7 +5,7 @@ use bevy::{
     prelude::*,
 };
 
-use crate::graphics::{EntityColor, SpriteDrawer, SpriteSheet};
+use crate::graphics::{EntityColor, SpriteDrawer, SpriteSection, SpriteSheet};
 
 #[derive(Debug, Clone, Component)]
 #[require(SpriteDrawer, AnimationData, AnimationMode)]
@@ -132,15 +132,21 @@ pub fn update_animations(
 
 pub fn draw_animations(
     sprite_sheets: Res<Assets<SpriteSheet>>,
+    sprites: Res<Assets<SpriteSection>>,
     animations: Query<(&Animation, &AnimationData, &SpriteDrawer, Option<&EntityColor>)>,
 ) {
     animations.par_iter().for_each(|(animation, data, drawer, color)| {
-        let Some(sprite) = sprite_sheets.get(&animation.sprite) else { return };
-        let Some(frame) = sprite.frames.get(data.frame) else { return };
+        let Some(frame) = sprite_sheets
+            .get(&animation.sprite)
+            .and_then(|sheet| sheet.frames.get(data.frame))
+            .and_then(|frame| sprites.get(frame))
+        else {
+            return
+        };
 
-        drawer.draw_at(Vec3::ZERO, Rot2::IDENTITY, Sprite {
+        drawer.draw_at(Vec3::ZERO, Rot2::IDENTITY, None, Sprite {
             color: color.copied().unwrap_or_default().0,
-            ..frame.clone()
+            ..frame.sprite()
         });
     });
 }

@@ -3,6 +3,7 @@ use std::{io, ops::Range, time::Duration};
 use async_channel::Sender;
 use bevy::{
     asset::{AssetLoader, AsyncReadExt as _, LoadContext, LoadDirectError, ParseAssetPathError, io::Reader},
+    image::{CompressedImageFormats, ImageLoader, ImageLoaderError, ImageLoaderSettings},
     platform::collections::HashMap,
     prelude::*,
     sprite::Anchor,
@@ -14,10 +15,76 @@ use serde::Deserialize;
 use crate::graphics::SpriteError;
 
 #[derive(Debug, Clone, Asset, TypePath)]
+pub struct SpriteSection {
+    pub page: Handle<Image>,
+    pub sprite: TextureAtlas,
+    pub rect: Option<Rect>,
+    pub anchor: Anchor,
+}
+
+impl SpriteSection {
+    pub fn sprite(&self) -> Sprite {
+        Sprite {
+            image: self.page.clone(),
+            texture_atlas: Some(self.sprite.clone()),
+            color: Color::WHITE,
+            flip_x: false,
+            flip_y: false,
+            custom_size: None,
+            rect: self.rect,
+            anchor: self.anchor,
+            image_mode: SpriteImageMode::Auto,
+        }
+    }
+}
+
+#[derive(Debug, Error, From, Display)]
+pub enum SpriteSectionError {
+    Image(ImageLoaderError),
+    Packing(SpriteError),
+    #[display("The channel to the main world for packing sprites was closed")]
+    Closed,
+}
+
+#[derive(Debug, Clone)]
+pub struct SpriteSectionLoader(pub Sender<(Image, Sender<Result<(Handle<Image>, TextureAtlas), SpriteError>>)>);
+impl AssetLoader for SpriteSectionLoader {
+    type Asset = SpriteSection;
+    type Settings = ();
+    type Error = SpriteSectionError;
+
+    async fn load(
+        &self,
+        reader: &mut dyn Reader,
+        _: &Self::Settings,
+        load_context: &mut LoadContext<'_>,
+    ) -> Result<Self::Asset, Self::Error> {
+        let image = ImageLoader::new(CompressedImageFormats::empty())
+            .load(reader, &ImageLoaderSettings::default(), load_context)
+            .await?;
+
+        let (sender, receiver) = async_channel::bounded(1);
+        self.0.send((image, sender)).await.map_err(|_| SpriteSectionError::Closed)?;
+        let (page, sprite) = receiver.recv().await.map_err(|_| SpriteSectionError::Closed)??;
+
+        Ok(SpriteSection {
+            page,
+            sprite,
+            rect: None,
+            anchor: Anchor::Center,
+        })
+    }
+
+    fn extensions(&self) -> &[&str] {
+        ImageLoader::SUPPORTED_FILE_EXTENSIONS
+    }
+}
+
+#[derive(Debug, Clone, Asset, TypePath)]
 pub struct SpriteSheet {
     pub page: Handle<Image>,
     pub sprite: TextureAtlas,
-    pub frames: Vec<Sprite>,
+    pub frames: Vec<Handle<SpriteSection>>,
     pub durations: Vec<Duration>,
     pub tags: HashMap<String, Range<usize>>,
 }
@@ -122,7 +189,8 @@ impl AssetLoader for SpriteSheetLoader {
 
         let frames = frames
             .iter()
-            .map(|frame| {
+            .enumerate()
+            .map(|(i, frame)| {
                 let source_size = uvec2(frame.source_size.w, frame.source_size.h).as_vec2();
                 let source_center = source_size / 2.;
 
@@ -133,23 +201,18 @@ impl AssetLoader for SpriteSheetLoader {
                 let sprite_size = uvec2(frame.sprite_source_size.w, frame.sprite_source_size.h).as_vec2();
                 let sprite_center = sprite_location + sprite_size / 2.;
 
-                Sprite {
-                    image: page.clone_weak(),
-                    texture_atlas: Some(TextureAtlas {
+                load_context.add_labeled_asset(format!("frame-{i}"), SpriteSection {
+                    page: page.clone_weak(),
+                    sprite: TextureAtlas {
                         layout: sprite.layout.clone_weak(),
                         index: sprite.index,
-                    }),
-                    color: Color::WHITE,
-                    flip_x: false,
-                    flip_y: false,
-                    custom_size: Some(frame_size),
+                    },
                     rect: Some(Rect {
                         min: frame_location,
                         max: frame_location + frame_size,
                     }),
                     anchor: Anchor::Custom((source_center - sprite_center) / sprite_size * vec2(1., -1.)),
-                    image_mode: SpriteImageMode::Auto,
-                }
+                })
             })
             .collect();
 
