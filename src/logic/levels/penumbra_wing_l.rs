@@ -117,7 +117,7 @@ fn draw_attractor_spawn_effect(
                     angle.slerp(Rot2::radians((effect.target_pos - vec).to_angle()), rotate),
                     Some(vec2(width, 8.)),
                     Sprite {
-                        color: Color::linear_rgba(1., green, blue, alpha),
+                        color: Color::linear_rgba(1., green, blue, alpha * (1. - proceed.powi(10))),
                         ..ring_8.sprite()
                     },
                 );
