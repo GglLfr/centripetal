@@ -64,10 +64,10 @@ impl Sprites {
                 .get_mut(&page.layout)
                 .ok_or(SpriteError::NonexistentLayout { page: page.image.id() })?;
 
-            if let Some(rect) = page.alloc.allocate(Size2D::new(image.width(), image.height()).cast()) {
+            if let Some(rect) = page.alloc.allocate(Size2D::new(image.width() + 2, image.height() + 2).cast()) {
                 let rect = URect {
-                    min: IVec2::new(rect.min.x, rect.min.y).as_uvec2(),
-                    max: IVec2::new(rect.max.x, rect.max.y).as_uvec2(),
+                    min: IVec2::new(rect.min.x + 1, rect.min.y + 1).as_uvec2(),
+                    max: IVec2::new(rect.max.x - 1, rect.max.y - 1).as_uvec2(),
                 };
 
                 let index = layout.add_texture(rect);
@@ -87,11 +87,11 @@ impl Sprites {
             .get_mut(&page.layout)
             .ok_or(SpriteError::NonexistentLayout { page: page.image.id() })?;
 
-        match page.alloc.allocate(Size2D::new(image.width(), image.height()).cast()) {
+        match page.alloc.allocate(Size2D::new(image.width() + 2, image.height() + 2).cast()) {
             Some(rect) => {
                 let rect = URect {
-                    min: IVec2::new(rect.min.x, rect.min.y).as_uvec2(),
-                    max: IVec2::new(rect.max.x, rect.max.y).as_uvec2(),
+                    min: IVec2::new(rect.min.x + 1, rect.min.y + 1).as_uvec2(),
+                    max: IVec2::new(rect.max.x - 1, rect.max.y - 1).as_uvec2(),
                 };
 
                 let index = layout.add_texture(rect);
