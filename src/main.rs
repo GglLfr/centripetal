@@ -54,6 +54,8 @@ pub struct Sprites {
     pub attractor_regular: Handle<SpriteSheet>,
     #[asset(path = "entities/selene/selene.json")]
     pub selene: Handle<SpriteSheet>,
+    #[asset(path = "entities/selene/selene_penumbra.json")]
+    pub selene_penumbra: Handle<SpriteSheet>,
 }
 
 fn main() -> AppExit {

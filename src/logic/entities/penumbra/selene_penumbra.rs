@@ -2,15 +2,22 @@ use std::time::Duration;
 
 use avian2d::prelude::*;
 use bevy::{
-    ecs::{query::QueryItem, system::SystemParamItem},
+    ecs::{
+        query::QueryItem,
+        system::{SystemParamItem, lifetimeless::SRes},
+    },
     prelude::*,
 };
 
-use crate::logic::{
-    CameraTarget, Fields, FromLevelEntity, IsPlayer,
-    entities::{
-        Hurt,
-        penumbra::{AttractedInitial, AttractedLaunch, AttractedParams, AttractedPrediction, OnLaunch, PenumbraEntity},
+use crate::{
+    Sprites,
+    graphics::{Animation, AnimationMode, EntityColor},
+    logic::{
+        CameraTarget, Fields, FromLevelEntity, IsPlayer,
+        entities::{
+            Hurt,
+            penumbra::{AttractedInitial, AttractedLaunch, AttractedParams, AttractedPrediction, OnLaunch, PenumbraEntity},
+        },
     },
 };
 
@@ -18,13 +25,13 @@ use crate::logic::{
 #[require(IsPlayer, CameraTarget, PenumbraEntity)]
 pub struct SelenePenumbra;
 impl FromLevelEntity for SelenePenumbra {
-    type Param = ();
+    type Param = SRes<Sprites>;
     type Data = ();
 
     fn from_level_entity(
         mut e: EntityCommands,
         fields: &Fields,
-        _: &mut SystemParamItem<Self::Param>,
+        sprites: &mut SystemParamItem<Self::Param>,
         _: QueryItem<Self::Data>,
     ) -> Result {
         let ccw = fields.bool("ccw")?;
@@ -58,6 +65,10 @@ impl FromLevelEntity for SelenePenumbra {
                 max_distance: 640.,
             },
             Collider::circle(5.),
+            Animation::new(sprites.selene_penumbra.clone_weak(), "anim"),
+            AnimationMode::Repeat,
+            EntityColor(Color::linear_rgba(1., 2., 24., 1.)),
+            DebugRender::none(),
         ))
         .observe(on_selene_launch)
         .observe(on_selene_hurt);

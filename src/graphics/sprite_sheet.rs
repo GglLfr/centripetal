@@ -38,15 +38,8 @@ impl SpriteSection {
         }
     }
 
-    pub fn sprite_with(
-        &self,
-        color: impl Into<Color>,
-        size: impl Into<Option<Vec2>>,
-        local_anchor: impl Into<Anchor>,
-    ) -> Sprite {
+    pub fn sprite_with(&self, color: impl Into<Color>, size: impl Into<Option<Vec2>>, local_anchor: Anchor) -> Sprite {
         let size = size.into().unwrap_or(self.size);
-        let local_anchor = local_anchor.into();
-
         Sprite {
             image: self.page.clone(),
             texture_atlas: Some(self.sprite.clone()),

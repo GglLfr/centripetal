@@ -9,7 +9,6 @@ use bevy::{
     },
     prelude::*,
     ptr::OwningPtr,
-    sprite::Anchor,
 };
 
 use crate::{
@@ -230,7 +229,7 @@ pub fn draw_animations(
             drawer.draw_at(
                 Vec3::ZERO,
                 Rot2::IDENTITY,
-                frame.sprite_with(color.copied().unwrap_or_default().0, None, Anchor::Center),
+                frame.sprite_with(color.copied().unwrap_or_default().0, None, default()),
             );
         }
     });
