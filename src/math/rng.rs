@@ -40,6 +40,14 @@ impl FusedIterator for RandLenVectors<'_> {}
 pub trait RngExt {
     fn as_rng(&mut self) -> &mut Rng;
 
+    fn f32_within(&mut self, min: f32, max: f32) -> f32 {
+        min + self.as_rng().f32() * (max - min)
+    }
+
+    fn f64_within(&mut self, min: f64, max: f64) -> f64 {
+        min + self.as_rng().f64() * (max - min)
+    }
+
     fn len_vectors(
         &mut self,
         count: usize,

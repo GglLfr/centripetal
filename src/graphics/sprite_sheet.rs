@@ -20,6 +20,7 @@ pub struct SpriteSection {
     pub sprite: TextureAtlas,
     pub rect: Option<Rect>,
     pub anchor: Anchor,
+    pub size: Vec2,
 }
 
 impl SpriteSection {
@@ -30,7 +31,7 @@ impl SpriteSection {
             color: Color::WHITE,
             flip_x: false,
             flip_y: false,
-            custom_size: None,
+            custom_size: Some(self.size),
             rect: self.rect,
             anchor: self.anchor,
             image_mode: SpriteImageMode::Auto,
@@ -64,6 +65,7 @@ impl AssetLoader for SpriteSectionLoader {
             .await?;
 
         let (sender, receiver) = async_channel::bounded(1);
+        let size = image.size().as_vec2();
         self.0.send((image, sender)).await.map_err(|_| SpriteSectionError::Closed)?;
         let (page, sprite) = receiver.recv().await.map_err(|_| SpriteSectionError::Closed)??;
 
@@ -72,6 +74,7 @@ impl AssetLoader for SpriteSectionLoader {
             sprite,
             rect: None,
             anchor: Anchor::Center,
+            size,
         })
     }
 
@@ -212,6 +215,7 @@ impl AssetLoader for SpriteSheetLoader {
                         max: frame_location + frame_size,
                     }),
                     anchor: Anchor::Custom((source_center - sprite_center) / sprite_size * vec2(1., -1.)),
+                    size: sprite_size,
                 })
             })
             .collect();

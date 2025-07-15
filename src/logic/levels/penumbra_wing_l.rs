@@ -24,7 +24,7 @@ use crate::{
         entities::penumbra::AttractedAction,
         levels::{disable, enable, in_level},
     },
-    math::RngExt,
+    math::{FloatExt, RngExt},
 };
 
 #[derive(Debug, Copy, Clone, Default, Resource, TypePath, Serialize, Deserialize, Deref, DerefMut)]
@@ -77,7 +77,7 @@ impl FromLevel for State {
 }
 
 #[derive(Debug, Clone, Component, Default)]
-#[require(SpriteDrawer, Timed::new(Duration::from_secs(3)))]
+#[require(SpriteDrawer, Timed::new(Duration::from_millis(2500)))]
 struct AttractorSpawnEffect {
     target_pos: Vec2,
 }
@@ -87,43 +87,41 @@ fn draw_attractor_spawn_effect(
     sprite_sections: Res<Assets<SpriteSection>>,
     effects: Query<(Entity, &AttractorSpawnEffect, &SpriteDrawer, &Timed)>,
 ) {
+    let Some(ring_6) = sprite_sections.get(&sprites.ring_6) else { return };
     let Some(ring_8) = sprite_sections.get(&sprites.ring_8) else { return };
 
+    let rings = [ring_6, ring_8];
     for (e, effect, drawer, &timed) in &effects {
         let mut rng = Rng::with_seed(e.to_bits());
         let f = timed.frac();
 
         let mut layer = 0f32;
-        for (angle, vec) in rng
-            .fork()
-            .len_vectors(48, 0., 2. * PI, PIXELS_PER_UNIT as f32, 12. * PIXELS_PER_UNIT as f32)
+        for (angle, vec) in
+            rng.fork()
+                .len_vectors(40, 0., 2. * PI, 5. * PIXELS_PER_UNIT as f32, 10. * PIXELS_PER_UNIT as f32)
         {
-            let scl = 0.75 + rng.f32() * 0.25;
-            let f_scl = f / scl;
+            let ring = rings[rng.usize(0..rings.len())];
+            let f_scl = f.threshold(0., rng.f32_within(0.65, 1.));
 
-            let green = 1. + rng.f32();
-            let blue = 12. + rng.f32() * 12.;
-            let alpha = 0.5 + rng.f32() * 0.5;
+            let green = rng.f32_within(1., 2.);
+            let blue = rng.f32_within(12., 24.);
+            let alpha = rng.f32_within(0.5, 1.);
 
-            if f_scl <= 1. {
-                let rotate = (f_scl.clamp(0.6, 0.9) - 0.6) / 0.3;
-                let proceed = (f_scl.max(0.7) - 0.7) / 0.3;
-                let width = 8. + f_scl.powi(10) * 8.;
+            let rotate = f_scl.threshold(0.6, 0.9).pow_in(2);
+            let proceed = f_scl.threshold(0.6, 1.);
+            let width = ring.size.x + (1. - f_scl.slope(0.5)).pow_in(8) * ring.size.x * 2.;
 
-                drawer.draw_at(
-                    (vec * ((f - 1.).powi(5) + 1.))
-                        .lerp(effect.target_pos, proceed.powi(6))
-                        .extend(layer),
-                    angle.slerp(Rot2::radians((effect.target_pos - vec).to_angle()), rotate),
-                    Some(vec2(width, 8.)),
-                    Sprite {
-                        color: Color::linear_rgba(1., green, blue, alpha * (1. - proceed.powi(10))),
-                        ..ring_8.sprite()
-                    },
-                );
+            drawer.draw_at(
+                (vec * f.pow_out(5)).lerp(effect.target_pos, proceed.pow_in(6)).extend(layer),
+                angle.slerp(Rot2::radians((effect.target_pos - vec).to_angle()), rotate),
+                Some(vec2(width, ring.size.y)),
+                Sprite {
+                    color: Color::linear_rgba(1., green, blue, alpha * (1. - proceed.pow_in(10))),
+                    ..ring.sprite()
+                },
+            );
 
-                layer = layer.next_up();
-            }
+            layer = layer.next_up();
         }
     }
 }
@@ -137,7 +135,6 @@ pub const RINGS: [Uuid; 2] = [
 pub const HOVER_TARGET: Uuid = uuid!("ddc89020-3740-11f0-bea9-17dccf039850");
 
 pub const SPAWN_ATTRACTOR_DURATION: Duration = Duration::from_secs(2);
-pub const SPAWN_SELENE_DURATION: Duration = Duration::from_secs(2);
 
 pub fn update(
     mut commands: Commands,
@@ -201,8 +198,6 @@ pub fn update(
                                                   mut state: Query<&mut ActionState<AttractedAction>>|
                                                   -> Result {
                                                 if trigger.body.is_some_and(|body| body == selene) {
-                                                    // Stop observing and despawn the generic entity.
-                                                    commands.entity(trigger.observer()).despawn();
                                                     commands.get_entity(trigger.target())?.despawn();
 
                                                     // Enable accelerating.
