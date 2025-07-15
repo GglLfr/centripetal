@@ -11,6 +11,7 @@ use bevy::{
         },
     },
     prelude::*,
+    sprite::Anchor,
 };
 use fastrand::Rng;
 use leafwing_input_manager::prelude::*;
@@ -95,7 +96,7 @@ fn draw_attractor_spawn_effect(
         let mut rng = Rng::with_seed(e.to_bits());
         let f = timed.frac();
 
-        let mut layer = 0f32;
+        let mut layer = -1f32;
         for (angle, vec) in
             rng.fork()
                 .len_vectors(40, 0., 2. * PI, 5. * PIXELS_PER_UNIT as f32, 10. * PIXELS_PER_UNIT as f32)
@@ -107,21 +108,21 @@ fn draw_attractor_spawn_effect(
             let blue = rng.f32_within(12., 24.);
             let alpha = rng.f32_within(0.5, 1.);
 
-            let rotate = f_scl.threshold(0.6, 0.9).pow_in(2);
-            let proceed = f_scl.threshold(0.6, 1.);
-            let width = ring.size.x + (1. - f_scl.slope(0.5)).pow_in(8) * ring.size.x * 2.;
+            let rotate = f_scl.threshold(0.4, 0.9).pow_in(2);
+            let proceed = f_scl.threshold(0.4, 1.);
+            let width = ring.size.x + (1. - f_scl.slope(0.5)).pow_in(6) * ring.size.x * 2.;
 
             drawer.draw_at(
                 (vec * f.pow_out(5)).lerp(effect.target_pos, proceed.pow_in(6)).extend(layer),
                 angle.slerp(Rot2::radians((effect.target_pos - vec).to_angle()), rotate),
-                Some(vec2(width, ring.size.y)),
-                Sprite {
-                    color: Color::linear_rgba(1., green, blue, alpha * (1. - proceed.pow_in(10))),
-                    ..ring.sprite()
-                },
+                ring.sprite_with(
+                    Color::linear_rgba(1., green, blue, alpha * (1. - proceed.pow_in(7))),
+                    vec2(width, ring.size.y),
+                    Anchor::CenterRight,
+                ),
             );
 
-            layer = layer.next_up();
+            layer = layer.next_down();
         }
     }
 }
@@ -170,6 +171,7 @@ pub fn update(
                     .with_children(move |children| {
                         children
                             .spawn((
+                                Transform::from_xyz(0., 0., 1.),
                                 Animation::new(sprite_sheets.grand_attractor_spawned.clone(), "anim"),
                                 EntityColor(Color::linear_rgba(1., 2., 24., 1.)),
                             ))

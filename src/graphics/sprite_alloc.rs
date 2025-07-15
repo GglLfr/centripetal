@@ -20,12 +20,12 @@ use derive_more::{Display, Error};
 use guillotiere::{SimpleAtlasAllocator, euclid::Size2D};
 
 #[derive(Debug, Resource)]
-pub struct Sprites {
+pub struct SpriteAllocator {
     pages: Vec<Page>,
     pending: Vec<(Image, Handle<Image>, URect)>,
 }
 
-impl FromWorld for Sprites {
+impl FromWorld for SpriteAllocator {
     fn from_world(world: &mut World) -> Self {
         let (device, mut images, mut layouts) =
             SystemState::<(Res<RenderDevice>, ResMut<Assets<Image>>, ResMut<Assets<TextureAtlasLayout>>)>::new(world)
@@ -52,7 +52,7 @@ pub enum SpriteError {
     NonexistentLayout { page: AssetId<Image> },
 }
 
-impl Sprites {
+impl SpriteAllocator {
     pub fn pack(
         &mut self,
         image: Image,
@@ -173,7 +173,7 @@ pub fn pack_incoming_sprites(
     receiver: Receiver<(Image, Sender<Result<(Handle<Image>, TextureAtlas), SpriteError>>)>,
 ) -> impl System<In = (), Out = ()> {
     IntoSystem::into_system(
-        move |mut sprites: ResMut<Sprites>,
+        move |mut sprites: ResMut<SpriteAllocator>,
               mut images: ResMut<Assets<Image>>,
               mut layouts: ResMut<Assets<TextureAtlasLayout>>| {
             ComputeTaskPool::get().scope(|scope| {
@@ -192,7 +192,7 @@ pub fn pack_incoming_sprites(
 pub struct PendingSprites(Vec<(Image, Handle<Image>, URect)>);
 
 pub fn extract_pending_sprites(mut world: ResMut<MainWorld>, mut pending: ResMut<PendingSprites>) {
-    pending.0.append(&mut world.resource_mut::<Sprites>().pending);
+    pending.0.append(&mut world.resource_mut::<SpriteAllocator>().pending);
 }
 
 pub fn prepare_pending_sprites(

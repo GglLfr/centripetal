@@ -19,7 +19,7 @@ pub struct SpriteSection {
     pub page: Handle<Image>,
     pub sprite: TextureAtlas,
     pub rect: Option<Rect>,
-    pub anchor: Anchor,
+    pub center_anchor: Anchor,
     pub size: Vec2,
 }
 
@@ -33,7 +33,32 @@ impl SpriteSection {
             flip_y: false,
             custom_size: Some(self.size),
             rect: self.rect,
-            anchor: self.anchor,
+            anchor: self.center_anchor,
+            image_mode: SpriteImageMode::Auto,
+        }
+    }
+
+    pub fn sprite_with(
+        &self,
+        color: impl Into<Color>,
+        size: impl Into<Option<Vec2>>,
+        local_anchor: impl Into<Anchor>,
+    ) -> Sprite {
+        let size = size.into().unwrap_or(self.size);
+        let local_anchor = local_anchor.into();
+
+        Sprite {
+            image: self.page.clone(),
+            texture_atlas: Some(self.sprite.clone()),
+            color: color.into(),
+            flip_x: false,
+            flip_y: false,
+            custom_size: Some(size),
+            rect: self.rect,
+            anchor: Anchor::Custom(
+                self.center_anchor.as_vec() +
+                    local_anchor.as_vec() * size / self.rect.map(|rect| rect.size()).unwrap_or(size),
+            ),
             image_mode: SpriteImageMode::Auto,
         }
     }
@@ -73,7 +98,7 @@ impl AssetLoader for SpriteSectionLoader {
             page,
             sprite,
             rect: None,
-            anchor: Anchor::Center,
+            center_anchor: Anchor::Center,
             size,
         })
     }
@@ -214,7 +239,7 @@ impl AssetLoader for SpriteSheetLoader {
                         min: frame_location,
                         max: frame_location + frame_size,
                     }),
-                    anchor: Anchor::Custom((source_center - sprite_center) / sprite_size * vec2(1., -1.)),
+                    center_anchor: Anchor::Custom((source_center - sprite_center) / sprite_size * vec2(1., -1.)),
                     size: sprite_size,
                 })
             })

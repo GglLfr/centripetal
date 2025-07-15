@@ -12,7 +12,10 @@ use bevy::{
 use leafwing_input_manager::{buttonlike::ButtonState, prelude::*};
 use serde::{Deserialize, Serialize};
 
-use crate::logic::{Fields, FromLevelEntity, entities::penumbra::PenumbraEntity};
+use crate::{
+    graphics::{AnimationFrom, AnimationMode, EntityColor},
+    logic::{Fields, FromLevelEntity, entities::penumbra::PenumbraEntity},
+};
 
 #[derive(Debug, Clone, Component)]
 #[require(PenumbraEntity, AttractorEntities)]
@@ -31,6 +34,10 @@ impl Attractor {
                 caster: Collider::circle(radius),
             },
             Collider::circle(8.),
+            AnimationFrom::sprite(|sprites| (sprites.attractor_regular.clone_weak(), "anim".into())),
+            AnimationMode::Repeat,
+            EntityColor(Color::linear_rgba(1., 1., 12., 1.)),
+            DebugRender::none(),
         )
     }
 }

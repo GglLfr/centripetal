@@ -50,6 +50,8 @@ pub struct Sprites {
     #[asset(path = "effects/ring_16.png")]
     pub ring_16: Handle<SpriteSection>,
     // Entities.
+    #[asset(path = "entities/attractor/regular.json")]
+    pub attractor_regular: Handle<SpriteSheet>,
     #[asset(path = "entities/selene/selene.json")]
     pub selene: Handle<SpriteSheet>,
 }

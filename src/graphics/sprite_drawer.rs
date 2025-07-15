@@ -20,13 +20,12 @@ impl SpriteDrawer {
         self.queued.append([conf]);
     }
 
-    pub fn draw_at(&self, pos: impl Into<Vec3>, rot: impl Into<Rot2>, size: impl Into<Option<Vec2>>, sprite: Sprite) {
+    pub fn draw_at(&self, pos: impl Into<Vec3>, rot: impl Into<Rot2>, sprite: Sprite) {
         self.draw(Draw {
             pos: pos.into(),
             rot: rot.into(),
-            size: size.into(),
             sprite,
-        });
+        })
     }
 }
 
@@ -34,7 +33,6 @@ impl SpriteDrawer {
 pub struct Draw {
     pub pos: Vec3,
     pub rot: Rot2,
-    pub size: Option<Vec2>,
     pub sprite: Sprite,
 }
 
@@ -58,10 +56,6 @@ pub fn flush_drawer_to_children(
 
                 if let Some((mut sprite, mut trns)) = sprites.fetch_next() {
                     *sprite = draw.sprite;
-                    if let Some(size) = draw.size {
-                        sprite.custom_size = Some(size);
-                    }
-
                     *trns = transform;
                 } else {
                     drawer_entity.with_child((draw.sprite, transform));

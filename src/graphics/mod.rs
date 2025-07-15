@@ -4,14 +4,14 @@ use bevy::{
 };
 
 mod animation;
+mod sprite_alloc;
 mod sprite_drawer;
 mod sprite_sheet;
-mod sprites;
 
 pub use animation::*;
+pub use sprite_alloc::*;
 pub use sprite_drawer::*;
 pub use sprite_sheet::*;
-pub use sprites::*;
 
 #[derive(Debug, Copy, Clone, Component, Deref, DerefMut)]
 pub struct EntityColor(pub Color);
@@ -42,7 +42,7 @@ impl Plugin for GraphicsPlugin {
 
     fn finish(&self, app: &mut App) {
         let (sender, receiver) = async_channel::bounded(8);
-        app.init_resource::<Sprites>()
+        app.init_resource::<SpriteAllocator>()
             .register_asset_loader(SpriteSheetLoader(sender.clone()))
             .register_asset_loader(SpriteSectionLoader(sender))
             .add_systems(PreUpdate, pack_incoming_sprites(receiver));
