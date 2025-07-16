@@ -62,7 +62,7 @@ impl FromLevelEntity for SelenePenumbra {
             },
             AttractedPrediction {
                 points: Vec::new(),
-                max_distance: 640.,
+                max_distance: 480.,
             },
             Collider::circle(5.),
             Animation::new(sprites.selene_penumbra.clone_weak(), "anim"),

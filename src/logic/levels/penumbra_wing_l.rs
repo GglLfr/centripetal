@@ -50,11 +50,17 @@ struct SpawningSelene;
 
 #[derive(Debug, Copy, Clone, Default, Component)]
 #[component(storage = "SparseSet")]
-struct TutorialHover;
+struct TutorialMove {
+    aligned: Option<Duration>,
+}
 
 #[derive(Debug, Copy, Clone, Default, Component)]
 #[component(storage = "SparseSet")]
-struct TutorialAccel;
+struct TutorialLaunch;
+
+#[derive(Debug, Copy, Clone, Default, Component)]
+#[component(storage = "SparseSet")]
+struct TutorialParry;
 
 impl FromLevel for Instance {
     type Param = (SRes<IntroShown>, SQuery<Read<Transform>>);
@@ -67,6 +73,7 @@ impl FromLevel for Instance {
         entities: QueryItem<Self::Data>,
     ) -> Result {
         if !**cutscene_shown {
+            let level_entity = e.id();
             let mut commands = e.commands();
             let [selene, attractor, _ring_0, _ring_1, hover_target] = [SELENE, ATTRACTOR, RINGS[0], RINGS[1], HOVER_TARGET]
                 .map(|iid| {
@@ -83,13 +90,16 @@ impl FromLevel for Instance {
                 .truncate();
 
             e.insert((
+                Init,
                 StateMachine::default()
                     .trans::<Init, _>(trans_wait(Duration::from_secs(1)), SpawningAttractor)
                     // Attractor spawning effect.
                     .on_enter::<SpawningAttractor>(move |e| {
-                        let level_entity = e.id();
                         e.with_child((
-                            attractor_trns,
+                            Transform {
+                                translation: attractor_trns.translation.with_z(1.),
+                                ..attractor_trns
+                            },
                             CameraTarget,
                             AnimationFrom::sprite(|sprites| (sprites.attractor_spawn.clone_weak(), "in")),
                             EntityColor(Color::linear_rgba(1., 2., 24., 1.)),
@@ -111,7 +121,6 @@ impl FromLevel for Instance {
                     .trans::<SpawningAttractor, _>(done(Some(Done::Success)), SpawningSelene)
                     // Attractor spawned effect, Selene spawning effect.
                     .on_enter::<SpawningSelene>(move |e| {
-                        let level_entity = e.id();
                         e.commands()
                             .entity(attractor)
                             .queue(enable)
@@ -139,10 +148,9 @@ impl FromLevel for Instance {
                                     });
                             });
                     })
-                    .trans::<SpawningSelene, _>(done(Some(Done::Success)), TutorialHover)
-                    // Selene spawned effect (TODO), hovering tutorial.
-                    .on_enter::<TutorialHover>(move |e| {
-                        let level_entity = e.id();
+                    .trans::<SpawningSelene, _>(done(Some(Done::Success)), TutorialMove { aligned: None })
+                    // Selene spawned effect (TODO), hovering and accelerating tutorial.
+                    .on_enter::<TutorialMove>(move |e| {
                         e.commands().entity(attractor).remove::<CameraTarget>();
 
                         e.commands()
@@ -154,8 +162,7 @@ impl FromLevel for Instance {
                                     .get_mut::<ActionState<AttractedAction>>()
                                     .ok_or("`ActionState<AttractedAction>` not found")?;
 
-                                // Only `Hover` is enabled initially.
-                                action.disable_action(&AttractedAction::Accel);
+                                // Only `Hover` and `Accel` are enabled initially.
                                 action.disable_action(&AttractedAction::Launch);
                                 action.disable_action(&AttractedAction::Parry);
                                 Ok(())
@@ -167,23 +174,44 @@ impl FromLevel for Instance {
                             .insert(CollisionEventsEnabled)
                             .observe(
                                 move |trigger: Trigger<OnCollisionStart>,
-                                      mut commands: Commands,
-                                      mut state: Query<&mut ActionState<AttractedAction>>|
+                                      mut aligned: Query<&mut TutorialMove>,
+                                      time: Res<Time>|
                                       -> Result {
                                     if trigger.body.is_some_and(|body| body == selene) {
-                                        commands.get_entity(trigger.target())?.despawn();
-
-                                        // Enable accelerating.
-                                        commands.get_entity(level_entity)?.insert(Done::Success);
-                                        state.get_mut(selene)?.enable_action(&AttractedAction::Accel);
+                                        aligned.get_mut(level_entity)?.aligned = Some(time.elapsed());
                                     }
 
                                     Ok(())
                                 },
+                            )
+                            .observe(
+                                move |trigger: Trigger<OnCollisionEnd>, mut aligned: Query<&mut TutorialMove>| -> Result {
+                                    if trigger.body.is_some_and(|body| body == selene) {
+                                        aligned.get_mut(level_entity)?.aligned = None;
+                                    }
+                                    Ok(())
+                                },
                             );
                     })
-                    .trans::<TutorialHover, _>(done(Some(Done::Success)), TutorialAccel),
-                Init,
+                    .on_exit::<TutorialMove>(move |e| {
+                        e.commands().entity(hover_target).despawn();
+                        e.commands().entity(selene).queue(|mut e: EntityWorldMut| {
+                            e.get_mut::<ActionState<AttractedAction>>()
+                                .expect("`ActionState<AttractedAction>` not found in Selene")
+                                .enable_action(&AttractedAction::Launch)
+                        });
+                    })
+                    .trans::<TutorialMove, _>(
+                        |In(level_entity): In<Entity>, time: Res<Time>, aligned: Query<&TutorialMove>| {
+                            aligned
+                                .get(level_entity)
+                                .expect("`TutorialMove` in level entity")
+                                .aligned
+                                .is_some_and(|since| time.elapsed() - since >= Duration::from_secs(5))
+                        },
+                        TutorialLaunch,
+                    )
+                    .trans::<TutorialLaunch, _>(done(Some(Done::Success)), TutorialParry),
             ));
             debug!("Loaded left-wing side Penumbra level (+ intro cutscene)!");
         } else {
@@ -219,15 +247,15 @@ fn draw_attractor_spawn_effect(
                 .len_vectors(40, 0., 2. * PI, 5. * PIXELS_PER_UNIT as f32, 10. * PIXELS_PER_UNIT as f32)
         {
             let ring = rings[rng.usize(0..rings.len())];
-            let f_scl = f.threshold(0., rng.f32_within(0.65, 1.));
+            let f_scl = f.threshold(0., rng.f32_within(0.75, 1.));
 
             let green = rng.f32_within(1., 2.);
             let blue = rng.f32_within(12., 24.);
             let alpha = rng.f32_within(0.5, 1.);
 
             let rotate = f_scl.threshold(0.4, 0.9).pow_in(2);
-            let proceed = f_scl.threshold(0.4, 1.);
-            let width = ring.size.x + (1. - f_scl.slope(0.5)).pow_in(6) * ring.size.x * 2.;
+            let proceed = f_scl.threshold(0.25, 1.);
+            let width = ring.size.x + (1. - f_scl.slope(0.5)).pow_in(6) * ring.size.x * 1.5;
 
             drawer.draw_at(
                 (vec * f.pow_out(5)).lerp(effect.target_pos, proceed.pow_in(6)).extend(layer),
