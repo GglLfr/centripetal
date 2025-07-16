@@ -2,6 +2,7 @@ use bevy::{
     prelude::*,
     render::{Render, RenderApp, render_asset::prepare_assets, texture::GpuImage},
 };
+use seldom_state::set::StateSet;
 
 mod animation;
 mod sprite_alloc;
@@ -27,7 +28,11 @@ impl Plugin for GraphicsPlugin {
     fn build(&self, app: &mut App) {
         app.init_asset::<SpriteSection>().init_asset::<SpriteSheet>().add_systems(
             PostUpdate,
-            (update_animations, draw_animations, flush_drawer_to_children)
+            (
+                update_animations.before(StateSet::Transition),
+                draw_animations,
+                flush_drawer_to_children,
+            )
                 .chain()
                 .before(TransformSystem::TransformPropagate),
         );

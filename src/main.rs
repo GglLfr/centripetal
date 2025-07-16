@@ -3,60 +3,39 @@
 use avian2d::prelude::*;
 #[cfg(feature = "dev")]
 use bevy::log::DEFAULT_FILTER;
-use bevy::{log::LogPlugin, prelude::*};
+use bevy::{
+    log::LogPlugin,
+    prelude::*,
+};
 use bevy_asset_loader::prelude::*;
 use bevy_ecs_tilemap::prelude::*;
 use bevy_framepace::FramepacePlugin;
 use iyes_progress::prelude::*;
+use seldom_state::prelude::*;
 
 use crate::{
-    graphics::{GraphicsPlugin, SpriteSection, SpriteSheet},
-    logic::{GameState, Ldtk, LoadLevel, LogicPlugin},
+    graphics::GraphicsPlugin,
+    logic::{GameState, LoadLevel, LogicPlugin},
 };
 
 pub mod graphics;
 pub mod logic;
 pub mod math;
 
+mod asset;
+mod ecs;
 mod config;
 mod save;
+pub use asset::*;
+pub use ecs::*;
 pub use config::*;
 pub use save::*;
 
-#[cfg_attr(not(feature = "bevy_dynamic"), global_allocator)]
-#[cfg_attr(
-    feature = "bevy_dynamic",
-    expect(unused, reason = "Bevy dynamic linking is incompatible with Mimalloc redirection")
-)]
+#[cfg(not(feature = "bevy_dynamic"))]
+#[global_allocator]
 static ALLOC: mimalloc_redirect::MiMalloc = mimalloc_redirect::MiMalloc;
 
 pub const PIXELS_PER_UNIT: u32 = 16;
-
-#[derive(Debug, Clone, Resource, AssetCollection, Deref, DerefMut)]
-pub struct WorldHandle {
-    #[asset(path = "levels/world.ldtk")]
-    pub handle: Handle<Ldtk>,
-}
-
-#[derive(Debug, Clone, Resource, AssetCollection)]
-pub struct Sprites {
-    // Visual effects.
-    #[asset(path = "effects/grand_attractor_spawned.json")]
-    pub grand_attractor_spawned: Handle<SpriteSheet>,
-    #[asset(path = "effects/ring_6.png")]
-    pub ring_6: Handle<SpriteSection>,
-    #[asset(path = "effects/ring_8.png")]
-    pub ring_8: Handle<SpriteSection>,
-    #[asset(path = "effects/ring_16.png")]
-    pub ring_16: Handle<SpriteSection>,
-    // Entities.
-    #[asset(path = "entities/attractor/regular.json")]
-    pub attractor_regular: Handle<SpriteSheet>,
-    #[asset(path = "entities/selene/selene.json")]
-    pub selene: Handle<SpriteSheet>,
-    #[asset(path = "entities/selene/selene_penumbra.json")]
-    pub selene_penumbra: Handle<SpriteSheet>,
-}
 
 fn main() -> AppExit {
     App::new()
@@ -78,6 +57,7 @@ fn main() -> AppExit {
             PhysicsPlugins::default().with_length_unit(PIXELS_PER_UNIT as f32),
             #[cfg(feature = "dev")]
             PhysicsDebugPlugin::default(),
+            StateMachinePlugin::default(),
             TilemapPlugin,
             FramepacePlugin,
             ConfigPlugin,

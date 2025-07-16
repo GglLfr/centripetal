@@ -176,7 +176,7 @@ impl Default for PlayerKeybinds {
                 .with(PlayerAction::Attack, KeyCode::KeyZ),
             attracted: InputMap::default()
                 .with_axis(
-                    AttractedAction::Prograde,
+                    AttractedAction::Accel,
                     VirtualAxis::new(KeyCode::ControlLeft, KeyCode::ShiftLeft),
                 )
                 .with_axis(AttractedAction::Hover, VirtualAxis::vertical_arrow_keys())

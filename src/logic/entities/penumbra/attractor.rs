@@ -34,7 +34,7 @@ impl Attractor {
                 caster: Collider::circle(radius),
             },
             Collider::circle(8.),
-            AnimationFrom::sprite(|sprites| (sprites.attractor_regular.clone_weak(), "anim".into())),
+            AnimationFrom::sprite(|sprites| (sprites.attractor_regular.clone_weak(), "anim")),
             AnimationMode::Repeat,
             EntityColor(Color::linear_rgba(1., 1., 12., 1.)),
             DebugRender::none(),
@@ -82,7 +82,7 @@ pub struct AttractedInitial {
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Reflect, Actionlike, Serialize, Deserialize)]
 pub enum AttractedAction {
     #[actionlike(Axis)]
-    Prograde,
+    Accel,
     #[actionlike(Axis)]
     Hover,
     Precise,
@@ -354,7 +354,7 @@ pub fn apply_attractor_accels(
                 let precise_scale = if state.pressed(&AttractedAction::Precise) { param.precise_scale } else { 1. };
 
                 {
-                    let prograde_value = state.clamped_value(&AttractedAction::Prograde);
+                    let prograde_value = state.clamped_value(&AttractedAction::Accel);
 
                     let r_vec = *linear_velocity;
                     let r = r_vec.length();

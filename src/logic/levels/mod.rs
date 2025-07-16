@@ -3,7 +3,7 @@ use bevy::{ecs::entity_disabling::Disabled, prelude::*};
 
 use crate::logic::{Level, LevelUnload};
 
-pub mod penumbra_wing_l;
+mod penumbra_wing_l;
 
 #[derive(Debug, Copy, Clone, Default)]
 pub struct LevelsPlugin;

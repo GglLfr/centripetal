@@ -20,6 +20,7 @@ guillotiere = "0.6"
 iyes_progress = { version = "0.14", features = ["assets", "async"] }
 mimalloc-redirect = "0.1"
 num-traits = "0.2"
+seldom_state = "0.14"
 serde = { version = "1", features = ["derive"] }
 serde_flexitos = "0.2"
 serde_json = "1"

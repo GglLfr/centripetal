@@ -15,37 +15,48 @@ use bevy::{
 };
 use fastrand::Rng;
 use leafwing_input_manager::prelude::*;
+use seldom_state::prelude::*;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    PIXELS_PER_UNIT, SaveApp, Sprites,
-    graphics::{Animation, EntityColor, OnAnimateDone, SpriteDrawer, SpriteSection},
+    Observe, PIXELS_PER_UNIT, SaveApp, Sprites,
+    graphics::{AnimateKey, AnimationFrom, EntityColor, OnAnimateDone, SpriteDrawer, SpriteSection},
     logic::{
-        CameraTarget, Fields, FromLevel, InGameState, LevelApp, LevelEntities, LevelUnload, OnTimeFinished, Timed,
+        CameraTarget, Fields, FromLevel, InGameState, LevelApp, LevelEntities, OnTimeFinished, Timed,
         entities::penumbra::AttractedAction,
         levels::{disable, enable, in_level},
     },
     math::{FloatExt, RngExt},
+    trans_wait,
 };
 
 #[derive(Debug, Copy, Clone, Default, Resource, TypePath, Serialize, Deserialize, Deref, DerefMut)]
-pub struct IntroShown(pub bool);
+struct IntroShown(pub bool);
 
-#[derive(Debug, Copy, Clone, Component)]
-pub enum State {
-    Init {
-        target_pos: Vec2,
-    },
-    Begin {
-        target_pos: Vec2,
-        started: Duration,
-        done: bool,
-    },
-    TutorialHover,
-    TutorialAccelerate,
-}
+#[derive(Debug, Copy, Clone, Default)]
+struct Instance;
 
-impl FromLevel for State {
+#[derive(Debug, Copy, Clone, Default, Component)]
+#[component(storage = "SparseSet")]
+struct Init;
+
+#[derive(Debug, Copy, Clone, Default, Component)]
+#[component(storage = "SparseSet")]
+struct SpawningAttractor;
+
+#[derive(Debug, Copy, Clone, Default, Component)]
+#[component(storage = "SparseSet")]
+struct SpawningSelene;
+
+#[derive(Debug, Copy, Clone, Default, Component)]
+#[component(storage = "SparseSet")]
+struct TutorialHover;
+
+#[derive(Debug, Copy, Clone, Default, Component)]
+#[component(storage = "SparseSet")]
+struct TutorialAccel;
+
+impl FromLevel for Instance {
     type Param = (SRes<IntroShown>, SQuery<Read<Transform>>);
     type Data = Read<LevelEntities>;
 
@@ -57,17 +68,123 @@ impl FromLevel for State {
     ) -> Result {
         if !**cutscene_shown {
             let mut commands = e.commands();
-            for iid in [SELENE, ATTRACTOR, RINGS[0], RINGS[1], HOVER_TARGET] {
-                commands.get_entity(entities.get(iid)?)?.queue(disable);
-            }
+            let [selene, attractor, _ring_0, _ring_1, hover_target] = [SELENE, ATTRACTOR, RINGS[0], RINGS[1], HOVER_TARGET]
+                .map(|iid| {
+                    let e = entities.get(iid).unwrap();
+                    commands.entity(e).queue(disable);
 
-            let [&selene_trns, &attractor_trns] = transforms.get_many([entities.get(SELENE)?, entities.get(ATTRACTOR)?])?;
+                    e
+                });
+
+            let [&selene_trns, &attractor_trns] = transforms.get_many([selene, attractor])?;
             let target_pos = GlobalTransform::from(selene_trns)
                 .reparented_to(&GlobalTransform::from(attractor_trns))
                 .translation
                 .truncate();
 
-            e.insert(Self::Init { target_pos });
+            e.insert((
+                StateMachine::default()
+                    .trans::<Init, _>(trans_wait(Duration::from_secs(1)), SpawningAttractor)
+                    // Attractor spawning effect.
+                    .on_enter::<SpawningAttractor>(move |e| {
+                        let level_entity = e.id();
+                        e.with_child((
+                            attractor_trns,
+                            CameraTarget,
+                            AnimationFrom::sprite(|sprites| (sprites.attractor_spawn.clone_weak(), "in")),
+                            EntityColor(Color::linear_rgba(1., 2., 24., 1.)),
+                            Observe::by(move |trigger: Trigger<OnAnimateDone>, mut commands: Commands| -> Result {
+                                match trigger.event().as_str() {
+                                    "in" => {
+                                        commands.get_entity(trigger.target())?.queue(AnimateKey::continuous("out"));
+                                        commands.get_entity(level_entity)?.insert(Done::Success);
+                                    }
+                                    "out" => {
+                                        commands.get_entity(trigger.target())?.despawn();
+                                    }
+                                    e => Err(format!("Unknown animation state: `{e}`."))?,
+                                }
+                                Ok(())
+                            }),
+                        ));
+                    })
+                    .trans::<SpawningAttractor, _>(done(Some(Done::Success)), SpawningSelene)
+                    // Attractor spawned effect, Selene spawning effect.
+                    .on_enter::<SpawningSelene>(move |e| {
+                        let level_entity = e.id();
+                        e.commands()
+                            .entity(attractor)
+                            .queue(enable)
+                            .insert(CameraTarget)
+                            .with_children(move |children| {
+                                children
+                                    .spawn((
+                                        Transform::from_xyz(0., 0., 1.),
+                                        AnimationFrom::sprite(|sprites| {
+                                            (sprites.grand_attractor_spawned.clone_weak(), "anim")
+                                        }),
+                                        EntityColor(Color::linear_rgba(1., 2., 24., 1.)),
+                                    ))
+                                    .observe(|trigger: Trigger<OnAnimateDone>, mut commands: Commands| -> Result {
+                                        commands.get_entity(trigger.target())?.despawn();
+                                        Ok(())
+                                    });
+
+                                children
+                                    .spawn(AttractorSpawnEffect { target_pos })
+                                    .observe(Timed::despawn_on_finished)
+                                    .observe(move |_: Trigger<OnTimeFinished>, mut commands: Commands| -> Result {
+                                        commands.get_entity(level_entity)?.insert(Done::Success);
+                                        Ok(())
+                                    });
+                            });
+                    })
+                    .trans::<SpawningSelene, _>(done(Some(Done::Success)), TutorialHover)
+                    // Selene spawned effect (TODO), hovering tutorial.
+                    .on_enter::<TutorialHover>(move |e| {
+                        let level_entity = e.id();
+                        e.commands().entity(attractor).remove::<CameraTarget>();
+
+                        e.commands()
+                            .entity(selene)
+                            .queue(enable)
+                            // Can't use `Query`s here because it's still `Disabled`.
+                            .queue(|mut e: EntityWorldMut| -> Result {
+                                let mut action = e
+                                    .get_mut::<ActionState<AttractedAction>>()
+                                    .ok_or("`ActionState<AttractedAction>` not found")?;
+
+                                // Only `Hover` is enabled initially.
+                                action.disable_action(&AttractedAction::Accel);
+                                action.disable_action(&AttractedAction::Launch);
+                                action.disable_action(&AttractedAction::Parry);
+                                Ok(())
+                            });
+
+                        e.commands()
+                            .entity(hover_target)
+                            .queue(enable)
+                            .insert(CollisionEventsEnabled)
+                            .observe(
+                                move |trigger: Trigger<OnCollisionStart>,
+                                      mut commands: Commands,
+                                      mut state: Query<&mut ActionState<AttractedAction>>|
+                                      -> Result {
+                                    if trigger.body.is_some_and(|body| body == selene) {
+                                        commands.get_entity(trigger.target())?.despawn();
+
+                                        // Enable accelerating.
+                                        commands.get_entity(level_entity)?.insert(Done::Success);
+                                        state.get_mut(selene)?.enable_action(&AttractedAction::Accel);
+                                    }
+
+                                    Ok(())
+                                },
+                            );
+                    })
+                    .trans::<TutorialHover, _>(done(Some(Done::Success)), TutorialAccel),
+                Init,
+            ));
             debug!("Loaded left-wing side Penumbra level (+ intro cutscene)!");
         } else {
             todo!("Revisit this level for the non-intro variant...")
@@ -127,125 +244,19 @@ fn draw_attractor_spawn_effect(
     }
 }
 
-pub const SELENE: Uuid = uuid!("332e5310-3740-11f0-b0d1-4b444b848a1e");
-pub const ATTRACTOR: Uuid = uuid!("8226eab0-3740-11f0-b0d1-31c3cf318fb2");
-pub const RINGS: [Uuid; 2] = [
+const SELENE: Uuid = uuid!("332e5310-3740-11f0-b0d1-4b444b848a1e");
+const ATTRACTOR: Uuid = uuid!("8226eab0-3740-11f0-b0d1-31c3cf318fb2");
+const RINGS: [Uuid; 2] = [
     uuid!("483defc0-3740-11f0-bea9-1bca02df9366"),
     uuid!("516847d0-3740-11f0-bea9-db42cbfffb80"),
 ];
-pub const HOVER_TARGET: Uuid = uuid!("ddc89020-3740-11f0-bea9-17dccf039850");
-
-pub const SPAWN_ATTRACTOR_DURATION: Duration = Duration::from_secs(2);
-
-pub fn update(
-    mut commands: Commands,
-    time: Res<Time>,
-    sprite_sheets: Res<Sprites>,
-    level: Single<(&mut State, &LevelEntities), Without<LevelUnload>>,
-) -> Result {
-    let now = time.elapsed();
-    let (mut level, entities) = level.into_inner();
-
-    let selene = entities.get(SELENE)?;
-    let attractor = entities.get(ATTRACTOR)?;
-    let hover_target = entities.get(HOVER_TARGET)?;
-
-    match *level {
-        State::Init { target_pos } => {
-            *level = State::Begin {
-                target_pos,
-                started: now,
-                done: false,
-            }
-        }
-        State::Begin {
-            target_pos,
-            started,
-            ref mut done,
-        } => {
-            if now - started >= SPAWN_ATTRACTOR_DURATION && !std::mem::replace(done, true) {
-                commands
-                    .get_entity(attractor)?
-                    .queue(enable)
-                    .insert(CameraTarget)
-                    .with_children(move |children| {
-                        children
-                            .spawn((
-                                Transform::from_xyz(0., 0., 1.),
-                                Animation::new(sprite_sheets.grand_attractor_spawned.clone(), "anim"),
-                                EntityColor(Color::linear_rgba(1., 2., 24., 1.)),
-                            ))
-                            .observe(|trigger: Trigger<OnAnimateDone>, mut commands: Commands| {
-                                commands.entity(trigger.target()).despawn();
-                            });
-
-                        children
-                            .spawn(AttractorSpawnEffect { target_pos })
-                            .observe(Timed::despawn_on_finished)
-                            .observe(
-                                move |_: Trigger<OnTimeFinished>,
-                                      mut commands: Commands,
-                                      level: Single<&mut State, Without<LevelUnload>>|
-                                      -> Result {
-                                    commands.get_entity(attractor)?.remove::<CameraTarget>();
-
-                                    commands
-                                        .get_entity(hover_target)?
-                                        .queue(enable)
-                                        .insert(CollisionEventsEnabled)
-                                        .observe(
-                                            move |trigger: Trigger<OnCollisionStart>,
-                                                  mut commands: Commands,
-                                                  level: Single<&mut State, Without<LevelUnload>>,
-                                                  mut state: Query<&mut ActionState<AttractedAction>>|
-                                                  -> Result {
-                                                if trigger.body.is_some_and(|body| body == selene) {
-                                                    commands.get_entity(trigger.target())?.despawn();
-
-                                                    // Enable accelerating.
-                                                    *level.into_inner() = State::TutorialAccelerate;
-                                                    state.get_mut(selene)?.enable_action(&AttractedAction::Prograde);
-                                                }
-
-                                                Ok(())
-                                            },
-                                        );
-
-                                    commands
-                                        .get_entity(selene)?
-                                        .queue(enable)
-                                        // Can't use `Queue`s here because it's still `Disabled`.
-                                        .queue(|mut e: EntityWorldMut| -> Result {
-                                            let mut action = e
-                                                .get_mut::<ActionState<AttractedAction>>()
-                                                .ok_or("`ActionState<AttractedAction>` not found")?;
-
-                                            // Only `Hover` is enabled initially.
-                                            action.disable_action(&AttractedAction::Prograde);
-                                            action.disable_action(&AttractedAction::Launch);
-                                            action.disable_action(&AttractedAction::Parry);
-                                            Ok(())
-                                        });
-
-                                    *level.into_inner() = State::TutorialHover;
-                                    Ok(())
-                                },
-                            );
-                    });
-            }
-        }
-        State::TutorialHover => {}
-        State::TutorialAccelerate => {}
-    }
-
-    Ok(())
-}
+const HOVER_TARGET: Uuid = uuid!("ddc89020-3740-11f0-bea9-17dccf039850");
 
 pub(super) fn plugin(app: &mut App) {
-    app.register_level::<State>("penumbra_wing_l")
+    app.register_level::<Instance>("penumbra_wing_l")
         .add_systems(
             Update,
-            (update, draw_attractor_spawn_effect).run_if(in_state(InGameState::Resumed).and(in_level("penumbra_wing_l"))),
+            draw_attractor_spawn_effect.run_if(Condition::and(in_state(InGameState::Resumed), in_level("penumbra_wing_l"))),
         )
         .save_resource_init::<IntroShown>();
 }

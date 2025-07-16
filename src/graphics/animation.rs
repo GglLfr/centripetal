@@ -4,7 +4,7 @@ use bevy::{
     ecs::{
         bundle::{BundleEffect, DynamicBundle},
         component::{ComponentId, Components, ComponentsRegistrator, HookContext, RequiredComponents, StorageType},
-        system::{BoxedSystem, RunSystemError},
+        system::{BoxedSystem, IntoPipeSystem, RunSystemError},
         world::DeferredWorld,
     },
     prelude::*,
@@ -19,11 +19,15 @@ use crate::{
 #[derive(Debug)]
 pub struct AnimationFrom(BoxedSystem<In<Entity>, (Handle<SpriteSheet>, String)>);
 impl AnimationFrom {
-    pub fn new<M>(system: impl IntoSystem<In<Entity>, (Handle<SpriteSheet>, String), M>) -> Self {
-        Self(Box::new(IntoSystem::into_system(system)))
+    pub fn new<M, S: 'static + Into<String>>(system: impl IntoSystem<In<Entity>, (Handle<SpriteSheet>, S), M>) -> Self {
+        Self(Box::new(IntoPipeSystem::into_system(system.pipe(
+            |In((handle, string)): In<(Handle<SpriteSheet>, S)>| (handle, string.into()),
+        ))))
     }
 
-    pub fn sprite(provider: impl FnOnce(&Sprites) -> (Handle<SpriteSheet>, String) + 'static + Send + Sync) -> Self {
+    pub fn sprite<S: 'static + Into<String>>(
+        provider: impl FnOnce(&Sprites) -> (Handle<SpriteSheet>, S) + 'static + Send + Sync,
+    ) -> Self {
         let mut provider = Some(provider);
         Self::new(move |_: In<Entity>, sprites: Res<Sprites>| {
             provider.take().expect("This system must only be run once")(&sprites)
@@ -75,7 +79,11 @@ impl BundleEffect for AnimationFrom {
             .sprite = sprite;
 
         entity.world_scope(|world| {
-            world.commands().entity(id).queue(AnimateKey(key.into(), true));
+            world.commands().entity(id).queue(AnimateKey {
+                key: key.into(),
+                reset_duration: true,
+                fire_exit: false,
+            });
         });
     }
 }
@@ -114,17 +122,34 @@ pub struct AnimationData {
 }
 
 #[derive(Debug, Clone)]
-pub struct AnimateKey(pub Cow<'static, str>, bool);
+pub struct AnimateKey {
+    pub key: Cow<'static, str>,
+    reset_duration: bool,
+    fire_exit: bool,
+}
+
 impl AnimateKey {
-    pub fn new(key: impl Into<Cow<'static, str>>) -> Self {
-        Self(key.into(), false)
+    pub fn new(key: impl Into<Cow<'static, str>>, reset_duration: bool) -> Self {
+        Self {
+            key: key.into(),
+            reset_duration,
+            fire_exit: true,
+        }
+    }
+
+    pub fn continuous(key: impl Into<Cow<'static, str>>) -> Self {
+        Self::new(key, false)
+    }
+
+    pub fn reset(key: impl Into<Cow<'static, str>>) -> Self {
+        Self::new(key, true)
     }
 }
 
 impl EntityCommand<Result> for AnimateKey {
     fn apply(self, mut entity: EntityWorldMut) -> Result {
         let id = entity.id();
-        if !self.1 {
+        if self.fire_exit {
             let key = std::mem::take(&mut entity.get_mut::<Animation>().ok_or("`Animation` not found")?.key);
             entity.trigger(OnAnimateExit(key));
         }
@@ -134,20 +159,22 @@ impl EntityCommand<Result> for AnimateKey {
                 .get::<Animation>(id)
                 .map(|anim| anim.sprite.id())
                 .and_then(|id| world.get_resource::<Assets<SpriteSheet>>()?.get(id))
-                .and_then(|sprite| sprite.tags.get(&*self.0))
+                .and_then(|sprite| sprite.tags.get(&*self.key))
                 .map(|range| range.start)
         });
 
         if let Some(mut anim) = entity.get_mut::<Animation>() {
-            (*self.0).clone_into(&mut anim.key);
-            if let Some(start) = start {
-                entity.insert(AnimationData {
-                    time: Duration::ZERO,
-                    frame: start,
-                    finished: false,
-                });
+            (*self.key).clone_into(&mut anim.key);
+            if let Some(start) = start &&
+                let Some(mut data) = entity.get_mut::<AnimationData>()
+            {
+                if self.reset_duration {
+                    data.time = Duration::ZERO;
+                }
+                data.frame = start;
+                data.finished = false;
 
-                entity.trigger(OnAnimateEnter(self.0.into()));
+                entity.trigger(OnAnimateEnter(self.key.into()));
             }
         }
 
@@ -164,7 +191,11 @@ pub struct OnAnimateExit(String);
 
 fn on_animation_insert(mut world: DeferredWorld, HookContext { entity, .. }: HookContext) {
     let key = std::mem::take(&mut world.entity_mut(entity).get_mut::<Animation>().unwrap().key);
-    world.commands().entity(entity).queue(AnimateKey(key.into(), true));
+    world.commands().entity(entity).queue(AnimateKey {
+        key: key.into(),
+        reset_duration: true,
+        fire_exit: true,
+    });
 }
 
 pub fn update_animations(
@@ -181,12 +212,18 @@ pub fn update_animations(
         if let Some(Range { start, end }) = sprite.tags.get(&animation.key).cloned() {
             data.frame = data.frame.clamp(start, end);
             while data.time > Duration::ZERO {
-                if (data.frame < end || matches!(mode, AnimationMode::Repeat)) &&
-                    let Some(&duration) = sprite.durations.get(data.frame) &&
+                if let Some(&duration) = sprite.durations.get(data.frame) &&
                     data.time >= duration
                 {
-                    data.time -= duration;
-                    data.frame = if data.frame == end { start } else { data.frame + 1 };
+                    if data.frame < end {
+                        data.frame += 1;
+                        data.time -= duration;
+                    } else if matches!(mode, AnimationMode::Repeat) {
+                        data.frame = start;
+                        data.time -= duration;
+                    } else {
+                        break
+                    }
                 } else {
                     break
                 }
@@ -194,9 +231,11 @@ pub fn update_animations(
 
             if !matches!(mode, AnimationMode::Repeat) &&
                 data.frame == end &&
-                sprite.durations.get(end).is_some_and(|&duration| data.time >= duration) &&
+                let Some(&duration) = sprite.durations.get(end) &&
+                data.time >= duration &&
                 !std::mem::replace(&mut data.finished, true)
             {
+                data.time -= duration;
                 commands.command_scope(|mut commands| {
                     commands.entity(e).trigger(OnAnimateDone(animation.key.clone()));
                 });
