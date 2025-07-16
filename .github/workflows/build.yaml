@@ -39,25 +39,25 @@ jobs:
       - name: Compile Release build with `dev` feature
         run: |
           cargo clean --package mimalloc-redirect
-          cargo build --no-default-features --features="dev"
+          cargo build --release --no-default-features --features="dev"
       - name: Copy files to a common directory
         if: matrix.os == 'ubuntu-latest'
         run: |
-          mkdir out/
-          mv "${{ matrix.artifacts }}" out/
+          mkdir out
+          mv "${{ matrix.artifacts }}" out
       - name: Copy files to a common directory
         if: matrix.os == 'windows-latest'
         shell: powershell
         run: |
           New-Item -Path "out" -ItemType Directory
           foreach ($file in "${{ matrix.artifacts }}" -split "`n") {
-            Move-Item -Path $file -Destination "out/"
+            Move-Item -Path $file -Destination "out"
           }
       - name: Upload game as a GitHub Action artifact
         uses: actions/upload-artifact@v4
         with:
           name: Centripetal ${{ matrix.name }}
-          path: './out/**'
+          path: 'out/**'
           if-no-files-found: error
           compression-level: 9
           retention-days: 30
