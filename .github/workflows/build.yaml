@@ -1,0 +1,42 @@
+name: On-Demand Build
+
+on:
+  workflow_dispatch
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            artifacts: |
+              assets/
+              target/release/centripetal
+          - os: windows-latest
+            artifacts: |
+              assets/
+              target/release/centripetal.exe
+              target/release/build/mimalloc-redirect-**/out/bin/**.dll
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Rust toolchain
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+      - name: Install Linux dependencies
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get install g++ pkg-config libx11-dev libasound2-dev libudev-dev libxkbcommon-x11-0 libwayland-dev libxkbcommon-dev
+      - name: Compile Release build with `dev` feature
+        run: |
+          cargo clean --package mimalloc-redirect
+          cargo build --release --no-default-features --features="dev"
+      - name: Upload game as a GitHub Action artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Centripetal (zipped)
+          path: ${{ matrix.artifacts }}
+          if-no-files-found: error
+          compression-level: 9
