@@ -12,10 +12,12 @@ jobs:
       matrix:
         include:
           - os: ubuntu-latest
+            name: Linux
             artifacts: |
               assets/
               target/release/centripetal
           - os: windows-latest
+            name: Windows
             artifacts: |
               assets/
               target/release/centripetal.exe
@@ -38,10 +40,14 @@ jobs:
         run: |
           cargo clean --package mimalloc-redirect
           cargo build --release --no-default-features --features="dev"
+
+          mkdir out/
+          cp ${{ matrix.artifacts }} out/
       - name: Upload game as a GitHub Action artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Centripetal (zipped)
-          path: ${{ matrix.artifacts }}
+          name: Centripetal ${{ matrix.name }}
+          path: out/**
           if-no-files-found: error
           compression-level: 9
+          retention-days: 30
