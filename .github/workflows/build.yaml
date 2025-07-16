@@ -39,14 +39,12 @@ jobs:
       - name: Compile Release build with `dev` feature
         run: |
           cargo clean --package mimalloc-redirect
-          cargo build --release --no-default-features --features="dev"
+          cargo build --no-default-features --features="dev"
       - name: Copy files to a common directory
         if: matrix.os == 'ubuntu-latest'
         run: |
           mkdir out/
-          while IFS= read -r file; do
-            mv "$file" "out/"
-          done <<< "${{ matrix.artifacts }}"
+          mv "${{ matrix.artifacts }}" out/
       - name: Copy files to a common directory
         if: matrix.os == 'windows-latest'
         shell: powershell
