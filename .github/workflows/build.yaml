@@ -10,18 +10,7 @@ jobs:
   build:
     strategy:
       matrix:
-        include:
-          - os: ubuntu-latest
-            name: Linux
-            artifacts: |
-              assets/
-              target/release/centripetal
-          - os: windows-latest
-            name: Windows
-            artifacts: |
-              assets/
-              target/release/centripetal.exe
-              target/release/build/mimalloc-redirect-**/out/bin/**.dll
+        os: [ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -40,23 +29,24 @@ jobs:
         run: |
           cargo clean --package mimalloc-redirect
           cargo build --release --no-default-features --features="dev"
-      - name: Copy files to a common directory
+      - name: Copy files to a common directory (Linux)
         if: matrix.os == 'ubuntu-latest'
         run: |
           mkdir out
-          mv "${{ matrix.artifacts }}" out
-      - name: Copy files to a common directory
+          mv assets out
+          mv target/release/centripetal out
+      - name: Copy files to a common directory (Windows)
         if: matrix.os == 'windows-latest'
-        shell: powershell
+        shell: pwsh
         run: |
-          New-Item -Path "out" -ItemType Directory
-          foreach ($file in "${{ matrix.artifacts }}" -split "`n") {
-            Move-Item -Path $file -Destination "out"
-          }
+          New-Item -ItemType Directory -Path 'out'
+          Move-Item -Path 'assets' -Destination 'out'
+          Move-Item -Path 'target/release/centripetal.exe' -Destination 'out'
+          Get-ChildItem -Path 'target/release/build/mimalloc-redirect-*/out/bin/*.dll' -File | Move-Item -Destination 'out'
       - name: Upload game as a GitHub Action artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Centripetal ${{ matrix.name }}
+          name: Centripetal (`${{ matrix.os }}`)
           path: 'out/**'
           if-no-files-found: error
           compression-level: 9
