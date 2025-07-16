@@ -44,12 +44,17 @@ jobs:
         if: matrix.os == 'ubuntu-latest'
         run: |
           mkdir out/
-          cp ${{ matrix.artifacts }} out/
+          while IFS= read -r file; do
+            mv "$file" "out/"
+          done <<< "${{ matrix.artifacts }}"
       - name: Copy files to a common directory
         if: matrix.os == 'windows-latest'
+        shell: powershell
         run: |
-          mkdir out/
-          robocopy . out/ ${{ matrix.artifacts }}
+          New-Item -Path "out" -ItemType Directory
+          foreach ($file in "${{ matrix.artifacts }}" -split "`n") {
+            Move-Item -Path $file -Destination "out/"
+          }
       - name: Upload game as a GitHub Action artifact
         uses: actions/upload-artifact@v4
         with:
