@@ -40,14 +40,21 @@ jobs:
         run: |
           cargo clean --package mimalloc-redirect
           cargo build --release --no-default-features --features="dev"
-
-          mkdir out/
-          cp ${{ matrix.artifacts }} out/
+      - name: Copy files to a common directory
+        uses: nearform-actions/github-action-copy-files@v1
+        with:
+          source: ${{ matrix.artifacts }}
+          destination: './out/'
+          options: |
+            {
+              "overwrite": true,
+              "flat": true
+            }
       - name: Upload game as a GitHub Action artifact
         uses: actions/upload-artifact@v4
         with:
           name: Centripetal ${{ matrix.name }}
-          path: out/**
+          path: './out/**'
           if-no-files-found: error
           compression-level: 9
           retention-days: 30
