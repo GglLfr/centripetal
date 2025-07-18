@@ -5,7 +5,7 @@ use leafwing_input_manager::prelude::*;
 #[cfg(feature = "dev")]
 use crate::logic::entities::penumbra::{draw_attract_trajectory, draw_attractor_radius};
 use crate::logic::{
-    LevelApp,
+    LevelApp, LevelBounds, LevelUnload,
     entities::penumbra::{
         AttractedAction, Attractor, GenericPenumbra, SelenePenumbra, ThornPillar, ThornRing, apply_attractor_accels,
         detect_attracted_entities, predict_attract_trajectory, remove_attracted_initials, update_attracted_launching,
@@ -131,6 +131,27 @@ impl Killed {
 #[derive(Debug, Copy, Clone, Default, Component)]
 pub struct NoKillDespawn;
 
+pub fn kill_out_of_bounds(
+    commands: ParallelCommands,
+    level_bounds: Query<&LevelBounds, Without<LevelUnload>>,
+    entities: Query<(Entity, &Position, Has<NoKillDespawn>)>,
+) {
+    let Ok(&level_bounds) = level_bounds.single() else { return };
+
+    entities.par_iter().for_each(|(e, &pos, no_kill_despawn)| {
+        if pos.x < 0. || pos.x > level_bounds.x || pos.y < 0. || pos.y > level_bounds.x {
+            commands.command_scope(|mut commands| {
+                let mut e = commands.entity(e);
+                e.trigger(Killed::new());
+
+                if !no_kill_despawn {
+                    e.despawn();
+                }
+            });
+        }
+    });
+}
+
 #[derive(Debug, Copy, Clone, Default)]
 pub struct EntitiesPlugin;
 impl Plugin for EntitiesPlugin {
@@ -150,8 +171,10 @@ impl Plugin for EntitiesPlugin {
                 PhysicsSchedule,
                 (
                     predict_attract_trajectory.after(SolverSet::Finalize),
-                    (detect_attracted_entities, remove_attracted_initials)
-                        .chain()
+                    (
+                        (detect_attracted_entities, remove_attracted_initials).chain(),
+                        kill_out_of_bounds,
+                    )
                         .in_set(PhysicsStepSet::SpatialQuery)
                         .after(update_spatial_query_pipeline),
                 )

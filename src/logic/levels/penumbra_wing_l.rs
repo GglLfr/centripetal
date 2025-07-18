@@ -25,7 +25,7 @@ use crate::{
         CameraTarget, Fields, FromLevel, InGameState, LevelApp, LevelEntities, OnTimeFinished, Timed,
         entities::{
             Health, Killed, NoKillDespawn,
-            penumbra::{AttractedAction, AttractedInitial},
+            penumbra::{AttractedAction, AttractedInitial, AttractedPrediction},
         },
         levels::in_level,
     },
@@ -116,8 +116,13 @@ impl FromLevel for Instance {
             }
 
             commands.entity(selene).insert(NoKillDespawn).observe(
-                move |trigger: Trigger<Killed>, mut commands: Commands, transforms: Query<&Transform>| -> Result {
-                    let &trns = transforms.get(trigger.target())?;
+                move |trigger: Trigger<Killed>,
+                      mut commands: Commands,
+                      mut query: Query<(&Transform, &mut AttractedPrediction)>|
+                      -> Result {
+                    let (&trns, mut prediction) = query.get_mut(trigger.target())?;
+                    prediction.points.clear();
+
                     commands
                         .get_entity(selene)?
                         .insert((
