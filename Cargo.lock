@@ -4,9 +4,9 @@ version = 4
 
 [[package]]
 name = "ab_glyph"
-version = "0.2.30"
+version = "0.2.31"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1e0f4f6fbdc5ee39f2ede9f5f3ec79477271a6d6a2baff22310d51736bda6cea"
+checksum = "e074464580a518d16a7126262fffaaa47af89d4099d4cb403f8ed938ba12ee7d"
 dependencies = [
  "ab_glyph_rasterizer",
  "owned_ttf_parser",
@@ -307,7 +307,7 @@ checksum = "c08606f8c3cbf4ce6ec8e28fb0014a2c086708fe954eaa885384a6165172e7e8"
 [[package]]
 name = "avian2d"
 version = "0.3.0"
-source = "git+https://github.com/Jondolf/avian#1c93e6c7d1194ea213293d49909e72f02cbdba64"
+source = "git+https://github.com/Jondolf/avian?branch=fix-disabling#53e96d585f61b1f97f603adabc747a27c4b2f96d"
 dependencies = [
  "approx",
  "arrayvec",
@@ -318,6 +318,7 @@ dependencies = [
  "bevy_transform_interpolation",
  "bitflags 2.9.1",
  "derive_more 1.0.0",
+ "glam_matrix_extensions",
  "itertools 0.13.0",
  "nalgebra",
  "parry2d",
@@ -329,7 +330,7 @@ dependencies = [
 [[package]]
 name = "avian_derive"
 version = "0.2.2"
-source = "git+https://github.com/Jondolf/avian#1c93e6c7d1194ea213293d49909e72f02cbdba64"
+source = "git+https://github.com/Jondolf/avian?branch=fix-disabling#53e96d585f61b1f97f603adabc747a27c4b2f96d"
 dependencies = [
  "proc-macro-error2",
  "proc-macro2",
@@ -667,11 +668,11 @@ dependencies = [
 [[package]]
 name = "bevy_heavy"
 version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "34ccc861fea2ff58c67f4df119512e204050bd7631a3a9c65e1a5e9d162cce28"
+source = "git+https://github.com/Jondolf/bevy_heavy.git#f2a6e3b16c839cd8802512a4de737047314f3afc"
 dependencies = [
  "bevy_math",
  "bevy_reflect",
+ "glam_matrix_extensions",
 ]
 
 [[package]]
@@ -1460,9 +1461,9 @@ dependencies = [
 
 [[package]]
 name = "cc"
-version = "1.2.29"
+version = "1.2.30"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5c1599538de2394445747c8cf7935946e3cc27e9625f889d979bfb2aaf569362"
+checksum = "deec109607ca693028562ed836a5f1c4b8bd77755c4e132fc5ce11b0b6211ae7"
 dependencies = [
  "jobserver",
  "libc",
@@ -2207,6 +2208,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "glam_matrix_extensions"
+version = "0.1.0"
+source = "git+https://github.com/Jondolf/glam_matrix_extensions#3dcfc3b9279fbe792f240a56c96bae8949f4a499"
+dependencies = [
+ "bevy_reflect",
+ "glam",
+]
+
+[[package]]
 name = "glob"
 version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2519,9 +2529,9 @@ checksum = "bbd2bcb4c963f2ddae06a2efc7e9f3591312473c50c6685e1f298068316e66fe"
 
 [[package]]
 name = "leafwing-input-manager"
-version = "0.17.0"
+version = "0.17.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5e5921290ac62f78a4f2f2f9fe3a31c73bbf4309b013bf25f91514ac111e3976"
+checksum = "68ac3ba8262c0e42b22bb917c18ef9dbe773e2b6b279c61a4a520c5d960b5e1a"
 dependencies = [
  "bevy",
  "dyn-clone",

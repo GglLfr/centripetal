@@ -18,21 +18,84 @@ pub mod penumbra;
 #[component(immutable)]
 pub struct Health(pub u32);
 impl Health {
-    pub fn hurt(self, amount: u32) -> Self {
+    pub fn new(amount: u32) -> Self {
+        if amount == 0 {
+            warn!("`Health` shouldn't be created with 0.");
+        }
+        Self(amount.max(1))
+    }
+
+    pub fn hurt(&mut self, amount: u32) -> bool {
         self.change(-(amount as i32), None)
     }
 
-    pub fn change(self, delta: i32, max: Option<MaxHealth>) -> Self {
-        Self(
-            self.saturating_add_signed(delta)
-                .min(max.as_deref().copied().unwrap_or(u32::MAX)),
-        )
+    pub fn change(&mut self, delta: i32, max: Option<MaxHealth>) -> bool {
+        if self.0 > 0 {
+            self.0 = self
+                .saturating_add_signed(delta)
+                .min(max.as_deref().copied().unwrap_or(u32::MAX));
+            self.0 == 0
+        } else {
+            false
+        }
     }
 }
 
 #[derive(Debug, Copy, Clone, Component, Deref)]
 #[component(immutable)]
 pub struct MaxHealth(pub u32);
+impl MaxHealth {
+    pub fn new(amount: u32) -> Self {
+        if amount == 0 {
+            warn!("`MaxHealth` shouldn't be created with 0.");
+        }
+        Self(amount.max(1))
+    }
+}
+
+#[derive(Debug, Copy, Clone, Event)]
+pub struct TryHurt {
+    pub by: Entity,
+    pub amount: u32,
+    pub stopped: bool,
+}
+
+impl TryHurt {
+    pub fn new(amount: u32) -> Self {
+        Self::by(Entity::PLACEHOLDER, amount)
+    }
+
+    pub fn by(by: Entity, amount: u32) -> Self {
+        Self {
+            by,
+            amount,
+            stopped: false,
+        }
+    }
+}
+
+impl EntityCommand<Result> for TryHurt {
+    fn apply(mut self, mut entity: EntityWorldMut) -> Result {
+        let id = entity.id();
+        entity.world_scope(|world| world.trigger_targets_ref(&mut self, id));
+
+        if !self.stopped {
+            let Some(should_kill) = entity.modify_component(|health: &mut Health| health.hurt(self.amount)) else {
+                return Ok(())
+            };
+
+            entity.trigger(Hurt::by(self.by, self.amount));
+            if should_kill {
+                entity.trigger(Killed::by(self.by));
+                if !entity.contains::<NoKillDespawn>() {
+                    entity.despawn();
+                }
+            }
+        }
+
+        Ok(())
+    }
+}
 
 #[derive(Debug, Copy, Clone, Event)]
 pub struct Hurt {
@@ -41,10 +104,32 @@ pub struct Hurt {
 }
 
 impl Hurt {
-    pub fn new(by: Entity, amount: u32) -> Self {
+    pub fn new(amount: u32) -> Self {
+        Self::by(Entity::PLACEHOLDER, amount)
+    }
+
+    pub fn by(by: Entity, amount: u32) -> Self {
         Self { by, amount }
     }
 }
+
+#[derive(Debug, Copy, Clone, Event)]
+pub struct Killed {
+    pub by: Entity,
+}
+
+impl Killed {
+    pub fn new() -> Self {
+        Self::by(Entity::PLACEHOLDER)
+    }
+
+    pub fn by(by: Entity) -> Self {
+        Self { by }
+    }
+}
+
+#[derive(Debug, Copy, Clone, Default, Component)]
+pub struct NoKillDespawn;
 
 #[derive(Debug, Copy, Clone, Default)]
 pub struct EntitiesPlugin;

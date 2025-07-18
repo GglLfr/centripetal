@@ -15,14 +15,14 @@ use crate::{
     logic::{
         CameraTarget, Fields, FromLevelEntity, IsPlayer,
         entities::{
-            Hurt,
+            Health, Hurt, MaxHealth,
             penumbra::{AttractedInitial, AttractedLaunch, AttractedParams, AttractedPrediction, OnLaunch, PenumbraEntity},
         },
     },
 };
 
 #[derive(Debug, Copy, Clone, Default, Component)]
-#[require(IsPlayer, CameraTarget, PenumbraEntity)]
+#[require(Health::new(10), MaxHealth::new(10), IsPlayer, CameraTarget, PenumbraEntity)]
 pub struct SelenePenumbra;
 impl FromLevelEntity for SelenePenumbra {
     type Param = SRes<Sprites>;

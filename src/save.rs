@@ -30,7 +30,7 @@ impl Serialize for dyn SaveResource {
 pub struct SaveRegistry {
     base_dir: PathBuf,
     removals: Vec<fn(&mut World)>,
-    defaults: Vec<Box<dyn FnMut(&mut World) + 'static + Send + Sync>>,
+    defaults: Vec<Box<dyn FnMut(&mut World) -> Result + 'static + Send + Sync>>,
 }
 
 static REGISTRY: LazyLock<RwLock<MapRegistry<dyn SaveResource>>> =
@@ -39,7 +39,7 @@ static REGISTRY: LazyLock<RwLock<MapRegistry<dyn SaveResource>>> =
 impl SaveRegistry {
     pub fn save<T: Resource + TypePath + Serialize + for<'de> Deserialize<'de>>(
         &mut self,
-        mut add_default: impl FnMut(&mut World) -> Option<T> + 'static + Send + Sync,
+        mut add_default: impl FnMut(&mut World) -> Result<Option<T>> + 'static + Send + Sync,
     ) {
         REGISTRY
             .write()
@@ -52,30 +52,34 @@ impl SaveRegistry {
 
         self.defaults.push(Box::new(move |world| {
             if !world.contains_resource::<T>() &&
-                let Some(resource) = add_default(world)
+                let Some(resource) = add_default(world)?
             {
                 world.insert_resource(resource);
             }
+
+            Ok(())
         }));
     }
 
-    pub fn apply(&mut self, world: &mut World, resources: impl IntoIterator<Item = Box<dyn SaveResource>>) {
-        for removal in &self.removals {
+    pub fn apply(&mut self, world: &mut World, resources: impl IntoIterator<Item = Box<dyn SaveResource>>) -> Result {
+        for &removal in &self.removals {
             removal(world);
         }
 
         let registry = REGISTRY.read().unwrap_or_else(PoisonError::into_inner);
         for resource in resources {
             if let Err(GetError::NotRegistered { id }) = registry.get_deserialize_fn(resource.reflect_short_type_path()) {
-                panic!("`{id}` is not registered; call `app.save_resource::<{id}>()` first");
+                Err(format!("`{id}` is not registered; call `app.save_resource::<{id}>()` first"))?
             }
 
             resource.insert(world);
         }
 
         for default in &mut self.defaults {
-            default(world);
+            default(world)?;
         }
+
+        Ok(())
     }
 }
 
@@ -88,8 +92,8 @@ impl ApplySave {
     }
 }
 
-impl Command for ApplySave {
-    fn apply(self, world: &mut World) {
+impl Command<Result> for ApplySave {
+    fn apply(self, world: &mut World) -> Result {
         world.resource_scope(|world, mut registry: Mut<SaveRegistry>| registry.apply(world, self.0))
     }
 }
@@ -117,25 +121,25 @@ impl Plugin for SavePlugin {
 
 pub trait SaveApp {
     fn save_resource<T: Resource + TypePath + Serialize + for<'de> Deserialize<'de>>(&mut self) -> &mut Self {
-        self.save_resource_with::<T>(|_| None)
+        self.save_resource_with::<T>(|_| Ok(None))
     }
 
     fn save_resource_init<T: Resource + FromWorld + TypePath + Serialize + for<'de> Deserialize<'de>>(
         &mut self,
     ) -> &mut Self {
-        self.save_resource_with::<T>(|world| Some(T::from_world(world)))
+        self.save_resource_with::<T>(|world| Ok(Some(T::from_world(world))))
     }
 
     fn save_resource_with<T: Resource + TypePath + Serialize + for<'de> Deserialize<'de>>(
         &mut self,
-        add_default: impl FnMut(&mut World) -> Option<T> + 'static + Send + Sync,
+        add_default: impl FnMut(&mut World) -> Result<Option<T>> + 'static + Send + Sync,
     ) -> &mut Self;
 }
 
 impl SaveApp for App {
     fn save_resource_with<T: Resource + TypePath + Serialize + for<'de> Deserialize<'de>>(
         &mut self,
-        add_default: impl FnMut(&mut World) -> Option<T> + 'static + Send + Sync,
+        add_default: impl FnMut(&mut World) -> Result<Option<T>> + 'static + Send + Sync,
     ) -> &mut Self {
         self.world_mut().resource_mut::<SaveRegistry>().save::<T>(add_default);
         self

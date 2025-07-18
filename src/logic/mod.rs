@@ -76,13 +76,14 @@ impl Plugin for LogicPlugin {
             .init_resource::<RegisteredLevelIntCells>()
             .add_plugins((LdtkPlugin, EntitiesPlugin, LevelsPlugin))
             .add_systems(
+                PreUpdate,
+                (handle_load_level_begin, update_timed).run_if(in_state(InGameState::Resumed)),
+            )
+            .add_systems(
                 Update,
-                (
-                    handle_load_level_begin.run_if(in_state(InGameState::Resumed)),
-                    handle_load_level_progress
-                        .after(handle_load_level_begin)
-                        .run_if(in_state(InGameState::Loading)),
-                ),
+                (handle_load_level_progress
+                    .after(handle_load_level_begin)
+                    .run_if(in_state(InGameState::Loading)),),
             )
             .add_systems(OnExit(InGameState::Loading), handle_load_level_end)
             .add_systems(Startup, startup_camera)
@@ -93,7 +94,6 @@ impl Plugin for LogicPlugin {
                     .after(CameraUpdateSystem)
                     .before(TransformSystem::TransformPropagate),
             )
-            .add_systems(PreUpdate, update_timed)
             .save_resource::<LoadLevel>();
     }
 }

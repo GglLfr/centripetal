@@ -23,11 +23,14 @@ use crate::{
     graphics::{AnimateKey, AnimationFrom, EntityColor, OnAnimateDone, SpriteDrawer, SpriteSection},
     logic::{
         CameraTarget, Fields, FromLevel, InGameState, LevelApp, LevelEntities, OnTimeFinished, Timed,
-        entities::penumbra::AttractedAction,
-        levels::{disable, enable, in_level},
+        entities::{
+            Health, Killed, NoKillDespawn,
+            penumbra::{AttractedAction, AttractedInitial},
+        },
+        levels::in_level,
     },
     math::{FloatExt, RngExt},
-    trans_wait,
+    resume, suspend, trans_wait,
 };
 
 #[derive(Debug, Copy, Clone, Default, Resource, TypePath, Serialize, Deserialize, Deref, DerefMut)]
@@ -63,13 +66,13 @@ struct TutorialLaunch;
 struct TutorialParry;
 
 impl FromLevel for Instance {
-    type Param = (SRes<IntroShown>, SQuery<Read<Transform>>);
+    type Param = (SRes<IntroShown>, SQuery<Read<Transform>>, SQuery<Read<AttractedInitial>>);
     type Data = Read<LevelEntities>;
 
     fn from_level(
         mut e: EntityCommands,
         _: &Fields,
-        (cutscene_shown, transforms): SystemParamItem<Self::Param>,
+        (cutscene_shown, transforms, initials): SystemParamItem<Self::Param>,
         entities: QueryItem<Self::Data>,
     ) -> Result {
         if !**cutscene_shown {
@@ -78,16 +81,58 @@ impl FromLevel for Instance {
             let [selene, attractor, _ring_0, _ring_1, hover_target] = [SELENE, ATTRACTOR, RINGS[0], RINGS[1], HOVER_TARGET]
                 .map(|iid| {
                     let e = entities.get(iid).unwrap();
-                    commands.entity(e).queue(disable);
+                    commands.entity(e).queue(suspend);
 
                     e
                 });
 
+            let initial = initials.get(selene).copied().unwrap_or_default();
             let [&selene_trns, &attractor_trns] = transforms.get_many([selene, attractor])?;
-            let target_pos = GlobalTransform::from(selene_trns)
-                .reparented_to(&GlobalTransform::from(attractor_trns))
-                .translation
-                .truncate();
+
+            #[must_use]
+            fn spawn_selene(
+                level_entity: Entity,
+                selene: Entity,
+                effect_trns: Transform,
+                selene_trns: Transform,
+                accept: impl FnOnce(&mut EntityWorldMut) -> Result + 'static + Send,
+            ) -> impl Command<Result> {
+                let target_pos = GlobalTransform::from(selene_trns)
+                    .reparented_to(&GlobalTransform::from(effect_trns))
+                    .translation
+                    .truncate();
+
+                move |world: &mut World| -> Result {
+                    accept(
+                        world
+                            .spawn((ChildOf(level_entity), AttractorSpawnEffect { target_pos }, effect_trns))
+                            .observe(Timed::despawn_on_finished)
+                            .observe(move |_: Trigger<OnTimeFinished>, mut commands: Commands| -> Result {
+                                commands.get_entity(selene)?.queue(resume);
+                                Ok(())
+                            }),
+                    )
+                }
+            }
+
+            commands.entity(selene).insert(NoKillDespawn).observe(
+                move |trigger: Trigger<Killed>, mut commands: Commands, transforms: Query<&Transform>| -> Result {
+                    let &trns = transforms.get(trigger.target())?;
+                    commands
+                        .get_entity(selene)?
+                        .insert((
+                            selene_trns,
+                            initial,
+                            LinearVelocity::ZERO,
+                            AngularVelocity::ZERO,
+                            Health::new(10),
+                        ))
+                        .queue(suspend);
+
+                    commands.queue(spawn_selene(level_entity, selene, trns, selene_trns, |_| Ok(())));
+                    Ok(())
+                },
+            );
 
             e.insert((
                 Init,
@@ -123,7 +168,7 @@ impl FromLevel for Instance {
                     .on_enter::<SpawningSelene>(move |e| {
                         e.commands()
                             .entity(attractor)
-                            .queue(enable)
+                            .queue(resume)
                             .insert(CameraTarget)
                             .with_children(move |children| {
                                 children
@@ -138,39 +183,35 @@ impl FromLevel for Instance {
                                         commands.get_entity(trigger.target())?.despawn();
                                         Ok(())
                                     });
-
-                                children
-                                    .spawn(AttractorSpawnEffect { target_pos })
-                                    .observe(Timed::despawn_on_finished)
-                                    .observe(move |_: Trigger<OnTimeFinished>, mut commands: Commands| -> Result {
-                                        commands.get_entity(level_entity)?.insert(Done::Success);
-                                        Ok(())
-                                    });
                             });
+
+                        e.commands()
+                            .queue(spawn_selene(level_entity, selene, attractor_trns, selene_trns, move |e| {
+                                e.observe(move |_: Trigger<OnTimeFinished>, mut commands: Commands| -> Result {
+                                    commands.get_entity(level_entity)?.insert(Done::Success);
+                                    Ok(())
+                                });
+                                Ok(())
+                            }));
                     })
                     .trans::<SpawningSelene, _>(done(Some(Done::Success)), TutorialMove { aligned: None })
                     // Selene spawned effect (TODO), hovering and accelerating tutorial.
                     .on_enter::<TutorialMove>(move |e| {
                         e.commands().entity(attractor).remove::<CameraTarget>();
+                        e.commands().entity(selene).queue(|mut e: EntityWorldMut| -> Result {
+                            let mut action = e
+                                .get_mut::<ActionState<AttractedAction>>()
+                                .ok_or("`ActionState<AttractedAction>` not found")?;
 
-                        e.commands()
-                            .entity(selene)
-                            .queue(enable)
-                            // Can't use `Query`s here because it's still `Disabled`.
-                            .queue(|mut e: EntityWorldMut| -> Result {
-                                let mut action = e
-                                    .get_mut::<ActionState<AttractedAction>>()
-                                    .ok_or("`ActionState<AttractedAction>` not found")?;
-
-                                // Only `Hover` and `Accel` are enabled initially.
-                                action.disable_action(&AttractedAction::Launch);
-                                action.disable_action(&AttractedAction::Parry);
-                                Ok(())
-                            });
+                            // Only `Hover` and `Accel` are enabled initially.
+                            action.disable_action(&AttractedAction::Launch);
+                            action.disable_action(&AttractedAction::Parry);
+                            Ok(())
+                        });
 
                         e.commands()
                             .entity(hover_target)
-                            .queue(enable)
+                            .queue(resume)
                             .insert(CollisionEventsEnabled)
                             .observe(
                                 move |trigger: Trigger<OnCollisionStart>,

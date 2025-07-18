@@ -42,7 +42,7 @@ impl FromLevelEntity for ThornPillar {
             Collider::rectangle(length as f32 * PIXELS_PER_UNIT as f32, PIXELS_PER_UNIT as f32 / 2.),
         ))
         .observe(OnLaunch::collide(true, |mut e, by| {
-            e.trigger(Hurt::new(by, 1));
+            e.trigger(Hurt::by(by, 1));
         }));
 
         debug!("Spawned thorn pillar {}!", e.id());

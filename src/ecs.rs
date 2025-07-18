@@ -1,9 +1,11 @@
 use std::{marker::PhantomData, time::Duration};
 
+use avian2d::prelude::*;
 use bevy::{
     ecs::{
         bundle::{BundleEffect, DynamicBundle},
         component::{ComponentId, Components, ComponentsRegistrator, RequiredComponents, StorageType},
+        entity_disabling::Disabled,
         system::IntoObserverSystem,
     },
     prelude::*,
@@ -65,4 +67,19 @@ pub fn trans_wait_on<Ctx: 'static + Send + Sync + Default>(duration: Duration) -
         now - prev >= duration
     })
     .into_trigger()
+}
+
+pub fn suspend(mut e: EntityWorldMut) {
+    e.insert_recursive::<Children>(Disabled);
+}
+
+pub fn resume(mut e: EntityWorldMut) {
+    // I don't know why, but I *have* to do this otherwise observers break.
+    if let Some(Disabled) = e.take::<Disabled>()
+        && let Some(body) = e.take::<(RigidBody, Collider, Transform, GlobalTransform)>()
+    {
+        e.remove_recursive::<Children, Disabled>();
+        e.remove_with_requires::<(RigidBody, Collider, Transform)>();
+        e.insert(body);
+    }
 }

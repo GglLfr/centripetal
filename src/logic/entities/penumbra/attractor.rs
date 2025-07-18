@@ -4,7 +4,7 @@ use avian2d::{dynamics::solver::solver_body::SolverBody, prelude::*};
 use bevy::{
     ecs::{
         query::QueryItem,
-        system::{IntoObserverSystem, ObserverSystem, SystemParamItem},
+        system::{IntoObserverSystem, ObserverSystem, SystemParamItem, lifetimeless::SRes},
     },
     math::{FloatOrd, VectorSpace},
     prelude::*,
@@ -13,8 +13,12 @@ use leafwing_input_manager::{buttonlike::ButtonState, prelude::*};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    graphics::{AnimationFrom, AnimationMode, EntityColor},
-    logic::{Fields, FromLevelEntity, entities::penumbra::PenumbraEntity},
+    Sprites,
+    graphics::{Animation, AnimationMode, EntityColor},
+    logic::{
+        Fields, FromLevelEntity,
+        entities::{TryHurt, penumbra::PenumbraEntity},
+    },
 };
 
 #[derive(Debug, Clone, Component)]
@@ -25,41 +29,41 @@ pub struct Attractor {
     pub caster: Collider,
 }
 
-impl Attractor {
-    pub fn bundle(radius: f32, strength: f32) -> impl Bundle {
-        (
-            Self {
-                radius,
-                gravity: strength * strength * radius,
-                caster: Collider::circle(radius),
-            },
-            Collider::circle(8.),
-            AnimationFrom::sprite(|sprites| (sprites.attractor_regular.clone_weak(), "anim")),
-            AnimationMode::Repeat,
-            EntityColor(Color::linear_rgba(1., 1., 12., 1.)),
-            DebugRender::none(),
-        )
-    }
-}
-
 #[derive(Debug, Clone, Default, Component, Deref, DerefMut)]
 pub struct AttractorEntities(pub Vec<Entity>);
 
 impl FromLevelEntity for Attractor {
-    type Param = ();
+    type Param = SRes<Sprites>;
     type Data = ();
 
     fn from_level_entity(
         mut e: EntityCommands,
         fields: &Fields,
-        _: &mut SystemParamItem<Self::Param>,
+        sprites: &mut SystemParamItem<Self::Param>,
         _: QueryItem<Self::Data>,
     ) -> Result {
         let radius = fields.float("radius")?;
         let strength = fields.float("strength")?;
         let _level_target = fields.string("level_target").ok().to_owned();
 
-        e.insert(Self::bundle(radius, strength));
+        e.insert((
+            Self {
+                radius,
+                gravity: strength * strength * radius,
+                caster: Collider::circle(radius),
+            },
+            Collider::circle(8.),
+            CollisionEventsEnabled,
+            Animation::new(sprites.attractor_regular.clone_weak(), "anim"),
+            AnimationMode::Repeat,
+            EntityColor(Color::linear_rgba(1., 1., 12., 1.)),
+            DebugRender::none(),
+        ))
+        .observe(|trigger: Trigger<OnCollisionStart>, mut commands: Commands| {
+            if let Some(mut e) = trigger.body.and_then(|e| commands.get_entity(e).ok()) {
+                e.queue(TryHurt::by(trigger.target(), 1_000_000));
+            }
+        });
 
         debug!("Spawned attractor {}!", e.id());
         Ok(())
@@ -200,8 +204,8 @@ pub fn update_attracted_launching(
             let mut target = None;
             let mut i = 0;
 
-            while let Some(launch) = param.launches.get(i) &&
-                launch.charge <= duration
+            while let Some(launch) = param.launches.get(i)
+                && launch.charge <= duration
             {
                 i += 1;
                 duration -= launch.charge;
@@ -225,12 +229,12 @@ pub fn update_attracted_launching(
                 {
                     AttractedLaunching::Charging { started: now }
                 }
-                (ButtonState::Pressed, Some((target, true)), AttractedLaunching::Charging { .. }) |
-                (ButtonState::JustReleased, Some((target, ..)), AttractedLaunching::Charging { .. }) => {
+                (ButtonState::Pressed, Some((target, true)), AttractedLaunching::Charging { .. })
+                | (ButtonState::JustReleased, Some((target, ..)), AttractedLaunching::Charging { .. }) => {
                     AttractedLaunching::Launch { target }
                 }
-                (ButtonState::Released, Some(..), AttractedLaunching::Charging { .. }) |
-                (ButtonState::JustReleased, .., AttractedLaunching::Charging { .. }) => {
+                (ButtonState::Released, Some(..), AttractedLaunching::Charging { .. })
+                | (ButtonState::JustReleased, .., AttractedLaunching::Charging { .. }) => {
                     AttractedLaunching::Idle { last_launched: now }
                 }
                 _ => continue,
@@ -410,8 +414,8 @@ pub fn predict_attract_trajectory(
                 accum += (new_pos - pos).length();
                 pos = new_pos;
 
-                if attractor_collision.contains_point(attractor_pos, 0., pos) ||
-                    !attractor.caster.contains_point(attractor_pos, 0., pos)
+                if attractor_collision.contains_point(attractor_pos, 0., pos)
+                    || !attractor.caster.contains_point(attractor_pos, 0., pos)
                 {
                     continue 'outer
                 }
