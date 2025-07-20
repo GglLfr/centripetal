@@ -19,10 +19,11 @@ use seldom_state::prelude::*;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    Observe, PIXELS_PER_UNIT, SaveApp, Sprites,
-    graphics::{AnimateKey, AnimationFrom, EntityColor, OnAnimateDone, SpriteDrawer, SpriteSection},
+    PIXELS_PER_UNIT, SaveApp, Sprites,
+    graphics::{AnimationFrom, AnimationHooks, EntityColor, SpriteDrawer, SpriteSection},
     logic::{
-        CameraTarget, Fields, FromLevel, InGameState, LevelApp, LevelEntities, OnTimeFinished, Timed,
+        CameraTarget, Fields, FromLevel, InGameState, LevelApp, LevelEntities, OnTimeFinished,
+        Timed,
         entities::{
             Health, Killed, NoKillDespawn,
             penumbra::{AttractedAction, AttractedInitial, AttractedPrediction},
@@ -33,7 +34,9 @@ use crate::{
     resume, suspend, trans_wait,
 };
 
-#[derive(Debug, Copy, Clone, Default, Resource, TypePath, Serialize, Deserialize, Deref, DerefMut)]
+#[derive(
+    Debug, Copy, Clone, Default, Resource, TypePath, Serialize, Deserialize, Deref, DerefMut,
+)]
 struct IntroShown(pub bool);
 
 #[derive(Debug, Copy, Clone, Default)]
@@ -66,7 +69,11 @@ struct TutorialLaunch;
 struct TutorialParry;
 
 impl FromLevel for Instance {
-    type Param = (SRes<IntroShown>, SQuery<Read<Transform>>, SQuery<Read<AttractedInitial>>);
+    type Param = (
+        SRes<IntroShown>,
+        SQuery<Read<Transform>>,
+        SQuery<Read<AttractedInitial>>,
+    );
     type Data = Read<LevelEntities>;
 
     fn from_level(
@@ -78,8 +85,8 @@ impl FromLevel for Instance {
         if !**cutscene_shown {
             let level_entity = e.id();
             let mut commands = e.commands();
-            let [selene, attractor, _ring_0, _ring_1, hover_target] = [SELENE, ATTRACTOR, RINGS[0], RINGS[1], HOVER_TARGET]
-                .map(|iid| {
+            let [selene, attractor, _ring_0, _ring_1, hover_target] =
+                [SELENE, ATTRACTOR, RINGS[0], RINGS[1], HOVER_TARGET].map(|iid| {
                     let e = entities.get(iid).unwrap();
                     commands.entity(e).queue(suspend);
 
@@ -105,12 +112,20 @@ impl FromLevel for Instance {
                 move |world: &mut World| -> Result {
                     accept(
                         world
-                            .spawn((ChildOf(level_entity), AttractorSpawnEffect { target_pos }, effect_trns))
+                            .spawn((
+                                ChildOf(level_entity),
+                                AttractorSpawnEffect { target_pos },
+                                effect_trns,
+                            ))
                             .observe(Timed::despawn_on_finished)
-                            .observe(move |_: Trigger<OnTimeFinished>, mut commands: Commands| -> Result {
-                                commands.get_entity(selene)?.queue(resume);
-                                Ok(())
-                            }),
+                            .observe(
+                                move |_: Trigger<OnTimeFinished>,
+                                      mut commands: Commands|
+                                      -> Result {
+                                    commands.get_entity(selene)?.queue(resume);
+                                    Ok(())
+                                },
+                            ),
                     )
                 }
             }
@@ -134,7 +149,13 @@ impl FromLevel for Instance {
                         ))
                         .queue(suspend);
 
-                    commands.queue(spawn_selene(level_entity, selene, trns, selene_trns, |_| Ok(())));
+                    commands.queue(spawn_selene(
+                        level_entity,
+                        selene,
+                        trns,
+                        selene_trns,
+                        |_| Ok(()),
+                    ));
                     Ok(())
                 },
             );
@@ -151,21 +172,20 @@ impl FromLevel for Instance {
                                 ..attractor_trns
                             },
                             CameraTarget,
-                            AnimationFrom::sprite(|sprites| (sprites.attractor_spawn.clone_weak(), "in")),
-                            EntityColor(Color::linear_rgba(1., 2., 24., 1.)),
-                            Observe::by(move |trigger: Trigger<OnAnimateDone>, mut commands: Commands| -> Result {
-                                match trigger.event().as_str() {
-                                    "in" => {
-                                        commands.get_entity(trigger.target())?.queue(AnimateKey::continuous("out"));
-                                        commands.get_entity(level_entity)?.insert(Done::Success);
-                                    }
-                                    "out" => {
-                                        commands.get_entity(trigger.target())?.despawn();
-                                    }
-                                    e => Err(format!("Unknown animation state: `{e}`."))?,
-                                }
-                                Ok(())
+                            AnimationFrom::sprite(|sprites| {
+                                (sprites.attractor_spawn.clone_weak(), "in")
                             }),
+                            AnimationHooks::default()
+                                .on_done("in", AnimationHooks::set("out", false))
+                                .on_done(
+                                    "in",
+                                    move |_: In<Entity>, mut commands: Commands| -> Result {
+                                        commands.get_entity(level_entity)?.insert(Done::Success);
+                                        Ok(())
+                                    },
+                                )
+                                .on_done("out", AnimationHooks::despawn),
+                            EntityColor(Color::linear_rgba(1., 2., 24., 1.)),
                         ));
                     })
                     .trans::<SpawningAttractor, _>(done(Some(Done::Success)), SpawningSelene)
@@ -176,43 +196,54 @@ impl FromLevel for Instance {
                             .queue(resume)
                             .insert(CameraTarget)
                             .with_children(move |children| {
-                                children
-                                    .spawn((
-                                        Transform::from_xyz(0., 0., 1.),
-                                        AnimationFrom::sprite(|sprites| {
-                                            (sprites.grand_attractor_spawned.clone_weak(), "anim")
-                                        }),
-                                        EntityColor(Color::linear_rgba(1., 2., 24., 1.)),
-                                    ))
-                                    .observe(|trigger: Trigger<OnAnimateDone>, mut commands: Commands| -> Result {
-                                        commands.get_entity(trigger.target())?.despawn();
-                                        Ok(())
-                                    });
+                                children.spawn((
+                                    Transform::from_xyz(0., 0., 1.),
+                                    AnimationFrom::sprite(|sprites| {
+                                        (sprites.grand_attractor_spawned.clone_weak(), "anim")
+                                    }),
+                                    AnimationHooks::default()
+                                        .on_done("anim", AnimationHooks::despawn),
+                                    EntityColor(Color::linear_rgba(1., 2., 24., 1.)),
+                                ));
                             });
 
-                        e.commands()
-                            .queue(spawn_selene(level_entity, selene, attractor_trns, selene_trns, move |e| {
-                                e.observe(move |_: Trigger<OnTimeFinished>, mut commands: Commands| -> Result {
-                                    commands.get_entity(level_entity)?.insert(Done::Success);
-                                    Ok(())
-                                });
+                        e.commands().queue(spawn_selene(
+                            level_entity,
+                            selene,
+                            attractor_trns,
+                            selene_trns,
+                            move |e| {
+                                e.observe(
+                                    move |_: Trigger<OnTimeFinished>,
+                                          mut commands: Commands|
+                                          -> Result {
+                                        commands.get_entity(level_entity)?.insert(Done::Success);
+                                        Ok(())
+                                    },
+                                );
                                 Ok(())
-                            }));
+                            },
+                        ));
                     })
-                    .trans::<SpawningSelene, _>(done(Some(Done::Success)), TutorialMove { aligned: None })
+                    .trans::<SpawningSelene, _>(
+                        done(Some(Done::Success)),
+                        TutorialMove { aligned: None },
+                    )
                     // Selene spawned effect (TODO), hovering and accelerating tutorial.
                     .on_enter::<TutorialMove>(move |e| {
                         e.commands().entity(attractor).remove::<CameraTarget>();
-                        e.commands().entity(selene).queue(|mut e: EntityWorldMut| -> Result {
-                            let mut action = e
-                                .get_mut::<ActionState<AttractedAction>>()
-                                .ok_or("`ActionState<AttractedAction>` not found")?;
+                        e.commands()
+                            .entity(selene)
+                            .queue(|mut e: EntityWorldMut| -> Result {
+                                let mut action = e
+                                    .get_mut::<ActionState<AttractedAction>>()
+                                    .ok_or("`ActionState<AttractedAction>` not found")?;
 
-                            // Only `Hover` and `Accel` are enabled initially.
-                            action.disable_action(&AttractedAction::Launch);
-                            action.disable_action(&AttractedAction::Parry);
-                            Ok(())
-                        });
+                                // Only `Hover` and `Accel` are enabled initially.
+                                action.disable_action(&AttractedAction::Launch);
+                                action.disable_action(&AttractedAction::Parry);
+                                Ok(())
+                            });
 
                         e.commands()
                             .entity(hover_target)
@@ -224,14 +255,17 @@ impl FromLevel for Instance {
                                       time: Res<Time>|
                                       -> Result {
                                     if trigger.body.is_some_and(|body| body == selene) {
-                                        aligned.get_mut(level_entity)?.aligned = Some(time.elapsed());
+                                        aligned.get_mut(level_entity)?.aligned =
+                                            Some(time.elapsed());
                                     }
 
                                     Ok(())
                                 },
                             )
                             .observe(
-                                move |trigger: Trigger<OnCollisionEnd>, mut aligned: Query<&mut TutorialMove>| -> Result {
+                                move |trigger: Trigger<OnCollisionEnd>,
+                                      mut aligned: Query<&mut TutorialMove>|
+                                      -> Result {
                                     if trigger.body.is_some_and(|body| body == selene) {
                                         aligned.get_mut(level_entity)?.aligned = None;
                                     }
@@ -248,12 +282,16 @@ impl FromLevel for Instance {
                         });
                     })
                     .trans::<TutorialMove, _>(
-                        |In(level_entity): In<Entity>, time: Res<Time>, aligned: Query<&TutorialMove>| {
+                        |In(level_entity): In<Entity>,
+                         time: Res<Time>,
+                         aligned: Query<&TutorialMove>| {
                             aligned
                                 .get(level_entity)
                                 .expect("`TutorialMove` in level entity")
                                 .aligned
-                                .is_some_and(|since| time.elapsed() - since >= Duration::from_secs(5))
+                                .is_some_and(|since| {
+                                    time.elapsed() - since >= Duration::from_secs(5)
+                                })
                         },
                         TutorialLaunch,
                     )
@@ -279,8 +317,12 @@ fn draw_attractor_spawn_effect(
     sprite_sections: Res<Assets<SpriteSection>>,
     effects: Query<(Entity, &AttractorSpawnEffect, &SpriteDrawer, &Timed)>,
 ) {
-    let Some(ring_6) = sprite_sections.get(&sprites.ring_6) else { return };
-    let Some(ring_8) = sprite_sections.get(&sprites.ring_8) else { return };
+    let Some(ring_6) = sprite_sections.get(&sprites.ring_6) else {
+        return;
+    };
+    let Some(ring_8) = sprite_sections.get(&sprites.ring_8) else {
+        return;
+    };
 
     let rings = [ring_6, ring_8];
     for (e, effect, drawer, &timed) in &effects {
@@ -288,10 +330,13 @@ fn draw_attractor_spawn_effect(
         let f = timed.frac();
 
         let mut layer = -1f32;
-        for (angle, vec) in
-            rng.fork()
-                .len_vectors(40, 0., 2. * PI, 5. * PIXELS_PER_UNIT as f32, 10. * PIXELS_PER_UNIT as f32)
-        {
+        for (angle, vec) in rng.fork().len_vectors(
+            40,
+            0.,
+            2. * PI,
+            5. * PIXELS_PER_UNIT as f32,
+            10. * PIXELS_PER_UNIT as f32,
+        ) {
             let ring = rings[rng.usize(0..rings.len())];
             let f_scl = f.threshold(0., rng.f32_within(0.75, 1.));
 
@@ -304,7 +349,9 @@ fn draw_attractor_spawn_effect(
             let width = ring.size.x + (1. - f_scl.slope(0.5)).pow_in(6) * ring.size.x * 1.5;
 
             drawer.draw_at(
-                (vec * f.pow_out(5)).lerp(effect.target_pos, proceed.pow_in(6)).extend(layer),
+                (vec * f.pow_out(5))
+                    .lerp(effect.target_pos, proceed.pow_in(6))
+                    .extend(layer),
                 angle.slerp(Rot2::radians((effect.target_pos - vec).to_angle()), rotate),
                 ring.sprite_with(
                     Color::linear_rgba(1., green, blue, alpha * (1. - proceed.pow_in(7))),
@@ -330,7 +377,10 @@ pub(super) fn plugin(app: &mut App) {
     app.register_level::<Instance>("penumbra_wing_l")
         .add_systems(
             Update,
-            draw_attractor_spawn_effect.run_if(Condition::and(in_state(InGameState::Resumed), in_level("penumbra_wing_l"))),
+            draw_attractor_spawn_effect.run_if(Condition::and(
+                in_state(InGameState::Resumed),
+                in_level("penumbra_wing_l"),
+            )),
         )
         .save_resource_init::<IntroShown>();
 }

@@ -3,10 +3,14 @@ use std::{borrow::Cow, ops::Range, time::Duration};
 use bevy::{
     ecs::{
         bundle::{BundleEffect, DynamicBundle},
-        component::{ComponentId, Components, ComponentsRegistrator, HookContext, RequiredComponents, StorageType},
+        component::{
+            ComponentId, Components, ComponentsRegistrator, HookContext, RequiredComponents,
+            StorageType,
+        },
         system::{BoxedSystem, IntoPipeSystem, RunSystemError},
         world::DeferredWorld,
     },
+    platform::collections::HashMap,
     prelude::*,
     ptr::OwningPtr,
 };
@@ -19,7 +23,9 @@ use crate::{
 #[derive(Debug)]
 pub struct AnimationFrom(BoxedSystem<In<Entity>, (Handle<SpriteSheet>, String)>);
 impl AnimationFrom {
-    pub fn new<M, S: 'static + Into<String>>(system: impl IntoSystem<In<Entity>, (Handle<SpriteSheet>, S), M>) -> Self {
+    pub fn new<M, S: 'static + Into<String>>(
+        system: impl IntoSystem<In<Entity>, (Handle<SpriteSheet>, S), M>,
+    ) -> Self {
         Self(Box::new(IntoPipeSystem::into_system(system.pipe(
             |In((handle, string)): In<(Handle<SpriteSheet>, S)>| (handle, string.into()),
         ))))
@@ -53,7 +59,10 @@ unsafe impl Bundle for AnimationFrom {
         Animation::get_component_ids(components, ids);
     }
 
-    fn register_required_components(components: &mut ComponentsRegistrator, required_components: &mut RequiredComponents) {
+    fn register_required_components(
+        components: &mut ComponentsRegistrator,
+        required_components: &mut RequiredComponents,
+    ) {
         <Animation as Bundle>::register_required_components(components, required_components);
     }
 }
@@ -98,7 +107,10 @@ pub struct Animation {
 
 impl Animation {
     pub fn new(sprite: Handle<SpriteSheet>, key: impl Into<String>) -> Self {
-        Self { sprite, key: key.into() }
+        Self {
+            sprite,
+            key: key.into(),
+        }
     }
 
     pub fn key(&self) -> &str {
@@ -150,7 +162,12 @@ impl EntityCommand<Result> for AnimateKey {
     fn apply(self, mut entity: EntityWorldMut) -> Result {
         let id = entity.id();
         if self.fire_exit {
-            let key = std::mem::take(&mut entity.get_mut::<Animation>().ok_or("`Animation` not found")?.key);
+            let key = std::mem::take(
+                &mut entity
+                    .get_mut::<Animation>()
+                    .ok_or("`Animation` not found")?
+                    .key,
+            );
             entity.trigger(OnAnimateExit(key));
         }
 
@@ -165,8 +182,8 @@ impl EntityCommand<Result> for AnimateKey {
 
         if let Some(mut anim) = entity.get_mut::<Animation>() {
             (*self.key).clone_into(&mut anim.key);
-            if let Some(start) = start &&
-                let Some(mut data) = entity.get_mut::<AnimationData>()
+            if let Some(start) = start
+                && let Some(mut data) = entity.get_mut::<AnimationData>()
             {
                 if self.reset_duration {
                     data.time = Duration::ZERO;
@@ -189,6 +206,169 @@ pub struct OnAnimateDone(String);
 #[derive(Debug, Clone, Event, Deref)]
 pub struct OnAnimateExit(String);
 
+#[derive(Default)]
+pub struct AnimationHooks {
+    //hooks: Box<dyn FnOnce(&mut Entity)>,
+    enter: HashMap<String, Vec<BoxedSystem<In<Entity>, Result>>>,
+    done: HashMap<String, Vec<BoxedSystem<In<Entity>, Result>>>,
+    exit: HashMap<String, Vec<BoxedSystem<In<Entity>, Result>>>,
+}
+
+impl AnimationHooks {
+    pub fn on_enter<M>(
+        mut self,
+        key: impl Into<String>,
+        system: impl IntoSystem<In<Entity>, Result, M>,
+    ) -> Self {
+        self.enter
+            .entry(key.into())
+            .or_default()
+            .push(Box::new(IntoSystem::into_system(system)));
+        self
+    }
+
+    pub fn on_done<M>(
+        mut self,
+        key: impl Into<String>,
+        system: impl IntoSystem<In<Entity>, Result, M>,
+    ) -> Self {
+        self.done
+            .entry(key.into())
+            .or_default()
+            .push(Box::new(IntoSystem::into_system(system)));
+        self
+    }
+
+    pub fn on_exit<M>(
+        mut self,
+        key: impl Into<String>,
+        system: impl IntoSystem<In<Entity>, Result, M>,
+    ) -> Self {
+        self.exit
+            .entry(key.into())
+            .or_default()
+            .push(Box::new(IntoSystem::into_system(system)));
+        self
+    }
+
+    pub fn set(
+        key: impl Into<String>,
+        reset_duration: bool,
+    ) -> impl System<In = In<Entity>, Out = Result> {
+        let key = key.into();
+        IntoSystem::into_system(move |In(e): In<Entity>, mut commands: Commands| {
+            commands
+                .entity(e)
+                .queue(AnimateKey::new(key.clone(), reset_duration));
+            Ok(())
+        })
+    }
+
+    pub fn despawn(In(entity): In<Entity>, mut commands: Commands) -> Result {
+        if let Ok(mut entity) = commands.get_entity(entity) {
+            entity.despawn();
+        }
+        Ok(())
+    }
+}
+
+impl DynamicBundle for AnimationHooks {
+    type Effect = Self;
+
+    fn get_components(self, _: &mut impl FnMut(StorageType, OwningPtr<'_>)) -> Self::Effect {
+        self
+    }
+}
+
+unsafe impl Bundle for AnimationHooks {
+    fn component_ids(_: &mut ComponentsRegistrator, _: &mut impl FnMut(ComponentId)) {}
+
+    fn get_component_ids(_: &Components, _: &mut impl FnMut(Option<ComponentId>)) {}
+
+    fn register_required_components(_: &mut ComponentsRegistrator, _: &mut RequiredComponents) {}
+}
+
+impl BundleEffect for AnimationHooks {
+    fn apply(self, entity: &mut EntityWorldMut) {
+        let Self {
+            mut enter,
+            mut done,
+            mut exit,
+        } = self;
+
+        entity.world_scope(|world| {
+            for sys in enter
+                .values_mut()
+                .chain(done.values_mut())
+                .chain(exit.values_mut())
+                .flatten()
+            {
+                sys.initialize(world);
+            }
+        });
+
+        if !enter.is_empty() {
+            entity.observe(
+                move |trigger: Trigger<OnAnimateEnter>, world: &mut World| -> Result {
+                    let e = trigger.target();
+                    if let Some(on_enter) = enter.get_mut(trigger.as_str()) {
+                        for on_enter in on_enter.iter_mut() {
+                            on_enter.run_without_applying_deferred(e, world)?;
+                        }
+                    }
+
+                    for on_enter in enter.values_mut().flatten() {
+                        on_enter.queue_deferred(DeferredWorld::from(&mut *world));
+                    }
+
+                    world.flush();
+                    Ok(())
+                },
+            );
+        }
+
+        if !done.is_empty() {
+            entity.observe(
+                move |trigger: Trigger<OnAnimateDone>, world: &mut World| -> Result {
+                    let e = trigger.target();
+                    if let Some(on_done) = done.get_mut(trigger.as_str()) {
+                        for on_done in on_done.iter_mut() {
+                            on_done.run_without_applying_deferred(e, world)?;
+                        }
+                    }
+
+                    for on_done in done.values_mut().flatten() {
+                        on_done.queue_deferred(DeferredWorld::from(&mut *world));
+                    }
+
+                    world.flush();
+                    Ok(())
+                },
+            );
+        }
+
+        if !exit.is_empty() {
+            entity.observe(
+                move |trigger: Trigger<OnAnimateExit>, world: &mut World| -> Result {
+                    let e = trigger.target();
+                    if let Some(on_exit) = exit.get_mut(trigger.as_str()) {
+                        for on_exit in on_exit.iter_mut() {
+                            on_exit.run_without_applying_deferred(e, world)?;
+                        }
+                    }
+
+                    for on_exit in exit.values_mut().flatten() {
+                        on_exit.queue_deferred(DeferredWorld::from(&mut *world));
+                    }
+
+                    world.flush();
+                    Ok(())
+                },
+            );
+        }
+    }
+}
+
 fn on_animation_insert(mut world: DeferredWorld, HookContext { entity, .. }: HookContext) {
     let key = std::mem::take(&mut world.entity_mut(entity).get_mut::<Animation>().unwrap().key);
     world.commands().entity(entity).queue(AnimateKey {
@@ -205,43 +385,49 @@ pub fn update_animations(
     mut animations: Query<(Entity, &Animation, &AnimationMode, &mut AnimationData)>,
 ) {
     let delta = time.delta();
-    animations.par_iter_mut().for_each(|(e, animation, &mode, mut data)| {
-        let Some(sprite) = sprite_sheets.get(&animation.sprite) else { return };
+    animations
+        .par_iter_mut()
+        .for_each(|(e, animation, &mode, mut data)| {
+            let Some(sprite) = sprite_sheets.get(&animation.sprite) else {
+                return;
+            };
 
-        data.time += delta;
-        if let Some(Range { start, end }) = sprite.tags.get(&animation.key).cloned() {
-            data.frame = data.frame.clamp(start, end);
-            while data.time > Duration::ZERO {
-                if let Some(&duration) = sprite.durations.get(data.frame) &&
-                    data.time >= duration
-                {
-                    if data.frame < end {
-                        data.frame += 1;
-                        data.time -= duration;
-                    } else if matches!(mode, AnimationMode::Repeat) {
-                        data.frame = start;
-                        data.time -= duration;
+            data.time += delta;
+            if let Some(Range { start, end }) = sprite.tags.get(&animation.key).cloned() {
+                data.frame = data.frame.clamp(start, end);
+                while data.time > Duration::ZERO {
+                    if let Some(&duration) = sprite.durations.get(data.frame)
+                        && data.time >= duration
+                    {
+                        if data.frame < end {
+                            data.frame += 1;
+                            data.time -= duration;
+                        } else if matches!(mode, AnimationMode::Repeat) {
+                            data.frame = start;
+                            data.time -= duration;
+                        } else {
+                            break;
+                        }
                     } else {
-                        break
+                        break;
                     }
-                } else {
-                    break
+                }
+
+                if !matches!(mode, AnimationMode::Repeat)
+                    && data.frame == end
+                    && let Some(&duration) = sprite.durations.get(end)
+                    && data.time >= duration
+                    && !std::mem::replace(&mut data.finished, true)
+                {
+                    data.time -= duration;
+                    commands.command_scope(|mut commands| {
+                        commands
+                            .entity(e)
+                            .trigger(OnAnimateDone(animation.key.clone()));
+                    });
                 }
             }
-
-            if !matches!(mode, AnimationMode::Repeat) &&
-                data.frame == end &&
-                let Some(&duration) = sprite.durations.get(end) &&
-                data.time >= duration &&
-                !std::mem::replace(&mut data.finished, true)
-            {
-                data.time -= duration;
-                commands.command_scope(|mut commands| {
-                    commands.entity(e).trigger(OnAnimateDone(animation.key.clone()));
-                });
-            }
-        }
-    });
+        });
 }
 
 pub fn draw_animations(
@@ -255,21 +441,23 @@ pub fn draw_animations(
         Option<&EntityColor>,
     )>,
 ) {
-    animations.par_iter().for_each(|(animation, data, &mode, drawer, color)| {
-        let Some(frame) = sprite_sheets
-            .get(&animation.sprite)
-            .and_then(|sheet| sheet.frames.get(data.frame))
-            .and_then(|frame| sprites.get(frame))
-        else {
-            return
-        };
+    animations
+        .par_iter()
+        .for_each(|(animation, data, &mode, drawer, color)| {
+            let Some(frame) = sprite_sheets
+                .get(&animation.sprite)
+                .and_then(|sheet| sheet.frames.get(data.frame))
+                .and_then(|frame| sprites.get(frame))
+            else {
+                return;
+            };
 
-        if !data.finished || !matches!(mode, AnimationMode::Finish) {
-            drawer.draw_at(
-                Vec3::ZERO,
-                Rot2::IDENTITY,
-                frame.sprite_with(color.copied().unwrap_or_default().0, None, default()),
-            );
-        }
-    });
+            if !data.finished || !matches!(mode, AnimationMode::Finish) {
+                drawer.draw_at(
+                    Vec3::ZERO,
+                    Rot2::IDENTITY,
+                    frame.sprite_with(color.copied().unwrap_or_default().0, None, default()),
+                );
+            }
+        });
 }

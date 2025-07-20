@@ -16,13 +16,22 @@ use crate::{
         CameraTarget, Fields, FromLevelEntity, IsPlayer,
         entities::{
             Health, Hurt, MaxHealth,
-            penumbra::{AttractedInitial, AttractedLaunch, AttractedParams, AttractedPrediction, OnLaunch, PenumbraEntity},
+            penumbra::{
+                AttractedInitial, AttractedLaunch, AttractedParams, AttractedPrediction, OnLaunch,
+                PenumbraEntity,
+            },
         },
     },
 };
 
 #[derive(Debug, Copy, Clone, Default, Component)]
-#[require(Health::new(10), MaxHealth::new(10), IsPlayer, CameraTarget, PenumbraEntity)]
+#[require(
+    Health::new(10),
+    MaxHealth::new(10),
+    IsPlayer,
+    CameraTarget,
+    PenumbraEntity
+)]
 pub struct SelenePenumbra;
 impl FromLevelEntity for SelenePenumbra {
     type Param = SRes<Sprites>;
@@ -79,9 +88,16 @@ impl FromLevelEntity for SelenePenumbra {
 }
 
 pub fn on_selene_hurt(trigger: Trigger<Hurt>) {
-    debug!("Selene ({}) hurt by {}!", trigger.target(), trigger.event().by);
+    debug!(
+        "Selene ({}) hurt by {}!",
+        trigger.target(),
+        trigger.event().by
+    );
 }
 
 pub fn on_selene_launch(trigger: Trigger<OnLaunch>) {
-    debug!("Selene ({}) launched without obstruction!", trigger.target());
+    debug!(
+        "Selene ({}) launched without obstruction!",
+        trigger.target()
+    );
 }

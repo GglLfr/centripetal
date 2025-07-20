@@ -26,22 +26,27 @@ impl Default for EntityColor {
 pub struct GraphicsPlugin;
 impl Plugin for GraphicsPlugin {
     fn build(&self, app: &mut App) {
-        app.init_asset::<SpriteSection>().init_asset::<SpriteSheet>().add_systems(
-            PostUpdate,
-            (
-                update_animations.before(StateSet::Transition),
-                draw_animations,
-                flush_drawer_to_children,
-            )
-                .chain()
-                .before(TransformSystem::TransformPropagate),
-        );
+        app.init_asset::<SpriteSection>()
+            .init_asset::<SpriteSheet>()
+            .add_systems(
+                PostUpdate,
+                (
+                    update_animations.before(StateSet::Transition),
+                    draw_animations,
+                    flush_drawer_to_children,
+                )
+                    .chain()
+                    .before(TransformSystem::TransformPropagate),
+            );
 
         if let Some(render_app) = app.get_sub_app_mut(RenderApp) {
             render_app
                 .init_resource::<PendingSprites>()
                 .add_systems(ExtractSchedule, extract_pending_sprites)
-                .add_systems(Render, prepare_pending_sprites.after(prepare_assets::<GpuImage>));
+                .add_systems(
+                    Render,
+                    prepare_pending_sprites.after(prepare_assets::<GpuImage>),
+                );
         }
     }
 

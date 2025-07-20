@@ -59,7 +59,11 @@ fn on_timed_insert(mut world: DeferredWorld, HookContext { entity, .. }: HookCon
     world.entity_mut(entity).get_mut::<Timed>().unwrap().started = now;
 }
 
-pub fn update_timed(commands: ParallelCommands, time: Res<Time>, mut timed_query: Query<(Entity, &mut Timed)>) {
+pub fn update_timed(
+    commands: ParallelCommands,
+    time: Res<Time>,
+    mut timed_query: Query<(Entity, &mut Timed)>,
+) {
     let now = time.elapsed();
     timed_query.par_iter_mut().for_each(|(e, mut timed)| {
         let elapsed = (now - timed.started).min(timed.lifetime);

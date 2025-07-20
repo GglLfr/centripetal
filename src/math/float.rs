@@ -57,7 +57,8 @@ impl<T: Float> FloatTransformer<T> for PowOut {
     fn apply_within(&self, value: T, min: T, max: T) -> T {
         let bounds = max - min;
         let scl = (value - min) / bounds;
-        let scl = (scl - T::one()).powi(self.exponent as i32) + [T::zero(), T::one()][(self.exponent % 2) as usize];
+        let scl = (scl - T::one()).powi(self.exponent as i32)
+            + [T::zero(), T::one()][(self.exponent % 2) as usize];
         min + scl * bounds
     }
 }

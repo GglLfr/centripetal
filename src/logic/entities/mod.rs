@@ -7,8 +7,9 @@ use crate::logic::entities::penumbra::{draw_attract_trajectory, draw_attractor_r
 use crate::logic::{
     LevelApp, LevelBounds, LevelUnload,
     entities::penumbra::{
-        AttractedAction, Attractor, GenericPenumbra, SelenePenumbra, ThornPillar, ThornRing, apply_attractor_accels,
-        detect_attracted_entities, predict_attract_trajectory, remove_attracted_initials, update_attracted_launching,
+        AttractedAction, Attractor, GenericPenumbra, SelenePenumbra, ThornPillar, ThornRing,
+        apply_attractor_accels, detect_attracted_entities, predict_attract_trajectory,
+        remove_attracted_initials, update_attracted_launching,
     },
 };
 
@@ -80,8 +81,10 @@ impl EntityCommand<Result> for TryHurt {
         entity.world_scope(|world| world.trigger_targets_ref(&mut self, id));
 
         if !self.stopped {
-            let Some(should_kill) = entity.modify_component(|health: &mut Health| health.hurt(self.amount)) else {
-                return Ok(())
+            let Some(should_kill) =
+                entity.modify_component(|health: &mut Health| health.hurt(self.amount))
+            else {
+                return Ok(());
             };
 
             entity.trigger(Hurt::by(self.by, self.amount));
@@ -136,7 +139,9 @@ pub fn kill_out_of_bounds(
     level_bounds: Query<&LevelBounds, Without<LevelUnload>>,
     entities: Query<(Entity, &Position, Has<NoKillDespawn>)>,
 ) {
-    let Ok(&level_bounds) = level_bounds.single() else { return };
+    let Ok(&level_bounds) = level_bounds.single() else {
+        return;
+    };
 
     entities.par_iter().for_each(|(e, &pos, no_kill_despawn)| {
         if pos.x < 0. || pos.x > level_bounds.x || pos.y < 0. || pos.y > level_bounds.x {
@@ -165,7 +170,9 @@ impl Plugin for EntitiesPlugin {
             .add_systems(Update, update_attracted_launching)
             .add_systems(
                 SubstepSchedule,
-                apply_attractor_accels.in_set(IntegrationSet::Velocity).ambiguous_with_all(),
+                apply_attractor_accels
+                    .in_set(IntegrationSet::Velocity)
+                    .ambiguous_with_all(),
             )
             .add_systems(
                 PhysicsSchedule,

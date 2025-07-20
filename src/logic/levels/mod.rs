@@ -12,10 +12,14 @@ impl Plugin for LevelsPlugin {
     }
 }
 
-pub fn in_level(level_id: impl Into<String>) -> impl FnMut(Query<&Level, Without<LevelUnload>>) -> bool + Clone {
+pub fn in_level(
+    level_id: impl Into<String>,
+) -> impl FnMut(Query<&Level, Without<LevelUnload>>) -> bool + Clone {
     let id = level_id.into();
     move |level: Query<&Level, Without<LevelUnload>>| {
-        let Ok(level) = level.single() else { return false };
+        let Ok(level) = level.single() else {
+            return false;
+        };
         level.id == id
     }
 }

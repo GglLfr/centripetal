@@ -77,7 +77,11 @@ unsafe impl<D: 'static + QueryData> SystemParam for CameraQuery<'_, D> {
         }
     }
 
-    unsafe fn new_archetype(state: &mut Self::State, archetype: &Archetype, system_meta: &mut SystemMeta) {
+    unsafe fn new_archetype(
+        state: &mut Self::State,
+        archetype: &Archetype,
+        system_meta: &mut SystemMeta,
+    ) {
         unsafe {
             Query::new_archetype(
                 state.get_mut().unwrap_or_else(PoisonError::into_inner),
@@ -88,11 +92,19 @@ unsafe impl<D: 'static + QueryData> SystemParam for CameraQuery<'_, D> {
     }
 
     fn apply(state: &mut Self::State, system_meta: &SystemMeta, world: &mut World) {
-        Query::apply(state.get_mut().unwrap_or_else(PoisonError::into_inner), system_meta, world);
+        Query::apply(
+            state.get_mut().unwrap_or_else(PoisonError::into_inner),
+            system_meta,
+            world,
+        );
     }
 
     fn queue(state: &mut Self::State, system_meta: &SystemMeta, world: DeferredWorld) {
-        Query::queue(state.get_mut().unwrap_or_else(PoisonError::into_inner), system_meta, world);
+        Query::queue(
+            state.get_mut().unwrap_or_else(PoisonError::into_inner),
+            system_meta,
+            world,
+        );
     }
 
     unsafe fn validate_param(
@@ -101,7 +113,8 @@ unsafe impl<D: 'static + QueryData> SystemParam for CameraQuery<'_, D> {
         world: UnsafeWorldCell,
     ) -> Result<(), SystemParamValidationError> {
         let mut lock = state.lock().unwrap_or_else(PoisonError::into_inner);
-        let query = unsafe { Query::get_param(&mut *lock, system_meta, world, world.change_tick()) };
+        let query =
+            unsafe { Query::get_param(&mut *lock, system_meta, world, world.change_tick()) };
 
         match query.single_inner() {
             Ok(..) => Ok(()),
@@ -136,12 +149,18 @@ unsafe impl<D: 'static + QueryData> SystemParam for CameraQuery<'_, D> {
 pub struct MainCamera;
 
 pub fn startup_camera(mut commands: Commands) {
-    debug!("Spawned `MainCamera` as entity {}!", commands.spawn(MainCamera).id());
+    debug!(
+        "Spawned `MainCamera` as entity {}!",
+        commands.spawn(MainCamera).id()
+    );
 }
 
 pub fn move_camera(
     camera: CameraQuery<(&mut Transform, &Projection)>,
-    target: Single<(&Transform, &CameraConfines, Option<&ChildOf>), (With<CameraTarget>, Without<MainCamera>)>,
+    target: Single<
+        (&Transform, &CameraConfines, Option<&ChildOf>),
+        (With<CameraTarget>, Without<MainCamera>),
+    >,
     level_bounds: Single<&LevelBounds>,
     child_of_query: Query<(&Transform, Option<&ChildOf>), Without<MainCamera>>,
 ) -> Result {
@@ -159,7 +178,7 @@ pub fn move_camera(
             if let Some(parent) = child_of.map(ChildOf::parent) {
                 e = parent;
             } else {
-                break
+                break;
             }
         }
     }
@@ -174,13 +193,15 @@ pub fn move_camera(
             let x = if size_diff.x < 0. {
                 bounds.x / 2.
             } else {
-                trns.x.clamp(cam_bounds.x / 2., bounds.x - cam_bounds.x / 2.)
+                trns.x
+                    .clamp(cam_bounds.x / 2., bounds.x - cam_bounds.x / 2.)
             };
 
             let y = if size_diff.y < 0. {
                 bounds.y / 2.
             } else {
-                trns.y.clamp(cam_bounds.y / 2., bounds.y - cam_bounds.y / 2.)
+                trns.y
+                    .clamp(cam_bounds.y / 2., bounds.y - cam_bounds.y / 2.)
             };
 
             vec2(x, y)

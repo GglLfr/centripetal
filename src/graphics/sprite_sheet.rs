@@ -2,7 +2,10 @@ use std::{io, ops::Range, time::Duration};
 
 use async_channel::Sender;
 use bevy::{
-    asset::{AssetLoader, AsyncReadExt as _, LoadContext, LoadDirectError, ParseAssetPathError, io::Reader},
+    asset::{
+        AssetLoader, AsyncReadExt as _, LoadContext, LoadDirectError, ParseAssetPathError,
+        io::Reader,
+    },
     image::{CompressedImageFormats, ImageLoader, ImageLoaderError, ImageLoaderSettings},
     platform::collections::HashMap,
     prelude::*,
@@ -38,7 +41,12 @@ impl SpriteSection {
         }
     }
 
-    pub fn sprite_with(&self, color: impl Into<Color>, size: impl Into<Option<Vec2>>, local_anchor: Anchor) -> Sprite {
+    pub fn sprite_with(
+        &self,
+        color: impl Into<Color>,
+        size: impl Into<Option<Vec2>>,
+        local_anchor: Anchor,
+    ) -> Sprite {
         let size = size.into().unwrap_or(self.size);
         Sprite {
             image: self.page.clone(),
@@ -49,8 +57,9 @@ impl SpriteSection {
             custom_size: Some(size),
             rect: self.rect,
             anchor: Anchor::Custom(
-                self.center_anchor.as_vec() +
-                    local_anchor.as_vec() * size / self.rect.map(|rect| rect.size()).unwrap_or(size),
+                self.center_anchor.as_vec()
+                    + local_anchor.as_vec() * size
+                        / self.rect.map(|rect| rect.size()).unwrap_or(size),
             ),
             image_mode: SpriteImageMode::Auto,
         }
@@ -66,7 +75,12 @@ pub enum SpriteSectionError {
 }
 
 #[derive(Debug, Clone)]
-pub struct SpriteSectionLoader(pub Sender<(Image, Sender<Result<(Handle<Image>, TextureAtlas), SpriteError>>)>);
+pub struct SpriteSectionLoader(
+    pub  Sender<(
+        Image,
+        Sender<Result<(Handle<Image>, TextureAtlas), SpriteError>>,
+    )>,
+);
 impl AssetLoader for SpriteSectionLoader {
     type Asset = SpriteSection;
     type Settings = ();
@@ -84,8 +98,14 @@ impl AssetLoader for SpriteSectionLoader {
 
         let (sender, receiver) = async_channel::bounded(1);
         let size = image.size().as_vec2();
-        self.0.send((image, sender)).await.map_err(|_| SpriteSectionError::Closed)?;
-        let (page, sprite) = receiver.recv().await.map_err(|_| SpriteSectionError::Closed)??;
+        self.0
+            .send((image, sender))
+            .await
+            .map_err(|_| SpriteSectionError::Closed)?;
+        let (page, sprite) = receiver
+            .recv()
+            .await
+            .map_err(|_| SpriteSectionError::Closed)??;
 
         Ok(SpriteSection {
             page,
@@ -179,7 +199,12 @@ struct Tag {
 }
 
 #[derive(Debug, Clone)]
-pub struct SpriteSheetLoader(pub Sender<(Image, Sender<Result<(Handle<Image>, TextureAtlas), SpriteError>>)>);
+pub struct SpriteSheetLoader(
+    pub  Sender<(
+        Image,
+        Sender<Result<(Handle<Image>, TextureAtlas), SpriteError>>,
+    )>,
+);
 impl AssetLoader for SpriteSheetLoader {
     type Asset = SpriteSheet;
     type Settings = ();
@@ -196,11 +221,22 @@ impl AssetLoader for SpriteSheetLoader {
 
         let Root { mut frames, meta } = unblock(move || serde_json::from_str(&file)).await?;
         let image_path = load_context.asset_path().resolve_embed(&meta.image)?;
-        let image = load_context.loader().immediate().load(image_path).await?.take();
+        let image = load_context
+            .loader()
+            .immediate()
+            .load(image_path)
+            .await?
+            .take();
 
         let (sender, receiver) = async_channel::bounded(1);
-        self.0.send((image, sender)).await.map_err(|_| SpriteSheetError::Closed)?;
-        let (page, sprite) = receiver.recv().await.map_err(|_| SpriteSheetError::Closed)??;
+        self.0
+            .send((image, sender))
+            .await
+            .map_err(|_| SpriteSheetError::Closed)?;
+        let (page, sprite) = receiver
+            .recv()
+            .await
+            .map_err(|_| SpriteSheetError::Closed)??;
 
         frames.sort_unstable_by_key(|frame| frame.filename.parse::<u32>().unwrap_or(0));
         let durations = frames
@@ -218,27 +254,38 @@ impl AssetLoader for SpriteSheetLoader {
                 let frame_location = uvec2(frame.frame.x, frame.frame.y).as_vec2();
                 let frame_size = uvec2(frame.frame.w, frame.frame.h).as_vec2();
 
-                let sprite_location = uvec2(frame.sprite_source_size.x, frame.sprite_source_size.y).as_vec2();
-                let sprite_size = uvec2(frame.sprite_source_size.w, frame.sprite_source_size.h).as_vec2();
+                let sprite_location =
+                    uvec2(frame.sprite_source_size.x, frame.sprite_source_size.y).as_vec2();
+                let sprite_size =
+                    uvec2(frame.sprite_source_size.w, frame.sprite_source_size.h).as_vec2();
                 let sprite_center = sprite_location + sprite_size / 2.;
 
-                load_context.add_labeled_asset(format!("frame-{i}"), SpriteSection {
-                    page: page.clone_weak(),
-                    sprite: TextureAtlas {
-                        layout: sprite.layout.clone_weak(),
-                        index: sprite.index,
+                load_context.add_labeled_asset(
+                    format!("frame-{i}"),
+                    SpriteSection {
+                        page: page.clone_weak(),
+                        sprite: TextureAtlas {
+                            layout: sprite.layout.clone_weak(),
+                            index: sprite.index,
+                        },
+                        rect: Some(Rect {
+                            min: frame_location,
+                            max: frame_location + frame_size,
+                        }),
+                        center_anchor: Anchor::Custom(
+                            (source_center - sprite_center) / sprite_size * vec2(1., -1.),
+                        ),
+                        size: sprite_size,
                     },
-                    rect: Some(Rect {
-                        min: frame_location,
-                        max: frame_location + frame_size,
-                    }),
-                    center_anchor: Anchor::Custom((source_center - sprite_center) / sprite_size * vec2(1., -1.)),
-                    size: sprite_size,
-                })
+                )
             })
             .collect();
 
-        let tags = meta.frame_tags.into_iter().map(|tag| (tag.name, tag.from..tag.to)).collect();
+        let tags = meta
+            .frame_tags
+            .into_iter()
+            .map(|tag| (tag.name, tag.from..tag.to))
+            .collect();
         Ok(SpriteSheet {
             page,
             sprite,

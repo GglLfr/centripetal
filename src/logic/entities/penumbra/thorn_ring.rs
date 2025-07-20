@@ -43,11 +43,16 @@ impl FromLevelEntity for ThornRing {
             vertices.push(Vec2::new(cos * radius + radius, sin * radius));
         }
 
-        trns.rotation = Quat::from_axis_angle(Vec3::Z, (facing - trns.translation.truncate()).to_angle());
-        e.insert((Self, AttractedInitial { ccw }, Collider::polyline(vertices, None)))
-            .observe(OnLaunch::collide(true, |mut e, by| {
-                e.trigger(Hurt::by(by, 1));
-            }));
+        trns.rotation =
+            Quat::from_axis_angle(Vec3::Z, (facing - trns.translation.truncate()).to_angle());
+        e.insert((
+            Self,
+            AttractedInitial { ccw },
+            Collider::polyline(vertices, None),
+        ))
+        .observe(OnLaunch::collide(true, |mut e, by| {
+            e.trigger(Hurt::by(by, 1));
+        }));
 
         debug!("Spawned thorn ring {}!", e.id());
         Ok(())

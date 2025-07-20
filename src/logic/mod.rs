@@ -32,7 +32,9 @@ pub struct LdtkWorld<'w> {
 
 impl LdtkWorld<'_> {
     pub fn get(&self) -> &Ldtk {
-        self.worlds.get(self.handle.id()).expect("The LDtk world is unloaded")
+        self.worlds
+            .get(self.handle.id())
+            .expect("The LDtk world is unloaded")
     }
 }
 
@@ -69,7 +71,12 @@ impl Plugin for LogicPlugin {
             .init_state::<GameState>()
             .add_sub_state::<InGameState>()
             .add_plugins(
-                ProgressPlugin::<InGameState>::new().with_state_transition(InGameState::Loading, InGameState::Resumed),
+                ProgressPlugin::<InGameState>::new()
+                    .with_state_transition(InGameState::Loading, InGameState::Resumed),
+            )
+            .configure_sets(
+                PostUpdate,
+                seldom_state::set::StateSet::Transition.before(CameraUpdateSystem),
             )
             .init_resource::<RegisteredLevels>()
             .init_resource::<RegisteredLevelEntities>()

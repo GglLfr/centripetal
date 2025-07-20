@@ -1485,6 +1485,7 @@ dependencies = [
  "guillotiere",
  "iyes_progress",
  "leafwing-input-manager",
+ "log",
  "mimalloc-redirect",
  "num-traits",
  "seldom_state",

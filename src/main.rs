@@ -3,10 +3,7 @@
 use avian2d::prelude::*;
 #[cfg(feature = "dev")]
 use bevy::log::DEFAULT_FILTER;
-use bevy::{
-    log::LogPlugin,
-    prelude::*,
-};
+use bevy::{log::LogPlugin, prelude::*};
 use bevy_asset_loader::prelude::*;
 use bevy_ecs_tilemap::prelude::*;
 use bevy_framepace::FramepacePlugin;
@@ -23,12 +20,12 @@ pub mod logic;
 pub mod math;
 
 mod asset;
-mod ecs;
 mod config;
+mod ecs;
 mod save;
 pub use asset::*;
-pub use ecs::*;
 pub use config::*;
+pub use ecs::*;
 pub use save::*;
 
 #[cfg(not(feature = "bevy_dynamic"))]
@@ -70,7 +67,10 @@ fn main() -> AppExit {
                 .load_collection::<WorldHandle>()
                 .load_collection::<Sprites>(),
         )
-        .add_plugins(ProgressPlugin::<GameState>::new().with_state_transition(GameState::Loading, GameState::Menu))
+        .add_plugins(
+            ProgressPlugin::<GameState>::new()
+                .with_state_transition(GameState::Loading, GameState::Menu),
+        )
         .add_systems(OnEnter(GameState::Menu), dev_init)
         .run()
 }

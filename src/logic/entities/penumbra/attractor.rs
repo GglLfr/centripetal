@@ -59,11 +59,13 @@ impl FromLevelEntity for Attractor {
             EntityColor(Color::linear_rgba(1., 1., 12., 1.)),
             DebugRender::none(),
         ))
-        .observe(|trigger: Trigger<OnCollisionStart>, mut commands: Commands| {
-            if let Some(mut e) = trigger.body.and_then(|e| commands.get_entity(e).ok()) {
-                e.queue(TryHurt::by(trigger.target(), 1_000_000));
-            }
-        });
+        .observe(
+            |trigger: Trigger<OnCollisionStart>, mut commands: Commands| {
+                if let Some(mut e) = trigger.body.and_then(|e| commands.get_entity(e).ok()) {
+                    e.queue(TryHurt::by(trigger.target(), 1_000_000));
+                }
+            },
+        );
 
         debug!("Spawned attractor {}!", e.id());
         Ok(())
@@ -153,7 +155,7 @@ impl EntityCommand for LaunchCommand {
                 world.trigger_targets_ref(&mut trigger, hit.entity);
 
                 if trigger.stopped {
-                    return
+                    return;
                 }
             }
         });
@@ -177,28 +179,40 @@ impl OnLaunch {
         stop: bool,
         mut apply: impl FnMut(EntityCommands, Entity) + 'static + Send + Sync,
     ) -> impl ObserverSystem<Self, ()> {
-        IntoObserverSystem::<Self, (), _>::into_system(move |mut trigger: Trigger<Self>, mut commands: Commands| {
-            if stop {
-                trigger.event_mut().stopped = true;
-            }
+        IntoObserverSystem::<Self, (), _>::into_system(
+            move |mut trigger: Trigger<Self>, mut commands: Commands| {
+                if stop {
+                    trigger.event_mut().stopped = true;
+                }
 
-            apply(commands.entity(trigger.event().command.launcher_entity), trigger.target());
-        })
+                apply(
+                    commands.entity(trigger.event().command.launcher_entity),
+                    trigger.target(),
+                );
+            },
+        )
     }
 }
 
 pub fn update_attracted_launching(
     mut commands: Commands,
     time: Res<Time>,
-    launches: Query<(Entity, &AttractedParams, &ActionState<AttractedAction>, &AttractedLaunching)>,
+    launches: Query<(
+        Entity,
+        &AttractedParams,
+        &ActionState<AttractedAction>,
+        &AttractedLaunching,
+    )>,
 ) {
     let now = time.elapsed();
     for (e, param, state, launching) in &launches {
         if param.launches.is_empty() {
-            continue
+            continue;
         }
 
-        let Some(data) = state.button_data(&AttractedAction::Launch) else { continue };
+        let Some(data) = state.button_data(&AttractedAction::Launch) else {
+            continue;
+        };
         let target = if let &AttractedLaunching::Charging { started } = launching {
             let mut duration = now - started;
             let mut target = None;
@@ -220,19 +234,33 @@ pub fn update_attracted_launching(
 
         commands.entity(e).insert(
             match (
-                if state.action_disabled(&AttractedAction::Launch) { ButtonState::Released } else { data.state },
+                if state.action_disabled(&AttractedAction::Launch) {
+                    ButtonState::Released
+                } else {
+                    data.state
+                },
                 target,
                 launching,
             ) {
-                (ButtonState::JustPressed, None, AttractedLaunching::Idle { last_launched: last })
-                    if now - *last >= param.launch_cooldown =>
-                {
+                (
+                    ButtonState::JustPressed,
+                    None,
+                    AttractedLaunching::Idle {
+                        last_launched: last,
+                    },
+                ) if now - *last >= param.launch_cooldown => {
                     AttractedLaunching::Charging { started: now }
                 }
-                (ButtonState::Pressed, Some((target, true)), AttractedLaunching::Charging { .. })
-                | (ButtonState::JustReleased, Some((target, ..)), AttractedLaunching::Charging { .. }) => {
-                    AttractedLaunching::Launch { target }
-                }
+                (
+                    ButtonState::Pressed,
+                    Some((target, true)),
+                    AttractedLaunching::Charging { .. },
+                )
+                | (
+                    ButtonState::JustReleased,
+                    Some((target, ..)),
+                    AttractedLaunching::Charging { .. },
+                ) => AttractedLaunching::Launch { target },
                 (ButtonState::Released, Some(..), AttractedLaunching::Charging { .. })
                 | (ButtonState::JustReleased, .., AttractedLaunching::Charging { .. }) => {
                     AttractedLaunching::Idle { last_launched: now }
@@ -287,18 +315,34 @@ pub fn detect_attracted_entities(
 
                     if let Some(&initial) = initial {
                         let initial_speed = (attractor.gravity / r).sqrt();
-                        let initial_velocity = if initial.ccw { -r_vec.perp() } else { r_vec.perp() } / r * initial_speed;
+                        let initial_velocity = if initial.ccw {
+                            -r_vec.perp()
+                        } else {
+                            r_vec.perp()
+                        } / r
+                            * initial_speed;
                         **linvel += initial_velocity;
                     }
 
                     if let Some(AttractedLaunching::Launch { target }) = launching {
-                        commands.entity(e).insert(AttractedLaunching::Idle { last_launched: now });
+                        commands
+                            .entity(e)
+                            .insert(AttractedLaunching::Idle { last_launched: now });
 
-                        let Ok(dir) = Dir2::new(r_vec) else { return true };
-                        let mut hits = pipeline.ray_hits(*pos, dir, r, u32::MAX, true, &SpatialQueryFilter {
-                            excluded_entities: [e, attractor_entity].into_iter().collect(),
-                            ..SpatialQueryFilter::DEFAULT
-                        });
+                        let Ok(dir) = Dir2::new(r_vec) else {
+                            return true;
+                        };
+                        let mut hits = pipeline.ray_hits(
+                            *pos,
+                            dir,
+                            r,
+                            u32::MAX,
+                            true,
+                            &SpatialQueryFilter {
+                                excluded_entities: [e, attractor_entity].into_iter().collect(),
+                                ..SpatialQueryFilter::DEFAULT
+                            },
+                        );
 
                         hits.sort_unstable_by_key(|data| FloatOrd(data.distance));
                         commands.entity(e).queue(LaunchCommand {
@@ -322,7 +366,10 @@ pub fn detect_attracted_entities(
     }
 }
 
-pub fn remove_attracted_initials(mut commands: Commands, query: Query<Entity, With<AttractedInitial>>) {
+pub fn remove_attracted_initials(
+    mut commands: Commands,
+    query: Query<Entity, With<AttractedInitial>>,
+) {
     for e in &query {
         commands.entity(e).remove::<AttractedInitial>();
     }
@@ -334,7 +381,11 @@ pub fn apply_attractor_accels(
     mut attracted: Query<(
         &Position,
         &mut SolverBody,
-        Option<(&AttractedParams, &AttractedLaunching, &ActionState<AttractedAction>)>,
+        Option<(
+            &AttractedParams,
+            &AttractedLaunching,
+            &ActionState<AttractedAction>,
+        )>,
     )>,
 ) {
     let dt = time.delta_secs();
@@ -348,14 +399,23 @@ pub fn apply_attractor_accels(
                 ..
             } = body.into_inner();
 
-            let (added_linvel, r_vec, r) = gravity_linvel(dt, *pos + *delta_position, *attractor_pos, attractor.gravity);
+            let (added_linvel, r_vec, r) = gravity_linvel(
+                dt,
+                *pos + *delta_position,
+                *attractor_pos,
+                attractor.gravity,
+            );
             *linear_velocity += added_linvel;
 
             let crs = r_vec.x * linear_velocity.y - r_vec.y * linear_velocity.x;
             *angular_velocity = -(crs / (r * r));
 
             if let Some((param, AttractedLaunching::Idle { .. }, state)) = hover {
-                let precise_scale = if state.pressed(&AttractedAction::Precise) { param.precise_scale } else { 1. };
+                let precise_scale = if state.pressed(&AttractedAction::Precise) {
+                    param.precise_scale
+                } else {
+                    1.
+                };
 
                 {
                     let prograde_value = state.clamped_value(&AttractedAction::Accel);
@@ -417,7 +477,7 @@ pub fn predict_attract_trajectory(
                 if attractor_collision.contains_point(attractor_pos, 0., pos)
                     || !attractor.caster.contains_point(attractor_pos, 0., pos)
                 {
-                    continue 'outer
+                    continue 'outer;
                 }
 
                 prediction.points.push(pos);
@@ -426,14 +486,20 @@ pub fn predict_attract_trajectory(
     }
 }
 
-pub fn draw_attract_trajectory(mut gizmos: Gizmos, attracted: Query<(&Position, &AttractedPrediction)>) {
+pub fn draw_attract_trajectory(
+    mut gizmos: Gizmos,
+    attracted: Query<(&Position, &AttractedPrediction)>,
+) {
     for (&pos, prediction) in &attracted {
         let mut pos = *pos;
         for (i, &point) in prediction.points.iter().enumerate() {
             gizmos.line_2d(
                 pos,
                 point,
-                LinearRgba::WHITE.lerp(LinearRgba::NONE, i as f32 / (prediction.points.len() - 1) as f32),
+                LinearRgba::WHITE.lerp(
+                    LinearRgba::NONE,
+                    i as f32 / (prediction.points.len() - 1) as f32,
+                ),
             );
             pos = point;
         }

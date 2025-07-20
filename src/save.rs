@@ -44,15 +44,17 @@ impl SaveRegistry {
         REGISTRY
             .write()
             .unwrap_or_else(PoisonError::into_inner)
-            .register(T::short_type_path(), |d| Ok(Box::new(erased_serde::deserialize::<T>(d)?)));
+            .register(T::short_type_path(), |d| {
+                Ok(Box::new(erased_serde::deserialize::<T>(d)?))
+            });
 
         self.removals.push(|world| {
             world.remove_resource::<T>();
         });
 
         self.defaults.push(Box::new(move |world| {
-            if !world.contains_resource::<T>() &&
-                let Some(resource) = add_default(world)?
+            if !world.contains_resource::<T>()
+                && let Some(resource) = add_default(world)?
             {
                 world.insert_resource(resource);
             }
@@ -61,15 +63,23 @@ impl SaveRegistry {
         }));
     }
 
-    pub fn apply(&mut self, world: &mut World, resources: impl IntoIterator<Item = Box<dyn SaveResource>>) -> Result {
+    pub fn apply(
+        &mut self,
+        world: &mut World,
+        resources: impl IntoIterator<Item = Box<dyn SaveResource>>,
+    ) -> Result {
         for &removal in &self.removals {
             removal(world);
         }
 
         let registry = REGISTRY.read().unwrap_or_else(PoisonError::into_inner);
         for resource in resources {
-            if let Err(GetError::NotRegistered { id }) = registry.get_deserialize_fn(resource.reflect_short_type_path()) {
-                Err(format!("`{id}` is not registered; call `app.save_resource::<{id}>()` first"))?
+            if let Err(GetError::NotRegistered { id }) =
+                registry.get_deserialize_fn(resource.reflect_short_type_path())
+            {
+                Err(format!(
+                    "`{id}` is not registered; call `app.save_resource::<{id}>()` first"
+                ))?
             }
 
             resource.insert(world);
@@ -120,11 +130,15 @@ impl Plugin for SavePlugin {
 }
 
 pub trait SaveApp {
-    fn save_resource<T: Resource + TypePath + Serialize + for<'de> Deserialize<'de>>(&mut self) -> &mut Self {
+    fn save_resource<T: Resource + TypePath + Serialize + for<'de> Deserialize<'de>>(
+        &mut self,
+    ) -> &mut Self {
         self.save_resource_with::<T>(|_| Ok(None))
     }
 
-    fn save_resource_init<T: Resource + FromWorld + TypePath + Serialize + for<'de> Deserialize<'de>>(
+    fn save_resource_init<
+        T: Resource + FromWorld + TypePath + Serialize + for<'de> Deserialize<'de>,
+    >(
         &mut self,
     ) -> &mut Self {
         self.save_resource_with::<T>(|world| Ok(Some(T::from_world(world))))
@@ -141,7 +155,9 @@ impl SaveApp for App {
         &mut self,
         add_default: impl FnMut(&mut World) -> Result<Option<T>> + 'static + Send + Sync,
     ) -> &mut Self {
-        self.world_mut().resource_mut::<SaveRegistry>().save::<T>(add_default);
+        self.world_mut()
+            .resource_mut::<SaveRegistry>()
+            .save::<T>(add_default);
         self
     }
 }

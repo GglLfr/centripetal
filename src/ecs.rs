@@ -4,7 +4,9 @@ use avian2d::prelude::*;
 use bevy::{
     ecs::{
         bundle::{BundleEffect, DynamicBundle},
-        component::{ComponentId, Components, ComponentsRegistrator, RequiredComponents, StorageType},
+        component::{
+            ComponentId, Components, ComponentsRegistrator, RequiredComponents, StorageType,
+        },
         entity_disabling::Disabled,
         system::IntoObserverSystem,
     },
@@ -13,14 +15,19 @@ use bevy::{
 };
 use seldom_state::prelude::*;
 
-pub struct Observe<E: Event, B: Bundle, M: 'static, T: IntoObserverSystem<E, B, M> + Sync>(pub T, PhantomData<fn(E, B, M)>);
+pub struct Observe<E: Event, B: Bundle, M: 'static, T: IntoObserverSystem<E, B, M> + Sync>(
+    pub T,
+    PhantomData<fn(E, B, M)>,
+);
 impl<E: Event, B: Bundle, M, T: IntoObserverSystem<E, B, M> + Sync> Observe<E, B, M, T> {
     pub fn by(observer: T) -> Self {
         Self(observer, PhantomData)
     }
 }
 
-impl<E: Event, B: Bundle, M: 'static, T: IntoObserverSystem<E, B, M> + Sync> DynamicBundle for Observe<E, B, M, T> {
+impl<E: Event, B: Bundle, M: 'static, T: IntoObserverSystem<E, B, M> + Sync> DynamicBundle
+    for Observe<E, B, M, T>
+{
     type Effect = Self;
 
     fn get_components(self, _: &mut impl FnMut(StorageType, OwningPtr<'_>)) -> Self::Effect {
@@ -28,7 +35,9 @@ impl<E: Event, B: Bundle, M: 'static, T: IntoObserverSystem<E, B, M> + Sync> Dyn
     }
 }
 
-unsafe impl<E: Event, B: Bundle, M: 'static, T: IntoObserverSystem<E, B, M> + Sync> Bundle for Observe<E, B, M, T> {
+unsafe impl<E: Event, B: Bundle, M: 'static, T: IntoObserverSystem<E, B, M> + Sync> Bundle
+    for Observe<E, B, M, T>
+{
     fn component_ids(_: &mut ComponentsRegistrator, _: &mut impl FnMut(ComponentId)) {}
 
     fn get_component_ids(_: &Components, _: &mut impl FnMut(Option<ComponentId>)) {}
@@ -36,13 +45,17 @@ unsafe impl<E: Event, B: Bundle, M: 'static, T: IntoObserverSystem<E, B, M> + Sy
     fn register_required_components(_: &mut ComponentsRegistrator, _: &mut RequiredComponents) {}
 }
 
-impl<E: Event, B: Bundle, M: 'static, T: IntoObserverSystem<E, B, M> + Sync> BundleEffect for Observe<E, B, M, T> {
+impl<E: Event, B: Bundle, M: 'static, T: IntoObserverSystem<E, B, M> + Sync> BundleEffect
+    for Observe<E, B, M, T>
+{
     fn apply(self, entity: &mut EntityWorldMut) {
         entity.observe(self.0);
     }
 }
 
-pub fn wait(duration: Duration) -> impl Fn(Res<Time>, Local<Option<Duration>>) -> bool + 'static + Send + Sync {
+pub fn wait(
+    duration: Duration,
+) -> impl Fn(Res<Time>, Local<Option<Duration>>) -> bool + 'static + Send + Sync {
     wait_on::<()>(duration)
 }
 
@@ -60,7 +73,9 @@ pub fn trans_wait(duration: Duration) -> impl EntityTrigger<Out = bool> {
     trans_wait_on::<()>(duration)
 }
 
-pub fn trans_wait_on<Ctx: 'static + Send + Sync + Default>(duration: Duration) -> impl EntityTrigger<Out = bool> {
+pub fn trans_wait_on<Ctx: 'static + Send + Sync + Default>(
+    duration: Duration,
+) -> impl EntityTrigger<Out = bool> {
     (move |_: In<Entity>, time: Res<Time<Ctx>>, mut started: Local<Option<Duration>>| {
         let now = time.elapsed();
         let prev = *started.get_or_insert(now);

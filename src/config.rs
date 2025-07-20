@@ -58,7 +58,9 @@ pub struct Config<T: 'static + Send + Clone + Default + Serialize + for<'de> Des
 }
 
 impl<T: 'static + Send + Clone + Default + Serialize + for<'de> Deserialize<'de>> Config<T> {
-    pub fn new<P: Into<PathBuf>>(path: P) -> impl ConditionalSendFuture<Output = io::Result<Self>> + use<T, P> {
+    pub fn new<P: Into<PathBuf>>(
+        path: P,
+    ) -> impl ConditionalSendFuture<Output = io::Result<Self>> + use<T, P> {
         let path = path.into();
 
         #[cfg(not(feature = "dev"))]
@@ -87,7 +89,10 @@ impl<T: 'static + Send + Clone + Default + Serialize + for<'de> Deserialize<'de>
                         match unblock(move || ron::de::from_bytes(&bytes)).await {
                             Ok(inner) => Ok(Self { inner, path }),
                             Err(e) => {
-                                error!("Invalid config file {}: falling back to defaults!\n{e}", path.display());
+                                error!(
+                                    "Invalid config file {}: falling back to defaults!\n{e}",
+                                    path.display()
+                                );
                                 create_default(path).await
                             }
                         }
@@ -253,7 +258,9 @@ impl Plugin for ConfigPlugin {
 
                 app.add_systems(
                     Startup,
-                    move |mut query: Query<&mut Window>, windows: NonSend<WinitWindows>| -> Result {
+                    move |mut query: Query<&mut Window>,
+                          windows: NonSend<WinitWindows>|
+                          -> Result {
                         let window = &mut *query.get_mut(id)?;
                         window.mode = mode;
                         window.visible = true;

@@ -15,7 +15,10 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     PIXELS_PER_UNIT,
-    logic::{CameraQuery, InGameState, Ldtk, LdtkEntityField, LdtkLayer, LdtkLayerData, LdtkLevel, LdtkTiles, LdtkWorld},
+    logic::{
+        CameraQuery, InGameState, Ldtk, LdtkEntityField, LdtkLayer, LdtkLayerData, LdtkLevel,
+        LdtkTiles, LdtkWorld,
+    },
 };
 
 #[derive(Debug, Clone, Resource, TypePath, Serialize, Deserialize, Deref, DerefMut)]
@@ -121,7 +124,8 @@ impl Fields {
     }
 
     pub fn point_px(&self, name: impl AsRef<str>) -> Result<UVec2, FieldError> {
-        self.point(name).map(|p| p * PIXELS_PER_UNIT + PIXELS_PER_UNIT / 2)
+        self.point(name)
+            .map(|p| p * PIXELS_PER_UNIT + PIXELS_PER_UNIT / 2)
     }
 }
 
@@ -187,14 +191,19 @@ impl RegisteredLevels {
             T::from_level(commands.entity(e), fields, param.into_inner(), data)
         }
 
-        self.0.insert(level.into(), world.register_system(spawn::<T>));
+        self.0
+            .insert(level.into(), world.register_system(spawn::<T>));
     }
 }
 
 #[derive(Debug, Clone, Default, Resource)]
 pub struct RegisteredLevelEntities(HashMap<String, SystemId<InRef<'static, [Entity]>, Result>>);
 impl RegisteredLevelEntities {
-    pub fn register<T: FromLevelEntity>(&mut self, world: &mut World, identifier: impl Into<String>) {
+    pub fn register<T: FromLevelEntity>(
+        &mut self,
+        world: &mut World,
+        identifier: impl Into<String>,
+    ) {
         fn spawn<T: FromLevelEntity>(
             InRef(e): InRef<[Entity]>,
             mut commands: Commands,
@@ -209,14 +218,22 @@ impl RegisteredLevelEntities {
             Ok(())
         }
 
-        self.0.insert(identifier.into(), world.register_system(spawn::<T>));
+        self.0
+            .insert(identifier.into(), world.register_system(spawn::<T>));
     }
 }
 
 #[derive(Debug, Clone, Default, Resource)]
-pub struct RegisteredLevelIntCells(HashMap<String, HashMap<u32, SystemId<InRef<'static, [Entity]>, Result>>>);
+pub struct RegisteredLevelIntCells(
+    HashMap<String, HashMap<u32, SystemId<InRef<'static, [Entity]>, Result>>>,
+);
 impl RegisteredLevelIntCells {
-    pub fn register<T: FromLevelIntCell>(&mut self, world: &mut World, layer: impl AsRef<str>, value: u32) {
+    pub fn register<T: FromLevelIntCell>(
+        &mut self,
+        world: &mut World,
+        layer: impl AsRef<str>,
+        value: u32,
+    ) {
         fn spawn<T: FromLevelIntCell>(
             InRef(e): InRef<[Entity]>,
             mut commands: Commands,
@@ -241,27 +258,47 @@ impl RegisteredLevelIntCells {
 pub trait LevelApp {
     fn register_level<T: FromLevel>(&mut self, level: impl Into<String>) -> &mut Self;
 
-    fn register_level_entity<T: FromLevelEntity>(&mut self, identifier: impl Into<String>) -> &mut Self;
+    fn register_level_entity<T: FromLevelEntity>(
+        &mut self,
+        identifier: impl Into<String>,
+    ) -> &mut Self;
 
-    fn register_level_int_cell<T: FromLevelIntCell>(&mut self, layer: impl AsRef<str>, value: u32) -> &mut Self;
+    fn register_level_int_cell<T: FromLevelIntCell>(
+        &mut self,
+        layer: impl AsRef<str>,
+        value: u32,
+    ) -> &mut Self;
 }
 
 impl LevelApp for App {
     fn register_level<T: FromLevel>(&mut self, level: impl Into<String>) -> &mut Self {
         self.world_mut()
-            .resource_scope(|world, mut entities: Mut<RegisteredLevels>| entities.register::<T>(world, level));
+            .resource_scope(|world, mut entities: Mut<RegisteredLevels>| {
+                entities.register::<T>(world, level)
+            });
         self
     }
 
-    fn register_level_entity<T: FromLevelEntity>(&mut self, identifier: impl Into<String>) -> &mut Self {
+    fn register_level_entity<T: FromLevelEntity>(
+        &mut self,
+        identifier: impl Into<String>,
+    ) -> &mut Self {
         self.world_mut()
-            .resource_scope(|world, mut entities: Mut<RegisteredLevelEntities>| entities.register::<T>(world, identifier));
+            .resource_scope(|world, mut entities: Mut<RegisteredLevelEntities>| {
+                entities.register::<T>(world, identifier)
+            });
         self
     }
 
-    fn register_level_int_cell<T: FromLevelIntCell>(&mut self, layer: impl AsRef<str>, value: u32) -> &mut Self {
+    fn register_level_int_cell<T: FromLevelIntCell>(
+        &mut self,
+        layer: impl AsRef<str>,
+        value: u32,
+    ) -> &mut Self {
         self.world_mut()
-            .resource_scope(|world, mut entities: Mut<RegisteredLevelIntCells>| entities.register::<T>(world, layer, value));
+            .resource_scope(|world, mut entities: Mut<RegisteredLevelIntCells>| {
+                entities.register::<T>(world, layer, value)
+            });
         self
     }
 }
@@ -274,8 +311,11 @@ pub fn handle_load_level_begin(
     mut state: ResMut<NextState<InGameState>>,
     to_be_unloaded: Query<(Entity, &Level), Without<LevelUnload>>,
 ) -> Result {
-    let Some(next) = next.as_ref().and_then(|next| next.is_changed().then_some(next.as_str())) else {
-        return Ok(())
+    let Some(next) = next
+        .as_ref()
+        .and_then(|next| next.is_changed().then_some(next.as_str()))
+    else {
+        return Ok(());
     };
 
     let mut identity = false;
@@ -290,10 +330,20 @@ pub fn handle_load_level_begin(
     }
 
     if !identity {
-        let handle = server.load(world.levels.get(next).ok_or_else(|| format!("Level {next} not found"))?);
+        let handle = server.load(
+            world
+                .levels
+                .get(next)
+                .ok_or_else(|| format!("Level {next} not found"))?,
+        );
         debug!(
             "Loading level {next} as entity {}!",
-            commands.spawn(Level { id: next.into(), handle }).id()
+            commands
+                .spawn(Level {
+                    id: next.into(),
+                    handle
+                })
+                .id()
         );
 
         state.set(InGameState::Loading);
@@ -342,7 +392,9 @@ pub fn handle_load_level_progress(
 
         for layer in &level_asset.layers {
             let mut layer_entity = commands.spawn((
-                LevelLayer { id: layer.id.clone() },
+                LevelLayer {
+                    id: layer.id.clone(),
+                },
                 Transform::default(),
                 Visibility::default(),
             ));
@@ -360,7 +412,9 @@ pub fn handle_load_level_progress(
                                             iid: e.iid,
                                         },
                                         Fields(e.fields.clone()),
-                                        Transform::from_translation(e.grid_position_px.as_vec2().extend(0.)),
+                                        Transform::from_translation(
+                                            e.grid_position_px.as_vec2().extend(0.),
+                                        ),
                                     ))
                                     .id(),
                             );
@@ -396,7 +450,12 @@ pub fn handle_load_level_progress(
     Ok(())
 }
 
-fn spawn_tilemap(layer_entity: &mut EntityCommands, tiles: &LdtkTiles, layer: &LdtkLayer, world: &Ldtk) -> Result {
+fn spawn_tilemap(
+    layer_entity: &mut EntityCommands,
+    tiles: &LdtkTiles,
+    layer: &LdtkLayer,
+    world: &Ldtk,
+) -> Result {
     let layer_entity_id = layer_entity.id();
     let tileset = world
         .tilesets
@@ -416,18 +475,23 @@ fn spawn_tilemap(layer_entity: &mut EntityCommands, tiles: &LdtkTiles, layer: &L
             storage.set(
                 &tile_pos,
                 layer_children
-                    .spawn((LevelTile { id: tile.id }, TileBundle {
-                        position: tile_pos,
-                        texture_index: TileTextureIndex(
-                            (tile.tileset_position_px.y * tileset.width + tile.tileset_position_px.x) / tileset.tile_size,
-                        ),
-                        tilemap_id: TilemapId(layer_entity_id),
-                        visible: default(),
-                        flip: default(),
-                        color: TileColor(Srgba::new(1., 1., 1., tile.alpha).into()),
-                        old_position: TilePosOld(tile_pos),
-                        sync: SyncToRenderWorld,
-                    }))
+                    .spawn((
+                        LevelTile { id: tile.id },
+                        TileBundle {
+                            position: tile_pos,
+                            texture_index: TileTextureIndex(
+                                (tile.tileset_position_px.y * tileset.width
+                                    + tile.tileset_position_px.x)
+                                    / tileset.tile_size,
+                            ),
+                            tilemap_id: TilemapId(layer_entity_id),
+                            visible: default(),
+                            flip: default(),
+                            color: TileColor(Srgba::new(1., 1., 1., tile.alpha).into()),
+                            old_position: TilePosOld(tile_pos),
+                            sync: SyncToRenderWorld,
+                        },
+                    ))
                     .id(),
             );
         }
@@ -493,8 +557,8 @@ pub fn handle_load_level_end(
     ) = state.get_mut(world);
 
     for (layer, layer_children, child_of) in &spawned_layers {
-        if let Ok(level) = levels.get(child_of.parent()) &&
-            let Some(&creator) = level_creators.0.get(&level.id)
+        if let Ok(level) = levels.get(child_of.parent())
+            && let Some(&creator) = level_creators.0.get(&level.id)
         {
             level_targets.insert((creator, child_of.parent()));
         }

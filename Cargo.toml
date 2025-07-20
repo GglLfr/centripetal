@@ -17,6 +17,7 @@ directories = "6"
 fastrand = "2"
 guillotiere = "0.6"
 iyes_progress = { version = "0.14", features = ["assets", "async"] }
+log = { version = "*", features = ["max_level_debug", "release_max_level_warn"] }
 mimalloc-redirect = "0.1"
 num-traits = "0.2"
 seldom_state = "0.14"
