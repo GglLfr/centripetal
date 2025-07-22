@@ -147,7 +147,9 @@ pub fn update_launch_charging(
         &mut LaunchCharging,
     )>,
 ) {
+    let now = time.elapsed();
     let delta = time.delta();
+
     for (e, action, durations, mut charging) in &mut charging {
         let Some(&duration) = durations.get(charging.index) else {
             continue;
@@ -161,9 +163,17 @@ pub fn update_launch_charging(
                     .insert(LaunchFinished {
                         index: charging.index - 1,
                     });
-
-                continue;
+            } else {
+                commands
+                    .entity(e)
+                    .remove::<LaunchCharging>()
+                    .insert(LaunchIdle {
+                        last_attempted: now,
+                    })
+                    .trigger(LaunchCancelled);
             }
+
+            continue;
         }
 
         charging.time += delta;

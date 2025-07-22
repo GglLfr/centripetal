@@ -8,9 +8,9 @@ use crate::logic::{
     LevelApp, LevelBounds, LevelUnload,
     entities::penumbra::{
         AttractedAction, Attractor, GenericPenumbra, LaunchAction, SelenePenumbra, ThornPillar,
-        ThornRing, apply_attractor_accels, detect_attracted_entities, predict_attract_trajectory,
-        remove_attracted_initials, trigger_launch_charging, update_launch_charging,
-        update_launch_idle,
+        ThornRing, apply_attractor_accels, detect_attracted_entities, draw_selene_launch_disc,
+        predict_attract_trajectory, remove_attracted_initials, trigger_launch_charging,
+        update_launch_charging, update_launch_idle,
     },
 };
 
@@ -172,6 +172,10 @@ impl Plugin for EntitiesPlugin {
         .register_level_entity::<ThornPillar>("thorn_pillar")
         .register_level_entity::<ThornRing>("thorn_ring")
         .add_systems(Update, (update_launch_idle, update_launch_charging))
+        .add_systems(
+            FixedPostUpdate,
+            draw_selene_launch_disc.after(PhysicsSet::StepSimulation),
+        )
         .add_systems(
             SubstepSchedule,
             apply_attractor_accels

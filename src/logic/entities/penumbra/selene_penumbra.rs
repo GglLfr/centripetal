@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::{f32::consts::PI, time::Duration};
 
 use avian2d::prelude::*;
 use bevy::{
@@ -7,6 +7,11 @@ use bevy::{
         system::{SystemParamItem, lifetimeless::SRes},
     },
     prelude::*,
+};
+use bevy_vector_shapes::{
+    prelude::*,
+    render::ShapePipelineType,
+    shapes::{DiscComponent, FillType, ShapeAlphaMode, ShapeFill, ShapeMaterial, ThicknessType},
 };
 
 use crate::{
@@ -17,8 +22,8 @@ use crate::{
         entities::{
             Health, Hurt, MaxHealth,
             penumbra::{
-                AttractedInitial, AttractedParams, AttractedPrediction, LaunchCooldown,
-                LaunchDurations, LaunchTarget, Launched, PenumbraEntity,
+                AttractedInitial, AttractedParams, AttractedPrediction, LaunchCharging,
+                LaunchCooldown, LaunchDurations, LaunchTarget, Launched, PenumbraEntity,
             },
         },
     },
@@ -49,18 +54,21 @@ pub struct LaunchDisc;
     Health::new(10),
     MaxHealth::new(10),
     Collider::circle(5.),
+
 )]
 pub struct SelenePenumbra;
 impl FromLevelEntity for SelenePenumbra {
-    type Param = SRes<Sprites>;
+    type Param = (SRes<Sprites>, ShapeCommands<'static, 'static>);
     type Data = ();
 
     fn from_level_entity(
         mut e: EntityCommands,
         fields: &Fields,
-        sprites: &mut SystemParamItem<Self::Param>,
+        (sprites, shapes): &mut SystemParamItem<Self::Param>,
         _: QueryItem<Self::Data>,
     ) -> Result {
+        shapes.cap = Cap::None;
+
         let ccw = fields.bool("ccw")?;
         e.insert((
             Self,
@@ -68,6 +76,18 @@ impl FromLevelEntity for SelenePenumbra {
             Animation::new(sprites.selene_penumbra.clone_weak(), "anim"),
             AnimationMode::Repeat,
             EntityColor(Color::linear_rgba(1., 2., 24., 1.)),
+            DiscComponent::arc(shapes.config(), 12., 0., 0.),
+            ShapeMaterial {
+                alpha_mode: ShapeAlphaMode::Blend,
+                disable_laa: true,
+                pipeline: ShapePipelineType::Shape2d,
+                canvas: None,
+                texture: None,
+            },
+            ShapeFill {
+                color: Color::NONE,
+                ty: FillType::Stroke(0., ThicknessType::World),
+            },
             DebugRender::none(),
         ))
         .observe(on_selene_launch)
@@ -77,7 +97,52 @@ impl FromLevelEntity for SelenePenumbra {
     }
 }
 
-pub fn draw_launch_disc() {}
+pub fn draw_selene_launch_disc(
+    mut selene: Query<(
+        &Rotation,
+        &mut DiscComponent,
+        &mut ShapeFill,
+        &LaunchDurations,
+        Option<&LaunchCharging>,
+    )>,
+) {
+    for (&rot, mut disc, mut fill, durations, charging) in &mut selene {
+        let rot = rot.as_radians();
+        disc.start_angle = rot;
+
+        if let Some(&charging) = charging
+            && let Some(&duration) = durations.get(charging.index)
+        {
+            let len = durations.len();
+            let arc_frac = 2. * PI / len as f32;
+            let f = charging.time.div_duration_f32(duration);
+
+            disc.cap = Cap::Round;
+            *fill = ShapeFill {
+                color: match charging.index.checked_sub(1) {
+                    None => Color::linear_rgba(1., 2., 4., f),
+                    Some(0) => Color::linear_rgba(1., 2., 4., 1.),
+                    Some(1) => Color::linear_rgba(4., 1., 2., 1.),
+                    _ => Color::NONE,
+                },
+                ty: FillType::Stroke(
+                    match charging.index.checked_sub(1) {
+                        None => 1.,
+                        Some(0) => 1.5,
+                        Some(1) => 2.,
+                        _ => 0.,
+                    },
+                    ThicknessType::World,
+                ),
+            };
+
+            disc.end_angle = f * arc_frac + charging.index as f32 * arc_frac + rot;
+        } else {
+            disc.cap = Cap::None;
+            disc.end_angle = rot;
+        }
+    }
+}
 
 pub fn on_selene_hurt(trigger: Trigger<Hurt>) {
     debug!(
