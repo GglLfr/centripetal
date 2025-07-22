@@ -32,7 +32,6 @@ impl FromLevelEntity for GenericPenumbra {
             Quat::from_axis_angle(Vec3::Z, (facing - trns.translation.truncate()).to_angle());
         e.insert((Self, AttractedInitial { ccw }, Collider::circle(5.)));
 
-        debug!("Spawned generic penumbra entity {}!", e.id());
         Ok(())
     }
 }

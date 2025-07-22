@@ -1,15 +1,13 @@
-use std::time::Duration;
-
 use avian2d::{dynamics::solver::solver_body::SolverBody, prelude::*};
 use bevy::{
     ecs::{
         query::QueryItem,
-        system::{IntoObserverSystem, ObserverSystem, SystemParamItem, lifetimeless::SRes},
+        system::{SystemParamItem, lifetimeless::SRes},
     },
-    math::{FloatOrd, VectorSpace},
+    math::VectorSpace,
     prelude::*,
 };
-use leafwing_input_manager::{buttonlike::ButtonState, prelude::*};
+use leafwing_input_manager::prelude::*;
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -17,7 +15,10 @@ use crate::{
     graphics::{Animation, AnimationMode, EntityColor},
     logic::{
         Fields, FromLevelEntity,
-        entities::{TryHurt, penumbra::PenumbraEntity},
+        entities::{
+            TryHurt,
+            penumbra::{LaunchTarget, PenumbraEntity},
+        },
     },
 };
 
@@ -67,7 +68,6 @@ impl FromLevelEntity for Attractor {
             },
         );
 
-        debug!("Spawned attractor {}!", e.id());
         Ok(())
     }
 }
@@ -92,183 +92,17 @@ pub enum AttractedAction {
     #[actionlike(Axis)]
     Hover,
     Precise,
-    Launch,
     Parry,
 }
 
 #[derive(Debug, Clone, Component)]
-#[require(ActionState<AttractedAction>, AttractedLaunching)]
+#[require(ActionState<AttractedAction>)]
 pub struct AttractedParams {
     pub ascend: f32,
     pub descend: f32,
     pub prograde: f32,
     pub retrograde: f32,
     pub precise_scale: f32,
-    pub launches: Vec<AttractedLaunch>,
-    pub launch_cooldown: Duration,
-}
-
-#[derive(Debug, Clone, Component)]
-#[component(immutable)]
-pub enum AttractedLaunching {
-    Idle { last_launched: Duration },
-    Charging { started: Duration },
-    Launch { target: AttractedLaunch },
-}
-
-impl Default for AttractedLaunching {
-    fn default() -> Self {
-        Self::Idle {
-            last_launched: Duration::ZERO,
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct AttractedLaunch {
-    pub charge: Duration,
-    pub damage: u32,
-}
-
-#[derive(Debug, Clone)]
-pub struct LaunchCommand {
-    pub target: AttractedLaunch,
-    pub launcher_entity: Entity,
-    pub launcher_pos: Vec2,
-    pub attractor_entity: Entity,
-    pub attractor_pos: Vec2,
-    hits: Vec<RayHitData>,
-}
-
-impl EntityCommand for LaunchCommand {
-    fn apply(mut self, mut entity: EntityWorldMut) {
-        let hits = std::mem::take(&mut self.hits);
-        let mut trigger = OnLaunch {
-            command: self,
-            hit: None,
-            stopped: false,
-        };
-
-        entity.world_scope(|world| {
-            for (i, &hit) in hits.iter().enumerate() {
-                trigger.hit = Some((i, hit));
-                world.trigger_targets_ref(&mut trigger, hit.entity);
-
-                if trigger.stopped {
-                    return;
-                }
-            }
-        });
-
-        if !trigger.stopped {
-            entity.trigger(trigger);
-        }
-    }
-}
-
-#[derive(Debug, Clone, Event, Deref)]
-pub struct OnLaunch {
-    #[deref]
-    command: LaunchCommand,
-    pub hit: Option<(usize, RayHitData)>,
-    pub stopped: bool,
-}
-
-impl OnLaunch {
-    pub fn collide(
-        stop: bool,
-        mut apply: impl FnMut(EntityCommands, Entity) + 'static + Send + Sync,
-    ) -> impl ObserverSystem<Self, ()> {
-        IntoObserverSystem::<Self, (), _>::into_system(
-            move |mut trigger: Trigger<Self>, mut commands: Commands| {
-                if stop {
-                    trigger.event_mut().stopped = true;
-                }
-
-                apply(
-                    commands.entity(trigger.event().command.launcher_entity),
-                    trigger.target(),
-                );
-            },
-        )
-    }
-}
-
-pub fn update_attracted_launching(
-    mut commands: Commands,
-    time: Res<Time>,
-    launches: Query<(
-        Entity,
-        &AttractedParams,
-        &ActionState<AttractedAction>,
-        &AttractedLaunching,
-    )>,
-) {
-    let now = time.elapsed();
-    for (e, param, state, launching) in &launches {
-        if param.launches.is_empty() {
-            continue;
-        }
-
-        let Some(data) = state.button_data(&AttractedAction::Launch) else {
-            continue;
-        };
-        let target = if let &AttractedLaunching::Charging { started } = launching {
-            let mut duration = now - started;
-            let mut target = None;
-            let mut i = 0;
-
-            while let Some(launch) = param.launches.get(i)
-                && launch.charge <= duration
-            {
-                i += 1;
-                duration -= launch.charge;
-                target = Some(launch);
-            }
-
-            let overcharged = param.launches.get(i + 1).is_none() && !duration.is_zero();
-            target.cloned().zip(Some(overcharged))
-        } else {
-            None
-        };
-
-        commands.entity(e).insert(
-            match (
-                if state.action_disabled(&AttractedAction::Launch) {
-                    ButtonState::Released
-                } else {
-                    data.state
-                },
-                target,
-                launching,
-            ) {
-                (
-                    ButtonState::JustPressed,
-                    None,
-                    AttractedLaunching::Idle {
-                        last_launched: last,
-                    },
-                ) if now - *last >= param.launch_cooldown => {
-                    AttractedLaunching::Charging { started: now }
-                }
-                (
-                    ButtonState::Pressed,
-                    Some((target, true)),
-                    AttractedLaunching::Charging { .. },
-                )
-                | (
-                    ButtonState::JustReleased,
-                    Some((target, ..)),
-                    AttractedLaunching::Charging { .. },
-                ) => AttractedLaunching::Launch { target },
-                (ButtonState::Released, Some(..), AttractedLaunching::Charging { .. })
-                | (ButtonState::JustReleased, .., AttractedLaunching::Charging { .. }) => {
-                    AttractedLaunching::Idle { last_launched: now }
-                }
-                _ => continue,
-            },
-        );
-    }
 }
 
 pub fn draw_attractor_radius(mut gizmos: Gizmos, attractors: Query<(&Position, &Attractor)>) {
@@ -284,8 +118,6 @@ pub fn draw_attractor_radius(mut gizmos: Gizmos, attractors: Query<(&Position, &
 }
 
 pub fn detect_attracted_entities(
-    mut commands: Commands,
-    time: Res<Time>,
     pipeline: Res<SpatialQueryPipeline>,
     mut attractors: Query<(Entity, &Position, &Attractor, &mut AttractorEntities)>,
     mut penumbra_bodies: Query<
@@ -293,14 +125,13 @@ pub fn detect_attracted_entities(
             Entity,
             &Position,
             &mut LinearVelocity,
-            Option<&AttractedLaunching>,
+            Option<&mut LaunchTarget>,
             Option<&AttractedInitial>,
         ),
         With<PenumbraEntity>,
     >,
     mut tmp: Local<Vec<Entity>>,
 ) {
-    let now = time.elapsed();
     for (attractor_entity, &attractor_pos, attractor, mut attracted) in &mut attractors {
         tmp.clear();
         pipeline.shape_intersections_callback(
@@ -309,7 +140,7 @@ pub fn detect_attracted_entities(
             0.,
             &SpatialQueryFilter::from_excluded_entities([attractor_entity]),
             |e| {
-                if let Ok((e, &pos, mut linvel, launching, initial)) = penumbra_bodies.get_mut(e) {
+                if let Ok((e, &pos, mut linvel, target, initial)) = penumbra_bodies.get_mut(e) {
                     let r_vec = *attractor_pos - *pos;
                     let r = r_vec.length();
 
@@ -324,35 +155,8 @@ pub fn detect_attracted_entities(
                         **linvel += initial_velocity;
                     }
 
-                    if let Some(AttractedLaunching::Launch { target }) = launching {
-                        commands
-                            .entity(e)
-                            .insert(AttractedLaunching::Idle { last_launched: now });
-
-                        let Ok(dir) = Dir2::new(r_vec) else {
-                            return true;
-                        };
-                        let mut hits = pipeline.ray_hits(
-                            *pos,
-                            dir,
-                            r,
-                            u32::MAX,
-                            true,
-                            &SpatialQueryFilter {
-                                excluded_entities: [e, attractor_entity].into_iter().collect(),
-                                ..SpatialQueryFilter::DEFAULT
-                            },
-                        );
-
-                        hits.sort_unstable_by_key(|data| FloatOrd(data.distance));
-                        commands.entity(e).queue(LaunchCommand {
-                            target: target.clone(),
-                            launcher_entity: e,
-                            launcher_pos: *pos,
-                            attractor_entity,
-                            attractor_pos: *attractor_pos,
-                            hits,
-                        });
+                    if let Some(mut target) = target {
+                        **target = Some(attractor_entity);
                     }
 
                     tmp.push(e);
@@ -381,11 +185,7 @@ pub fn apply_attractor_accels(
     mut attracted: Query<(
         &Position,
         &mut SolverBody,
-        Option<(
-            &AttractedParams,
-            &AttractedLaunching,
-            &ActionState<AttractedAction>,
-        )>,
+        Option<(&AttractedParams, &ActionState<AttractedAction>)>,
     )>,
 ) {
     let dt = time.delta_secs();
@@ -410,7 +210,7 @@ pub fn apply_attractor_accels(
             let crs = r_vec.x * linear_velocity.y - r_vec.y * linear_velocity.x;
             *angular_velocity = -(crs / (r * r));
 
-            if let Some((param, AttractedLaunching::Idle { .. }, state)) = hover {
+            if let Some((param, state)) = hover {
                 let precise_scale = if state.pressed(&AttractedAction::Precise) {
                     param.precise_scale
                 } else {

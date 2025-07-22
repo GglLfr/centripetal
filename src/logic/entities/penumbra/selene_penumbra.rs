@@ -17,20 +17,38 @@ use crate::{
         entities::{
             Health, Hurt, MaxHealth,
             penumbra::{
-                AttractedInitial, AttractedLaunch, AttractedParams, AttractedPrediction, OnLaunch,
-                PenumbraEntity,
+                AttractedInitial, AttractedParams, AttractedPrediction, LaunchCooldown,
+                LaunchDurations, LaunchTarget, Launched, PenumbraEntity,
             },
         },
     },
 };
 
 #[derive(Debug, Copy, Clone, Default, Component)]
+pub struct LaunchDisc;
+
+#[derive(Debug, Copy, Clone, Default, Component)]
 #[require(
-    Health::new(10),
-    MaxHealth::new(10),
     IsPlayer,
     CameraTarget,
-    PenumbraEntity
+    PenumbraEntity,
+    LaunchTarget,
+    AttractedParams {
+        ascend: 240.,
+        descend: 240.,
+        prograde: 80.,
+        retrograde: 80.,
+        precise_scale: 1. / 5.,
+    },
+    AttractedPrediction {
+        points: Vec::new(),
+        max_distance: 480.,
+    },
+    LaunchDurations([250, 500, 750].into_iter().map(Duration::from_millis).collect()),
+    LaunchCooldown(Duration::from_secs(1)),
+    Health::new(10),
+    MaxHealth::new(10),
+    Collider::circle(5.),
 )]
 pub struct SelenePenumbra;
 impl FromLevelEntity for SelenePenumbra {
@@ -47,33 +65,6 @@ impl FromLevelEntity for SelenePenumbra {
         e.insert((
             Self,
             AttractedInitial { ccw },
-            AttractedParams {
-                ascend: 240.,
-                descend: 240.,
-                prograde: 80.,
-                retrograde: 80.,
-                precise_scale: 1. / 5.,
-                launches: vec![
-                    AttractedLaunch {
-                        charge: Duration::from_millis(250),
-                        damage: 1,
-                    },
-                    AttractedLaunch {
-                        charge: Duration::from_millis(500),
-                        damage: 4,
-                    },
-                    AttractedLaunch {
-                        charge: Duration::from_millis(750),
-                        damage: 8,
-                    },
-                ],
-                launch_cooldown: Duration::from_secs(1),
-            },
-            AttractedPrediction {
-                points: Vec::new(),
-                max_distance: 480.,
-            },
-            Collider::circle(5.),
             Animation::new(sprites.selene_penumbra.clone_weak(), "anim"),
             AnimationMode::Repeat,
             EntityColor(Color::linear_rgba(1., 2., 24., 1.)),
@@ -82,10 +73,11 @@ impl FromLevelEntity for SelenePenumbra {
         .observe(on_selene_launch)
         .observe(on_selene_hurt);
 
-        debug!("Spawned Selene {}!", e.id());
         Ok(())
     }
 }
+
+pub fn draw_launch_disc() {}
 
 pub fn on_selene_hurt(trigger: Trigger<Hurt>) {
     debug!(
@@ -95,7 +87,7 @@ pub fn on_selene_hurt(trigger: Trigger<Hurt>) {
     );
 }
 
-pub fn on_selene_launch(trigger: Trigger<OnLaunch>) {
+pub fn on_selene_launch(trigger: Trigger<Launched>) {
     debug!(
         "Selene ({}) launched without obstruction!",
         trigger.target()

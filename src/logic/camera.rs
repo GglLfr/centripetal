@@ -149,10 +149,7 @@ unsafe impl<D: 'static + QueryData> SystemParam for CameraQuery<'_, D> {
 pub struct MainCamera;
 
 pub fn startup_camera(mut commands: Commands) {
-    debug!(
-        "Spawned `MainCamera` as entity {}!",
-        commands.spawn(MainCamera).id()
-    );
+    commands.spawn(MainCamera);
 }
 
 pub fn move_camera(

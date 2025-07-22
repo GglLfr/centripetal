@@ -7,6 +7,7 @@ use bevy::{log::LogPlugin, prelude::*};
 use bevy_asset_loader::prelude::*;
 use bevy_ecs_tilemap::prelude::*;
 use bevy_framepace::FramepacePlugin;
+use bevy_vector_shapes::prelude::*;
 use iyes_progress::prelude::*;
 use seldom_state::prelude::*;
 
@@ -57,6 +58,7 @@ fn main() -> AppExit {
             StateMachinePlugin::default(),
             TilemapPlugin,
             FramepacePlugin,
+            Shape2dPlugin::default(),
             ConfigPlugin,
             SavePlugin,
             GraphicsPlugin,

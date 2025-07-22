@@ -5,7 +5,10 @@ use bevy::{
 use leafwing_input_manager::prelude::*;
 use serde::{Deserialize, Serialize};
 
-use crate::{Config, PlayerKeybinds, logic::entities::penumbra::AttractedAction};
+use crate::{
+    Config, PlayerKeybinds,
+    logic::entities::penumbra::{AttractedAction, LaunchAction},
+};
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Reflect, Actionlike, Serialize, Deserialize)]
 pub enum PlayerAction {
@@ -15,7 +18,7 @@ pub enum PlayerAction {
 }
 
 #[derive(Debug, Copy, Clone, Default, Component)]
-#[require(InputMap<PlayerAction>, InputMap<AttractedAction>)]
+#[require(InputMap<PlayerAction>, InputMap<AttractedAction>, InputMap<LaunchAction>)]
 #[component(on_insert = sync_input_map)]
 pub struct IsPlayer;
 pub fn sync_input_map(mut world: DeferredWorld, HookContext { entity, .. }: HookContext) {
@@ -23,6 +26,5 @@ pub fn sync_input_map(mut world: DeferredWorld, HookContext { entity, .. }: Hook
     let mut e = world.entity_mut(entity);
     *e.get_mut::<InputMap<PlayerAction>>().unwrap() = keybinds.player;
     *e.get_mut::<InputMap<AttractedAction>>().unwrap() = keybinds.attracted;
-
-    debug!("Synchronized player input map!");
+    *e.get_mut::<InputMap<LaunchAction>>().unwrap() = keybinds.launch;
 }

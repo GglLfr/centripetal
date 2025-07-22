@@ -10,8 +10,8 @@ use bevy::{
 use crate::logic::{
     Fields, FromLevelEntity,
     entities::{
-        Hurt,
-        penumbra::{AttractedInitial, OnLaunch, PenumbraEntity},
+        TryHurt,
+        penumbra::{AttractedInitial, PenumbraEntity, TryLaunch},
     },
 };
 
@@ -50,11 +50,15 @@ impl FromLevelEntity for ThornRing {
             AttractedInitial { ccw },
             Collider::polyline(vertices, None),
         ))
-        .observe(OnLaunch::collide(true, |mut e, by| {
-            e.trigger(Hurt::by(by, 1));
-        }));
+        .observe(|mut trigger: Trigger<TryLaunch>, mut commands: Commands| {
+            if trigger.by() != trigger.target() {
+                trigger.event_mut().stop();
+                commands
+                    .entity(trigger.by())
+                    .queue(TryHurt::by(trigger.target(), 1));
+            }
+        });
 
-        debug!("Spawned thorn ring {}!", e.id());
         Ok(())
     }
 }

@@ -11,16 +11,21 @@ async-fs = "2"
 bevy_asset_loader = { version = "0.23", features = ["progress_tracking"] }
 bevy_ecs_tilemap = { version = "0.16", features = ["atlas"] }
 bevy_framepace = "0.19"
+bevy_vector_shapes = "0.10.0"
 blocking = "1"
+bytemuck = { version = "1", features = ["derive"] }
 derive_more = { version = "2", features = ["error", "from", "display"] }
 directories = "6"
 fastrand = "2"
 guillotiere = "0.6"
 iyes_progress = { version = "0.14", features = ["assets", "async"] }
-log = { version = "*", features = ["max_level_debug", "release_max_level_warn"] }
+log = { version = "*", features = [
+    "max_level_debug",
+    "release_max_level_warn",
+] }
 mimalloc-redirect = "0.1"
 num-traits = "0.2"
-seldom_state = "0.14"
+seldom_state = { version = "0.14", features = ["leafwing_input"] }
 serde = { version = "1", features = ["derive"] }
 serde_flexitos = "0.2"
 serde_json = "1"
@@ -29,13 +34,7 @@ vec-belt = "1"
 [dependencies.avian2d]
 version = "0.3"
 default-features = false
-features = [
-    "2d",
-    "f32",
-    "parry-f32",
-    "debug-plugin",
-    "parallel",
-]
+features = ["2d", "f32", "parry-f32", "debug-plugin", "parallel"]
 
 [dependencies.bevy]
 version = "0.16"
@@ -48,6 +47,7 @@ features = [
     "x11",
     "wayland",
     "png",
+    "tonemapping_luts",
     "bevy_asset",
     "bevy_color",
     "bevy_core_pipeline",
@@ -66,11 +66,7 @@ features = [
 [dependencies.leafwing-input-manager]
 version = "0.17"
 default-features = false
-features = [
-    "keyboard",
-    "mouse",
-    "picking",
-]
+features = ["keyboard", "mouse", "picking"]
 
 [features]
 default = ["bevy_dynamic", "dev"]

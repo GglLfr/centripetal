@@ -324,7 +324,6 @@ pub fn handle_load_level_begin(
             warn!("Tried reloading level {next}, ignoring!");
             identity = true;
         } else {
-            debug!("Unloading level entity {e}.");
             commands.entity(e).insert(LevelUnload);
         }
     }
@@ -336,15 +335,11 @@ pub fn handle_load_level_begin(
                 .get(next)
                 .ok_or_else(|| format!("Level {next} not found"))?,
         );
-        debug!(
-            "Loading level {next} as entity {}!",
-            commands
-                .spawn(Level {
-                    id: next.into(),
-                    handle
-                })
-                .id()
-        );
+
+        commands.spawn(Level {
+            id: next.into(),
+            handle,
+        });
 
         state.set(InGameState::Loading);
     }
@@ -377,8 +372,6 @@ pub fn handle_load_level_progress(
     }
 
     if done && !std::mem::replace(&mut spawned.0, true) {
-        debug!("Loaded level entity {e}!");
-
         let level_asset = levels.get(&level.handle).ok_or("Level asset unloaded")?;
         camera.clear_color = ClearColorConfig::Custom(level_asset.bg_color);
 
@@ -599,7 +592,5 @@ pub fn handle_load_level_end(
     }
 
     world.flush();
-    debug!("All levels have been loaded!");
-
     Ok(())
 }

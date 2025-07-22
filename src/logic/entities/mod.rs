@@ -7,9 +7,10 @@ use crate::logic::entities::penumbra::{draw_attract_trajectory, draw_attractor_r
 use crate::logic::{
     LevelApp, LevelBounds, LevelUnload,
     entities::penumbra::{
-        AttractedAction, Attractor, GenericPenumbra, SelenePenumbra, ThornPillar, ThornRing,
-        apply_attractor_accels, detect_attracted_entities, predict_attract_trajectory,
-        remove_attracted_initials, update_attracted_launching,
+        AttractedAction, Attractor, GenericPenumbra, LaunchAction, SelenePenumbra, ThornPillar,
+        ThornRing, apply_attractor_accels, detect_attracted_entities, predict_attract_trajectory,
+        remove_attracted_initials, trigger_launch_charging, update_launch_charging,
+        update_launch_idle,
     },
 };
 
@@ -161,32 +162,36 @@ pub fn kill_out_of_bounds(
 pub struct EntitiesPlugin;
 impl Plugin for EntitiesPlugin {
     fn build(&self, app: &mut App) {
-        app.add_plugins(InputManagerPlugin::<AttractedAction>::default())
-            .register_level_entity::<Attractor>("attractor")
-            .register_level_entity::<SelenePenumbra>("selene_penumbra")
-            .register_level_entity::<GenericPenumbra>("generic_penumbra")
-            .register_level_entity::<ThornPillar>("thorn_pillar")
-            .register_level_entity::<ThornRing>("thorn_ring")
-            .add_systems(Update, update_attracted_launching)
-            .add_systems(
-                SubstepSchedule,
-                apply_attractor_accels
-                    .in_set(IntegrationSet::Velocity)
-                    .ambiguous_with_all(),
-            )
-            .add_systems(
-                PhysicsSchedule,
+        app.add_plugins((
+            InputManagerPlugin::<AttractedAction>::default(),
+            InputManagerPlugin::<LaunchAction>::default(),
+        ))
+        .register_level_entity::<Attractor>("attractor")
+        .register_level_entity::<SelenePenumbra>("selene_penumbra")
+        .register_level_entity::<GenericPenumbra>("generic_penumbra")
+        .register_level_entity::<ThornPillar>("thorn_pillar")
+        .register_level_entity::<ThornRing>("thorn_ring")
+        .add_systems(Update, (update_launch_idle, update_launch_charging))
+        .add_systems(
+            SubstepSchedule,
+            apply_attractor_accels
+                .in_set(IntegrationSet::Velocity)
+                .ambiguous_with_all(),
+        )
+        .add_systems(
+            PhysicsSchedule,
+            (
+                predict_attract_trajectory.after(SolverSet::Finalize),
                 (
-                    predict_attract_trajectory.after(SolverSet::Finalize),
-                    (
-                        (detect_attracted_entities, remove_attracted_initials).chain(),
-                        kill_out_of_bounds,
-                    )
-                        .in_set(PhysicsStepSet::SpatialQuery)
-                        .after(update_spatial_query_pipeline),
+                    (detect_attracted_entities, remove_attracted_initials).chain(),
+                    trigger_launch_charging,
+                    kill_out_of_bounds,
                 )
-                    .ambiguous_with_all(),
-            );
+                    .in_set(PhysicsStepSet::SpatialQuery)
+                    .after(update_spatial_query_pipeline),
+            )
+                .ambiguous_with_all(),
+        );
 
         #[cfg(feature = "dev")]
         app.add_systems(Update, (draw_attractor_radius, draw_attract_trajectory));

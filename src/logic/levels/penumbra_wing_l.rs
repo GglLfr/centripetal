@@ -26,7 +26,7 @@ use crate::{
         Timed,
         entities::{
             Health, Killed, NoKillDespawn,
-            penumbra::{AttractedAction, AttractedInitial, AttractedPrediction},
+            penumbra::{AttractedAction, AttractedInitial, AttractedPrediction, LaunchAction},
         },
         levels::in_level,
     },
@@ -235,13 +235,15 @@ impl FromLevel for Instance {
                         e.commands()
                             .entity(selene)
                             .queue(|mut e: EntityWorldMut| -> Result {
-                                let mut action = e
-                                    .get_mut::<ActionState<AttractedAction>>()
-                                    .ok_or("`ActionState<AttractedAction>` not found")?;
-
                                 // Only `Hover` and `Accel` are enabled initially.
-                                action.disable_action(&AttractedAction::Launch);
-                                action.disable_action(&AttractedAction::Parry);
+                                e.get_mut::<ActionState<AttractedAction>>()
+                                    .ok_or("`ActionState<AttractedAction>` not found")?
+                                    .disable_action(&AttractedAction::Parry);
+
+                                /*e.get_mut::<ActionState<LaunchAction>>()
+                                .ok_or("`ActionState<LaunchAction>` not found")?
+                                .disable_action(&LaunchAction);*/
+
                                 Ok(())
                             });
 
@@ -276,9 +278,9 @@ impl FromLevel for Instance {
                     .on_exit::<TutorialMove>(move |e| {
                         e.commands().entity(hover_target).despawn();
                         e.commands().entity(selene).queue(|mut e: EntityWorldMut| {
-                            e.get_mut::<ActionState<AttractedAction>>()
-                                .expect("`ActionState<AttractedAction>` not found in Selene")
-                                .enable_action(&AttractedAction::Launch)
+                            e.get_mut::<ActionState<LaunchAction>>()
+                                .expect("`ActionState<LaunchAction>` not found in Selene")
+                                .enable_action(&LaunchAction)
                         });
                     })
                     .trans::<TutorialMove, _>(
@@ -297,7 +299,6 @@ impl FromLevel for Instance {
                     )
                     .trans::<TutorialLaunch, _>(done(Some(Done::Success)), TutorialParry),
             ));
-            debug!("Loaded left-wing side Penumbra level (+ intro cutscene)!");
         } else {
             todo!("Revisit this level for the non-intro variant...")
         }
