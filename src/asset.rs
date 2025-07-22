@@ -26,6 +26,8 @@ pub struct Sprites {
     // Entities.
     #[asset(path = "entities/attractor/regular.json")]
     pub attractor_regular: Handle<SpriteSheet>,
+    #[asset(path = "entities/attractor/slash.json")]
+    pub attractor_slash: Handle<SpriteSheet>,
     #[asset(path = "entities/attractor/spawn.json")]
     pub attractor_spawn: Handle<SpriteSheet>,
     #[asset(path = "entities/selene/selene.json")]

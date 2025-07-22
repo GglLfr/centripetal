@@ -88,7 +88,10 @@ impl EntityCommand<Result> for TryLaunch {
         });
 
         if stopped_by == Entity::PLACEHOLDER {
-            entity.trigger(Launched { index: self.index });
+            entity.trigger(Launched {
+                at: self.at,
+                index: self.index,
+            });
         } else {
             entity.trigger(LaunchFailed { stopped_by });
         }
@@ -107,6 +110,7 @@ pub struct LaunchCancelled;
 
 #[derive(Debug, Clone, Event)]
 pub struct Launched {
+    pub at: Entity,
     pub index: usize,
 }
 

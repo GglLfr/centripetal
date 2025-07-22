@@ -240,9 +240,9 @@ impl FromLevel for Instance {
                                     .ok_or("`ActionState<AttractedAction>` not found")?
                                     .disable_action(&AttractedAction::Parry);
 
-                                /*e.get_mut::<ActionState<LaunchAction>>()
-                                .ok_or("`ActionState<LaunchAction>` not found")?
-                                .disable_action(&LaunchAction);*/
+                                e.get_mut::<ActionState<LaunchAction>>()
+                                    .ok_or("`ActionState<LaunchAction>` not found")?
+                                    .disable_action(&LaunchAction);
 
                                 Ok(())
                             });

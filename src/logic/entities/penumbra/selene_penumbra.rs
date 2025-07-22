@@ -18,19 +18,23 @@ use crate::{
     Sprites,
     graphics::{Animation, AnimationMode, EntityColor},
     logic::{
-        CameraTarget, Fields, FromLevelEntity, IsPlayer,
+        CameraTarget, Fields, FromLevelEntity, IsPlayer, Timed,
         entities::{
-            Health, Hurt, MaxHealth,
+            Health, MaxHealth,
             penumbra::{
                 AttractedInitial, AttractedParams, AttractedPrediction, LaunchCharging,
                 LaunchCooldown, LaunchDurations, LaunchTarget, Launched, PenumbraEntity,
             },
         },
     },
+    math::FloatExt,
 };
 
 #[derive(Debug, Copy, Clone, Default, Component)]
 pub struct LaunchDisc;
+
+#[derive(Debug, Copy, Clone, Default, Component)]
+pub struct SlashEffect;
 
 #[derive(Debug, Copy, Clone, Default, Component)]
 #[require(
@@ -54,7 +58,6 @@ pub struct LaunchDisc;
     Health::new(10),
     MaxHealth::new(10),
     Collider::circle(5.),
-
 )]
 pub struct SelenePenumbra;
 impl FromLevelEntity for SelenePenumbra {
@@ -90,10 +93,47 @@ impl FromLevelEntity for SelenePenumbra {
             },
             DebugRender::none(),
         ))
-        .observe(on_selene_launch)
-        .observe(on_selene_hurt);
+        .observe(
+            |trigger: Trigger<Launched>,
+             mut commands: Commands,
+             positions: Query<&Position>,
+             sprites: Res<Sprites>|
+             -> Result {
+                let [&selene_pos, &attractor_pos] =
+                    positions.get_many([trigger.target(), trigger.at])?;
+
+                commands
+                    .spawn((
+                        SlashEffect,
+                        Animation::new(sprites.attractor_slash.clone_weak(), "anim"),
+                        // TODO Maybe create a nicer way to get timer from total animation time instead of hardcoding.
+                        Timed::new(Duration::from_millis(13 * 24)),
+                        EntityColor(Color::linear_rgba(100., 200., 1200., 1.)),
+                        Transform {
+                            translation: attractor_pos.extend(0.),
+                            rotation: Quat::from_axis_angle(
+                                Vec3::Z,
+                                (*attractor_pos - *selene_pos).to_angle(),
+                            ),
+                            scale: Vec3::ONE,
+                        },
+                    ))
+                    .observe(Timed::despawn_on_finished);
+
+                Ok(())
+            },
+        );
 
         Ok(())
+    }
+}
+
+pub fn color_selene_slash(mut slashes: Query<(&Timed, &mut EntityColor), With<SlashEffect>>) {
+    for (timed, mut color) in &mut slashes {
+        **color = Color::linear_rgba(100., 200., 1200., 1.).mix(
+            &Color::linear_rgba(1., 2., 24., 1.),
+            timed.frac().pow_out(6),
+        );
     }
 }
 
@@ -123,8 +163,8 @@ pub fn draw_selene_launch_disc(
             disc.cap = Cap::Round;
             *fill = ShapeFill {
                 color: match charging.index.checked_sub(1) {
-                    None => Color::linear_rgba(1., 2., 4., f),
-                    Some(0) => Color::linear_rgba(1., 2., 4., 1.),
+                    None => Color::linear_rgba(1., 2., 4., f * 0.5),
+                    Some(0) => Color::linear_rgba(4., 2., 1., 1.),
                     Some(1) => Color::linear_rgba(4., 1., 2., 1.),
                     _ => Color::NONE,
                 },
@@ -187,19 +227,4 @@ pub fn draw_selene_prediction_trajectory(
             }
         }
     }
-}
-
-pub fn on_selene_hurt(trigger: Trigger<Hurt>) {
-    debug!(
-        "Selene ({}) hurt by {}!",
-        trigger.target(),
-        trigger.event().by
-    );
-}
-
-pub fn on_selene_launch(trigger: Trigger<Launched>) {
-    debug!(
-        "Selene ({}) launched without obstruction!",
-        trigger.target()
-    );
 }
