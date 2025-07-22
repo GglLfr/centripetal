@@ -47,7 +47,7 @@ pub struct LaunchDisc;
     },
     AttractedPrediction {
         points: Vec::new(),
-        max_distance: 480.,
+        max_distance: 240.,
     },
     LaunchDurations([250, 500, 750].into_iter().map(Duration::from_millis).collect()),
     LaunchCooldown(Duration::from_secs(1)),
@@ -98,13 +98,16 @@ impl FromLevelEntity for SelenePenumbra {
 }
 
 pub fn draw_selene_launch_disc(
-    mut selene: Query<(
-        &Rotation,
-        &mut DiscComponent,
-        &mut ShapeFill,
-        &LaunchDurations,
-        Option<&LaunchCharging>,
-    )>,
+    mut selene: Query<
+        (
+            &Rotation,
+            &mut DiscComponent,
+            &mut ShapeFill,
+            &LaunchDurations,
+            Option<&LaunchCharging>,
+        ),
+        With<SelenePenumbra>,
+    >,
 ) {
     for (&rot, mut disc, mut fill, durations, charging) in &mut selene {
         let rot = rot.as_radians();
@@ -140,6 +143,48 @@ pub fn draw_selene_launch_disc(
         } else {
             disc.cap = Cap::None;
             disc.end_angle = rot;
+        }
+    }
+}
+
+pub fn draw_selene_prediction_trajectory(
+    mut shapes: ShapePainter,
+    selene: Query<&AttractedPrediction, With<SelenePenumbra>>,
+) {
+    const SKIP: f32 = 8.;
+
+    shapes.cap = Cap::Round;
+    shapes.thickness_type = ThicknessType::World;
+
+    for prediction in &selene {
+        let max = prediction.max_distance;
+        let mut accum = 0.;
+        let mut skip = 0.;
+
+        let Some(mut begin) = prediction.points.first().copied() else {
+            continue;
+        };
+
+        for points in prediction.points.windows(2) {
+            let [a, b] = *points else { continue };
+            let add = (b - a).length();
+            accum += add;
+            skip += add;
+
+            if skip >= SKIP {
+                let count_frac = skip / SKIP;
+                let count = count_frac as u32;
+                for i in 0..=count {
+                    let pos = begin.lerp(b, i as f32 / count_frac);
+
+                    shapes.transform.translation = pos.extend(0.);
+                    shapes.color = Color::linear_rgba(1., 2., 4., (1. - accum / max) * 0.5);
+                    shapes.rect(Vec2::splat(1.));
+                }
+
+                begin = begin.lerp(b, count as f32 / count_frac);
+                skip %= SKIP;
+            }
         }
     }
 }

@@ -4,7 +4,6 @@ use bevy::{
         query::QueryItem,
         system::{SystemParamItem, lifetimeless::SRes},
     },
-    math::VectorSpace,
     prelude::*,
 };
 use leafwing_input_manager::prelude::*;
@@ -282,26 +281,6 @@ pub fn predict_attract_trajectory(
 
                 prediction.points.push(pos);
             }
-        }
-    }
-}
-
-pub fn draw_attract_trajectory(
-    mut gizmos: Gizmos,
-    attracted: Query<(&Position, &AttractedPrediction)>,
-) {
-    for (&pos, prediction) in &attracted {
-        let mut pos = *pos;
-        for (i, &point) in prediction.points.iter().enumerate() {
-            gizmos.line_2d(
-                pos,
-                point,
-                LinearRgba::WHITE.lerp(
-                    LinearRgba::NONE,
-                    i as f32 / (prediction.points.len() - 1) as f32,
-                ),
-            );
-            pos = point;
         }
     }
 }

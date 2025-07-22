@@ -3,14 +3,14 @@ use bevy::prelude::*;
 use leafwing_input_manager::prelude::*;
 
 #[cfg(feature = "dev")]
-use crate::logic::entities::penumbra::{draw_attract_trajectory, draw_attractor_radius};
+use crate::logic::entities::penumbra::draw_attractor_radius;
 use crate::logic::{
     LevelApp, LevelBounds, LevelUnload,
     entities::penumbra::{
         AttractedAction, Attractor, GenericPenumbra, LaunchAction, SelenePenumbra, ThornPillar,
         ThornRing, apply_attractor_accels, detect_attracted_entities, draw_selene_launch_disc,
-        predict_attract_trajectory, remove_attracted_initials, trigger_launch_charging,
-        update_launch_charging, update_launch_idle,
+        draw_selene_prediction_trajectory, predict_attract_trajectory, remove_attracted_initials,
+        trigger_launch_charging, update_launch_charging, update_launch_idle,
     },
 };
 
@@ -171,10 +171,13 @@ impl Plugin for EntitiesPlugin {
         .register_level_entity::<GenericPenumbra>("generic_penumbra")
         .register_level_entity::<ThornPillar>("thorn_pillar")
         .register_level_entity::<ThornRing>("thorn_ring")
-        .add_systems(Update, (update_launch_idle, update_launch_charging))
         .add_systems(
-            FixedPostUpdate,
-            draw_selene_launch_disc.after(PhysicsSet::StepSimulation),
+            Update,
+            (
+                update_launch_idle,
+                update_launch_charging,
+                (draw_selene_launch_disc, draw_selene_prediction_trajectory),
+            ),
         )
         .add_systems(
             SubstepSchedule,
@@ -198,6 +201,6 @@ impl Plugin for EntitiesPlugin {
         );
 
         #[cfg(feature = "dev")]
-        app.add_systems(Update, (draw_attractor_radius, draw_attract_trajectory));
+        app.add_systems(Update, draw_attractor_radius);
     }
 }
