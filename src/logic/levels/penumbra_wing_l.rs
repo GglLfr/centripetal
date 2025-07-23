@@ -13,6 +13,13 @@ use bevy::{
     prelude::*,
     sprite::Anchor,
 };
+use bevy_vector_shapes::{
+    prelude::{ShapeCommands, ShapeSpawner},
+    render::ShapePipelineType,
+    shapes::{
+        Cap, DiscComponent, FillType, ShapeAlphaMode, ShapeFill, ShapeMaterial, ThicknessType,
+    },
+};
 use fastrand::Rng;
 use leafwing_input_manager::prelude::*;
 use seldom_state::prelude::*;
@@ -22,8 +29,7 @@ use crate::{
     PIXELS_PER_UNIT, SaveApp, Sprites,
     graphics::{AnimationFrom, AnimationHooks, EntityColor, SpriteDrawer, SpriteSection},
     logic::{
-        CameraTarget, Fields, FromLevel, InGameState, LevelApp, LevelEntities, OnTimeFinished,
-        Timed,
+        CameraTarget, Fields, FromLevel, LevelApp, LevelEntities, OnTimeFinished, Timed,
         entities::{
             Health, Killed, NoKillDespawn,
             penumbra::{AttractedAction, AttractedInitial, AttractedPrediction, LaunchAction},
@@ -57,7 +63,8 @@ struct SpawningSelene;
 #[derive(Debug, Copy, Clone, Default, Component)]
 #[component(storage = "SparseSet")]
 struct TutorialMove {
-    aligned: Option<Duration>,
+    align_time: Duration,
+    aligned: bool,
 }
 
 #[derive(Debug, Copy, Clone, Default, Component)]
@@ -73,13 +80,14 @@ impl FromLevel for Instance {
         SRes<IntroShown>,
         SQuery<Read<Transform>>,
         SQuery<Read<AttractedInitial>>,
+        ShapeCommands<'static, 'static>,
     );
     type Data = Read<LevelEntities>;
 
     fn from_level(
         mut e: EntityCommands,
         _: &Fields,
-        (cutscene_shown, transforms, initials): SystemParamItem<Self::Param>,
+        (cutscene_shown, transforms, initials, shapes): SystemParamItem<Self::Param>,
         entities: QueryItem<Self::Data>,
     ) -> Result {
         if !**cutscene_shown {
@@ -160,6 +168,22 @@ impl FromLevel for Instance {
                 },
             );
 
+            commands.entity(hover_target).insert((
+                Collider::circle(8.),
+                DiscComponent::arc(shapes.config(), 12., 0., 0.),
+                ShapeMaterial {
+                    alpha_mode: ShapeAlphaMode::Blend,
+                    disable_laa: true,
+                    pipeline: ShapePipelineType::Shape2d,
+                    canvas: None,
+                    texture: None,
+                },
+                ShapeFill {
+                    color: Color::linear_rgba(4., 2., 1., 1.),
+                    ty: FillType::Stroke(1.5, ThicknessType::World),
+                },
+            ));
+
             e.insert((
                 Init,
                 StateMachine::default()
@@ -225,10 +249,7 @@ impl FromLevel for Instance {
                             },
                         ));
                     })
-                    .trans::<SpawningSelene, _>(
-                        done(Some(Done::Success)),
-                        TutorialMove { aligned: None },
-                    )
+                    .trans::<SpawningSelene, _>(done(Some(Done::Success)), TutorialMove::default())
                     // Selene spawned effect (TODO), hovering and accelerating tutorial.
                     .on_enter::<TutorialMove>(move |e| {
                         e.commands().entity(attractor).remove::<CameraTarget>();
@@ -253,12 +274,10 @@ impl FromLevel for Instance {
                             .insert(CollisionEventsEnabled)
                             .observe(
                                 move |trigger: Trigger<OnCollisionStart>,
-                                      mut aligned: Query<&mut TutorialMove>,
-                                      time: Res<Time>|
+                                      mut aligned: Query<&mut TutorialMove>|
                                       -> Result {
                                     if trigger.body.is_some_and(|body| body == selene) {
-                                        aligned.get_mut(level_entity)?.aligned =
-                                            Some(time.elapsed());
+                                        aligned.get_mut(level_entity)?.aligned = true;
                                     }
 
                                     Ok(())
@@ -269,7 +288,7 @@ impl FromLevel for Instance {
                                       mut aligned: Query<&mut TutorialMove>|
                                       -> Result {
                                     if trigger.body.is_some_and(|body| body == selene) {
-                                        aligned.get_mut(level_entity)?.aligned = None;
+                                        aligned.get_mut(level_entity)?.aligned = false;
                                     }
                                     Ok(())
                                 },
@@ -284,16 +303,12 @@ impl FromLevel for Instance {
                         });
                     })
                     .trans::<TutorialMove, _>(
-                        |In(level_entity): In<Entity>,
-                         time: Res<Time>,
-                         aligned: Query<&TutorialMove>| {
+                        |In(level_entity): In<Entity>, aligned: Query<&TutorialMove>| {
                             aligned
                                 .get(level_entity)
                                 .expect("`TutorialMove` in level entity")
-                                .aligned
-                                .is_some_and(|since| {
-                                    time.elapsed() - since >= Duration::from_secs(5)
-                                })
+                                .align_time
+                                >= TUTORIAL_MOVE_ALIGN_DURATION
                         },
                         TutorialLaunch,
                     )
@@ -311,6 +326,43 @@ impl FromLevel for Instance {
 #[require(SpriteDrawer, Timed::new(Duration::from_millis(2500)))]
 struct AttractorSpawnEffect {
     target_pos: Vec2,
+}
+
+fn update_tutorial_move_aligned(
+    time: Res<Time>,
+    mut aligned: Query<(&LevelEntities, &mut TutorialMove)>,
+    mut target: Query<&mut DiscComponent>,
+) {
+    let delta = time.delta();
+    let Ok((entities, mut align)) = aligned.single_mut() else {
+        return;
+    };
+
+    align.align_time = if align.aligned {
+        (align.align_time + delta).min(TUTORIAL_MOVE_ALIGN_DURATION)
+    } else {
+        align.align_time.saturating_sub(delta)
+    };
+
+    let Some(mut component) = entities
+        .get(HOVER_TARGET)
+        .ok()
+        .and_then(|e| target.get_mut(e).ok())
+    else {
+        return;
+    };
+
+    component.end_angle = 2.
+        * PI
+        * align
+            .align_time
+            .div_duration_f32(TUTORIAL_MOVE_ALIGN_DURATION);
+
+    component.cap = if align.align_time > Duration::ZERO {
+        Cap::Round
+    } else {
+        Cap::None
+    };
 }
 
 fn draw_attractor_spawn_effect(
@@ -374,14 +426,14 @@ const RINGS: [Uuid; 2] = [
 ];
 const HOVER_TARGET: Uuid = uuid!("ddc89020-3740-11f0-bea9-17dccf039850");
 
+const TUTORIAL_MOVE_ALIGN_DURATION: Duration = Duration::from_secs(5);
+
 pub(super) fn plugin(app: &mut App) {
     app.register_level::<Instance>("penumbra_wing_l")
         .add_systems(
             Update,
-            draw_attractor_spawn_effect.run_if(Condition::and(
-                in_state(InGameState::Resumed),
-                in_level("penumbra_wing_l"),
-            )),
+            (draw_attractor_spawn_effect, update_tutorial_move_aligned)
+                .run_if(in_level("penumbra_wing_l")),
         )
         .save_resource_init::<IntroShown>();
 }

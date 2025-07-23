@@ -1,4 +1,3 @@
-use avian2d::prelude::*;
 use bevy::{
     ecs::{
         query::QueryItem,
@@ -30,7 +29,7 @@ impl FromLevelEntity for GenericPenumbra {
 
         trns.rotation =
             Quat::from_axis_angle(Vec3::Z, (facing - trns.translation.truncate()).to_angle());
-        e.insert((Self, AttractedInitial { ccw }, Collider::circle(5.)));
+        e.insert((Self, AttractedInitial { ccw }));
 
         Ok(())
     }
