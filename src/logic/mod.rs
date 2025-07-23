@@ -1,6 +1,8 @@
 use std::ops::Deref;
 
-use bevy::{ecs::system::SystemParam, prelude::*, render::camera::CameraUpdateSystem};
+use bevy::{
+    ecs::system::SystemParam, prelude::*, render::camera::CameraUpdateSystem, time::TimeSystem,
+};
 use iyes_progress::ProgressPlugin;
 use leafwing_input_manager::prelude::*;
 
@@ -82,6 +84,7 @@ impl Plugin for LogicPlugin {
             .init_resource::<RegisteredLevelEntities>()
             .init_resource::<RegisteredLevelIntCells>()
             .add_plugins((LdtkPlugin, EntitiesPlugin, LevelsPlugin))
+            .add_systems(First, update_time_stun.after(TimeSystem))
             .add_systems(
                 PreUpdate,
                 (handle_load_level_begin, update_timed).run_if(in_state(InGameState::Resumed)),

@@ -32,10 +32,12 @@ use crate::{
         SpriteSection,
     },
     logic::{
-        CameraTarget, Fields, FromLevel, LevelApp, LevelEntities, OnTimeFinished, Timed,
+        CameraTarget, Fields, FromLevel, LevelApp, LevelEntities, OnTimeFinished, TimeStun, Timed,
         entities::{
             Health, Killed, NoKillDespawn,
-            penumbra::{AttractedAction, AttractedInitial, AttractedPrediction, LaunchAction},
+            penumbra::{
+                AttractedAction, AttractedInitial, AttractedPrediction, LaunchAction, Launched,
+            },
         },
         levels::in_level,
     },
@@ -220,7 +222,7 @@ impl FromLevel for Instance {
                             EntityColor(Color::linear_rgba(1., 2., 24., 1.)),
                         ));
                     })
-                    .trans::<SpawningAttractor, _>(done(Some(Done::Success)), SpawningSelene)
+                    .trans::<SpawningAttractor, _>(done(None), SpawningSelene)
                     // Attractor spawned effect, Selene spawning effect.
                     .on_enter::<SpawningSelene>(move |e| {
                         e.commands()
@@ -257,7 +259,7 @@ impl FromLevel for Instance {
                             },
                         ));
                     })
-                    .trans::<SpawningSelene, _>(done(Some(Done::Success)), TutorialMove::default())
+                    .trans::<SpawningSelene, _>(done(None), TutorialMove::default())
                     // Selene spawned effect (TODO), hovering and accelerating tutorial.
                     .on_enter::<TutorialMove>(move |e| {
                         e.commands().entity(attractor).remove::<CameraTarget>();
@@ -320,7 +322,18 @@ impl FromLevel for Instance {
                         },
                         TutorialLaunch,
                     )
-                    .trans::<TutorialLaunch, _>(done(Some(Done::Success)), TutorialParry),
+                    .on_enter::<TutorialLaunch>(move |e| {
+                        e.commands().entity(selene).observe(
+                            move |trigger: Trigger<Launched>, mut commands: Commands| {
+                                if trigger.at == attractor {
+                                    commands.entity(trigger.observer()).despawn();
+                                    commands
+                                        .spawn((ChildOf(level_entity), TimeStun::long_smooth()));
+                                }
+                            },
+                        );
+                    })
+                    .trans::<TutorialLaunch, _>(done(None), TutorialParry),
             ));
         } else {
             todo!("Revisit this level for the non-intro variant...")

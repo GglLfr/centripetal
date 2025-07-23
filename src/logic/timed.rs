@@ -5,6 +5,8 @@ use bevy::{
     prelude::*,
 };
 
+use crate::math::FloatExt;
+
 #[derive(Debug, Copy, Clone, Component)]
 #[component(on_insert = on_timed_insert)]
 pub struct Timed {
@@ -79,4 +81,72 @@ pub fn update_timed(
             });
         }
     });
+}
+
+#[derive(Debug, Copy, Clone, Component)]
+#[component(on_insert = on_time_stun_insert)]
+pub struct TimeStun(TimeStunKind, Duration);
+impl TimeStun {
+    pub fn new(kind: TimeStunKind) -> Self {
+        Self(kind, Duration::ZERO)
+    }
+
+    pub fn short_instant() -> Self {
+        Self::new(TimeStunKind::ShortInstant)
+    }
+
+    pub fn long_smooth() -> Self {
+        Self::new(TimeStunKind::LongSmooth)
+    }
+}
+
+#[derive(Debug, Copy, Clone, Default)]
+pub enum TimeStunKind {
+    #[default]
+    ShortInstant,
+    LongSmooth,
+}
+
+fn on_time_stun_insert(mut world: DeferredWorld, HookContext { entity, .. }: HookContext) {
+    let elapsed = world.resource::<Time<Real>>().elapsed();
+    world.entity_mut(entity).get_mut::<TimeStun>().unwrap().1 = elapsed;
+}
+
+pub fn update_time_stun(
+    time: Res<Time<Real>>,
+    mut virtual_time: ResMut<Time<Virtual>>,
+    mut commands: Commands,
+    stuns: Query<(Entity, &TimeStun)>,
+) {
+    let now = time.elapsed();
+    let mut scale = 1.;
+
+    for (e, &TimeStun(kind, started)) in &stuns {
+        scale = match kind {
+            TimeStunKind::ShortInstant => {
+                if now - started >= Duration::from_millis(100) {
+                    commands.entity(e).despawn();
+                    1.
+                } else {
+                    0.
+                }
+            }
+            TimeStunKind::LongSmooth => {
+                if now - started >= Duration::from_millis(1000) {
+                    commands.entity(e).despawn();
+                    1.
+                } else {
+                    let f = (now - started).div_duration_f32(Duration::from_millis(1000));
+                    if f < 0.1 {
+                        0.
+                    } else {
+                        0.4 + f.threshold(0.1, 1.) * 0.6
+                    }
+                }
+            }
+        }
+        .min(scale);
+    }
+
+    virtual_time.set_relative_speed(scale);
 }
