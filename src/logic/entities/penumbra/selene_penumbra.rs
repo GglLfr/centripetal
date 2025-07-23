@@ -20,7 +20,7 @@ use crate::{
     logic::{
         CameraTarget, Fields, FromLevelEntity, IsPlayer, Timed,
         entities::{
-            Health, MaxHealth,
+            Health, MaxHealth, TryHurt,
             penumbra::{
                 AttractedInitial, AttractedParams, AttractedPrediction, LaunchCharging,
                 LaunchCooldown, LaunchDurations, LaunchTarget, Launched, PenumbraEntity,
@@ -99,6 +99,12 @@ impl FromLevelEntity for SelenePenumbra {
              positions: Query<&Position>,
              sprites: Res<Sprites>|
              -> Result {
+                if let Some(&hurt) = [1, 4, 8].get(trigger.index) {
+                    commands
+                        .entity(trigger.at)
+                        .queue(TryHurt::by(trigger.target(), hurt));
+                }
+
                 let [&selene_pos, &attractor_pos] =
                     positions.get_many([trigger.target(), trigger.at])?;
 
@@ -107,8 +113,8 @@ impl FromLevelEntity for SelenePenumbra {
                         SlashEffect,
                         Animation::new(sprites.attractor_slash.clone_weak(), "anim"),
                         // TODO Maybe create a nicer way to get timer from total animation time instead of hardcoding.
-                        Timed::new(Duration::from_millis(13 * 24)),
-                        EntityColor(Color::linear_rgba(100., 200., 1200., 1.)),
+                        Timed::new(Duration::from_millis(14 * 24)),
+                        EntityColor(Color::linear_rgba(50., 100., 600., 1.)),
                         Transform {
                             translation: attractor_pos.extend(0.),
                             rotation: Quat::from_axis_angle(
@@ -130,8 +136,8 @@ impl FromLevelEntity for SelenePenumbra {
 
 pub fn color_selene_slash(mut slashes: Query<(&Timed, &mut EntityColor), With<SlashEffect>>) {
     for (timed, mut color) in &mut slashes {
-        **color = Color::linear_rgba(100., 200., 1200., 1.).mix(
-            &Color::linear_rgba(1., 2., 24., 1.),
+        **color = Color::linear_rgba(50., 100., 600., 1.).mix(
+            &Color::linear_rgba(1., 2., 24., 0.25),
             timed.frac().pow_out(6),
         );
     }
@@ -214,7 +220,7 @@ pub fn draw_selene_prediction_trajectory(
             if skip >= SKIP {
                 let count_frac = skip / SKIP;
                 let count = count_frac as u32;
-                for i in 0..=count {
+                for i in 0..count {
                     let pos = begin.lerp(b, i as f32 / count_frac);
 
                     shapes.transform.translation = pos.extend(0.);

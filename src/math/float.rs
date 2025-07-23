@@ -80,6 +80,7 @@ impl<T: Float> FloatTransformer<T> for Pow {
         let bounds = max - min;
         let scl = (value - min) / bounds;
 
+        // What a fancy way to write `0.5` in an infallible way.
         let half = T::one() / (T::one() + T::one());
         min + match scl.partial_cmp(&half).unwrap_or(Ordering::Equal) {
             Ordering::Less => PowIn { exponent }.apply_within(scl, T::zero(), half),

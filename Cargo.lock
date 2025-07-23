@@ -313,7 +313,7 @@ checksum = "c08606f8c3cbf4ce6ec8e28fb0014a2c086708fe954eaa885384a6165172e7e8"
 [[package]]
 name = "avian2d"
 version = "0.3.0"
-source = "git+https://github.com/Jondolf/avian#b44e4d2f07c3bf91f961dd35f4d63a8a299b0136"
+source = "git+https://github.com/Jondolf/avian#6b8676b50e431b4bdb03a113958265ec30cbc6fb"
 dependencies = [
  "approx",
  "arrayvec",
@@ -330,13 +330,14 @@ dependencies = [
  "parry2d",
  "parry2d-f64",
  "smallvec",
+ "thiserror 2.0.12",
  "thread_local",
 ]
 
 [[package]]
 name = "avian_derive"
 version = "0.2.2"
-source = "git+https://github.com/Jondolf/avian#b44e4d2f07c3bf91f961dd35f4d63a8a299b0136"
+source = "git+https://github.com/Jondolf/avian#6b8676b50e431b4bdb03a113958265ec30cbc6fb"
 dependencies = [
  "proc-macro-error2",
  "proc-macro2",
@@ -2666,7 +2667,7 @@ checksum = "4488594b9328dee448adb906d8b126d9b7deb7cf5c22161ee591610bb1be83c0"
 dependencies = [
  "bitflags 2.9.1",
  "libc",
- "redox_syscall 0.5.14",
+ "redox_syscall 0.5.15",
 ]
 
 [[package]]
@@ -3326,7 +3327,7 @@ checksum = "bc838d2a56b5b1a6c25f55575dfc605fabb63bb2365f6c2353ef9159aa69e4a5"
 dependencies = [
  "cfg-if",
  "libc",
- "redox_syscall 0.5.14",
+ "redox_syscall 0.5.15",
  "smallvec",
  "windows-targets 0.52.6",
 ]
@@ -3705,9 +3706,9 @@ dependencies = [
 
 [[package]]
 name = "redox_syscall"
-version = "0.5.14"
+version = "0.5.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "de3a5d9f0aba1dbcec1cc47f0ff94a4b778fe55bca98a6dfa92e4e094e57b1c4"
+checksum = "7e8af0dde094006011e6a740d4879319439489813bd0bcdc7d821beaeeff48ec"
 dependencies = [
  "bitflags 2.9.1",
 ]
