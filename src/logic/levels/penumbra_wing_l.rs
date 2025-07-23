@@ -27,7 +27,10 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     PIXELS_PER_UNIT, SaveApp, Sprites,
-    graphics::{AnimationFrom, AnimationHooks, EntityColor, SpriteDrawer, SpriteSection},
+    graphics::{
+        Animation, AnimationFrom, AnimationHooks, AnimationMode, EntityColor, SpriteDrawer,
+        SpriteSection,
+    },
     logic::{
         CameraTarget, Fields, FromLevel, LevelApp, LevelEntities, OnTimeFinished, Timed,
         entities::{
@@ -78,6 +81,7 @@ struct TutorialParry;
 impl FromLevel for Instance {
     type Param = (
         SRes<IntroShown>,
+        SRes<Sprites>,
         SQuery<Read<Transform>>,
         SQuery<Read<AttractedInitial>>,
         ShapeCommands<'static, 'static>,
@@ -87,7 +91,7 @@ impl FromLevel for Instance {
     fn from_level(
         mut e: EntityCommands,
         _: &Fields,
-        (cutscene_shown, transforms, initials, shapes): SystemParamItem<Self::Param>,
+        (cutscene_shown, sprites, transforms, initials, shapes): SystemParamItem<Self::Param>,
         entities: QueryItem<Self::Data>,
     ) -> Result {
         if !**cutscene_shown {
@@ -170,7 +174,10 @@ impl FromLevel for Instance {
 
             commands.entity(hover_target).insert((
                 Collider::circle(8.),
-                DiscComponent::arc(shapes.config(), 12., 0., 0.),
+                Animation::new(sprites.collectible_32.clone_weak(), "anim"),
+                AnimationMode::Repeat,
+                EntityColor(Color::linear_rgba(12., 2., 1., 1.)),
+                DiscComponent::arc(shapes.config(), 16., 0., 0.),
                 ShapeMaterial {
                     alpha_mode: ShapeAlphaMode::Blend,
                     disable_laa: true,
@@ -182,6 +189,7 @@ impl FromLevel for Instance {
                     color: Color::linear_rgba(4., 2., 1., 1.),
                     ty: FillType::Stroke(1.5, ThicknessType::World),
                 },
+                DebugRender::none(),
             ));
 
             e.insert((
