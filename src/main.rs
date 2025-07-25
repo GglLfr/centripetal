@@ -67,7 +67,8 @@ fn main() -> AppExit {
         .add_loading_state(
             LoadingState::new(GameState::Loading)
                 .load_collection::<WorldHandle>()
-                .load_collection::<Sprites>(),
+                .load_collection::<Sprites>()
+                .load_collection::<Fonts>(),
         )
         .add_plugins(
             ProgressPlugin::<GameState>::new()

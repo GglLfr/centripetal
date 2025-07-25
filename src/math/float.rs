@@ -90,7 +90,7 @@ impl<T: Float> FloatTransformer<T> for Pow {
     }
 }
 
-pub trait FloatExt: Float {
+pub trait FloatTransformExt: Float {
     fn threshold(self, from: Self, to: Self) -> Self {
         Threshold { from, to }.apply(self)
     }
@@ -122,6 +122,14 @@ pub trait FloatExt: Float {
     fn pow_out_within(self, exponent: u32, min: Self, max: Self) -> Self {
         PowOut { exponent }.apply_within(self, min, max)
     }
+
+    fn min_mag(self, min: Self) -> Self {
+        self.copysign(self.abs().min(min))
+    }
+
+    fn max_mag(self, max: Self) -> Self {
+        self.copysign(self.abs().max(max))
+    }
 }
 
-impl<T: Float> FloatExt for T {}
+impl<T: Float> FloatTransformExt for T {}

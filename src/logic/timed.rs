@@ -5,7 +5,7 @@ use bevy::{
     prelude::*,
 };
 
-use crate::math::FloatExt;
+use crate::{IntoResultSystem, Observed, math::FloatTransformExt};
 
 #[derive(Debug, Copy, Clone, Component)]
 #[component(on_insert = on_timed_insert)]
@@ -28,6 +28,30 @@ impl Timed {
             frac: 0.,
             finished: false,
         }
+    }
+
+    pub fn run<M>(lifetime: Duration, sys: impl IntoResultSystem<(), (), M>) -> impl Bundle {
+        let mut sys = IntoResultSystem::into_result_system(sys);
+        (
+            Self::new(lifetime),
+            Observed::by(
+                move |trigger: Trigger<OnTimeFinished>, world: &mut World| -> Result {
+                    sys.initialize(world);
+                    sys.validate_param(world)?;
+                    sys.run_without_applying_deferred((), world)?;
+
+                    let mut world = DeferredWorld::from(world);
+                    sys.queue_deferred(world.reborrow());
+                    world
+                        .reborrow()
+                        .commands()
+                        .entity(trigger.target())
+                        .despawn();
+
+                    Ok(())
+                },
+            ),
+        )
     }
 
     pub fn despawn_on_finished(trigger: Trigger<OnTimeFinished>, mut commands: Commands) {
@@ -140,7 +164,7 @@ pub fn update_time_stun(
                     if f < 0.1 {
                         0.
                     } else {
-                        0.4 + f.threshold(0.1, 1.) * 0.6
+                        0.2 + f.threshold(0.1, 1.) * 0.8
                     }
                 }
             }

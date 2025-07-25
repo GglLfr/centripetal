@@ -16,7 +16,7 @@ use bevy::{
 };
 
 use crate::{
-    Sprites,
+    IntoResultSystem, Sprites,
     graphics::{EntityColor, SpriteDrawer, SpriteSection, SpriteSheet},
 };
 
@@ -218,36 +218,36 @@ impl AnimationHooks {
     pub fn on_enter<M>(
         mut self,
         key: impl Into<String>,
-        system: impl IntoSystem<In<Entity>, Result, M>,
+        system: impl IntoResultSystem<In<Entity>, (), M>,
     ) -> Self {
         self.enter
             .entry(key.into())
             .or_default()
-            .push(Box::new(IntoSystem::into_system(system)));
+            .push(Box::new(IntoResultSystem::into_result_system(system)));
         self
     }
 
     pub fn on_done<M>(
         mut self,
         key: impl Into<String>,
-        system: impl IntoSystem<In<Entity>, Result, M>,
+        system: impl IntoResultSystem<In<Entity>, (), M>,
     ) -> Self {
         self.done
             .entry(key.into())
             .or_default()
-            .push(Box::new(IntoSystem::into_system(system)));
+            .push(Box::new(IntoResultSystem::into_result_system(system)));
         self
     }
 
     pub fn on_exit<M>(
         mut self,
         key: impl Into<String>,
-        system: impl IntoSystem<In<Entity>, Result, M>,
+        system: impl IntoResultSystem<In<Entity>, (), M>,
     ) -> Self {
         self.exit
             .entry(key.into())
             .or_default()
-            .push(Box::new(IntoSystem::into_system(system)));
+            .push(Box::new(IntoResultSystem::into_result_system(system)));
         self
     }
 

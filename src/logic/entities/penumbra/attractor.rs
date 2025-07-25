@@ -21,6 +21,9 @@ use crate::{
     },
 };
 
+#[derive(Debug, Copy, Clone, Default, Component)]
+pub struct NoAttract;
+
 #[derive(Debug, Clone, Component)]
 #[require(PenumbraEntity, AttractorEntities)]
 pub struct Attractor {
@@ -127,7 +130,7 @@ pub fn detect_attracted_entities(
             Option<&mut LaunchTarget>,
             Option<&AttractedInitial>,
         ),
-        With<PenumbraEntity>,
+        (With<PenumbraEntity>, Without<NoAttract>),
     >,
     mut tmp: Local<Vec<Entity>>,
 ) {

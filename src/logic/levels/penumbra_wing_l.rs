@@ -36,12 +36,13 @@ use crate::{
         entities::{
             Health, Killed, NoKillDespawn,
             penumbra::{
-                AttractedAction, AttractedInitial, AttractedPrediction, LaunchAction, Launched,
+                AttractedAction, AttractedInitial, AttractedPrediction, HomingTarget, LaunchAction,
+                Launched, bullet,
             },
         },
         levels::in_level,
     },
-    math::{FloatExt, RngExt},
+    math::{FloatTransformExt, RngExt},
     resume, suspend, trans_wait,
 };
 
@@ -99,7 +100,7 @@ impl FromLevel for Instance {
         if !**cutscene_shown {
             let level_entity = e.id();
             let mut commands = e.commands();
-            let [selene, attractor, _ring_0, _ring_1, hover_target] =
+            let [selene, attractor, ring_0, ring_1, hover_target] =
                 [SELENE, ATTRACTOR, RINGS[0], RINGS[1], HOVER_TARGET].map(|iid| {
                     let e = entities.get(iid).unwrap();
                     commands.entity(e).queue(suspend);
@@ -306,11 +307,14 @@ impl FromLevel for Instance {
                     })
                     .on_exit::<TutorialMove>(move |e| {
                         e.commands().entity(hover_target).despawn();
-                        e.commands().entity(selene).queue(|mut e: EntityWorldMut| {
-                            e.get_mut::<ActionState<LaunchAction>>()
-                                .expect("`ActionState<LaunchAction>` not found in Selene")
-                                .enable_action(&LaunchAction)
-                        });
+                        e.commands()
+                            .entity(selene)
+                            .queue(|mut e: EntityWorldMut| -> Result {
+                                e.get_mut::<ActionState<LaunchAction>>()
+                                    .ok_or("`ActionState<LaunchAction>` not found in Selene")?
+                                    .enable_action(&LaunchAction);
+                                Ok(())
+                            });
                     })
                     .trans::<TutorialMove, _>(
                         |In(level_entity): In<Entity>, aligned: Query<&TutorialMove>| {
@@ -324,11 +328,46 @@ impl FromLevel for Instance {
                     )
                     .on_enter::<TutorialLaunch>(move |e| {
                         e.commands().entity(selene).observe(
-                            move |trigger: Trigger<Launched>, mut commands: Commands| {
-                                if trigger.at == attractor {
+                            move |trigger: Trigger<Launched>,
+                                  mut commands: Commands,
+                                  positions: Query<&Position>| {
+                                if trigger.at == attractor
+                                    && let Ok([&pos, &attractor_pos]) =
+                                        positions.get_many([trigger.target(), trigger.at])
+                                {
                                     commands.entity(trigger.observer()).despawn();
                                     commands
                                         .spawn((ChildOf(level_entity), TimeStun::long_smooth()));
+
+                                    for i in 0..3 {
+                                        let Rotation { cos, sin } = (*pos - *attractor_pos)
+                                            .try_normalize()
+                                            .map(|Vec2 { x: cos, y: sin }| Rotation { cos, sin })
+                                            .unwrap_or_default()
+                                            * Rotation::radians(2. * PI * i as f32 / 3.);
+
+                                        commands.spawn(Timed::run(
+                                            Duration::from_millis((i + 1) * 150),
+                                            move |mut commands: Commands| {
+                                                commands.spawn((
+                                                    bullet::spiky(level_entity),
+                                                    HomingTarget(selene),
+                                                    LinearVelocity(vec2(cos * 156., sin * 156.)),
+                                                    attractor_pos,
+                                                    Rotation { cos, sin },
+                                                ));
+                                            },
+                                        ));
+                                    }
+
+                                    commands.spawn(Timed::run(
+                                        Duration::from_millis(750),
+                                        move |mut commands: Commands| -> Result {
+                                            commands.get_entity(ring_0)?.queue(resume);
+                                            commands.get_entity(ring_1)?.queue(resume);
+                                            Ok(())
+                                        },
+                                    ));
                                 }
                             },
                         );

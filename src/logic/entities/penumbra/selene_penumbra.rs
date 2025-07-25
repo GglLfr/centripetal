@@ -27,7 +27,7 @@ use crate::{
             },
         },
     },
-    math::FloatExt,
+    math::FloatTransformExt,
 };
 
 #[derive(Debug, Copy, Clone, Default, Component)]
@@ -58,6 +58,7 @@ pub struct SlashEffect;
     Health::new(10),
     MaxHealth::new(10),
     Collider::circle(5.),
+    TransformExtrapolation,
 )]
 pub struct SelenePenumbra;
 impl FromLevelEntity for SelenePenumbra {

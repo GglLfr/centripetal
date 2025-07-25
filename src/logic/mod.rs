@@ -76,15 +76,11 @@ impl Plugin for LogicPlugin {
                 ProgressPlugin::<InGameState>::new()
                     .with_state_transition(InGameState::Loading, InGameState::Resumed),
             )
-            .configure_sets(
-                PostUpdate,
-                seldom_state::set::StateSet::Transition.before(CameraUpdateSystem),
-            )
             .init_resource::<RegisteredLevels>()
             .init_resource::<RegisteredLevelEntities>()
             .init_resource::<RegisteredLevelIntCells>()
             .add_plugins((LdtkPlugin, EntitiesPlugin, LevelsPlugin))
-            .add_systems(First, update_time_stun.after(TimeSystem))
+            .add_systems(First, update_time_stun.before(TimeSystem))
             .add_systems(
                 PreUpdate,
                 (handle_load_level_begin, update_timed).run_if(in_state(InGameState::Resumed)),
@@ -103,6 +99,10 @@ impl Plugin for LogicPlugin {
                     .run_if(in_state(InGameState::Resumed))
                     .after(CameraUpdateSystem)
                     .before(TransformSystem::TransformPropagate),
+            )
+            .configure_sets(
+                PostUpdate,
+                seldom_state::set::StateSet::Transition.before(move_camera),
             )
             .save_resource::<LoadLevel>();
     }

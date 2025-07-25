@@ -24,16 +24,30 @@ pub struct Sprites {
     #[asset(path = "effects/ring_16.png")]
     pub ring_16: Handle<SpriteSection>,
     // Entities.
+    // -- Attractor.
     #[asset(path = "entities/attractor/regular.json")]
     pub attractor_regular: Handle<SpriteSheet>,
     #[asset(path = "entities/attractor/slash.json")]
     pub attractor_slash: Handle<SpriteSheet>,
     #[asset(path = "entities/attractor/spawn.json")]
     pub attractor_spawn: Handle<SpriteSheet>,
+    // -- Bullet.
+    #[asset(path = "entities/bullet/spiky.json")]
+    pub bullet_spiky: Handle<SpriteSheet>,
+    // -- Generic.
     #[asset(path = "entities/generic/collectible_32.json")]
     pub collectible_32: Handle<SpriteSheet>,
+    // -- Selene.
     #[asset(path = "entities/selene/selene.json")]
     pub selene: Handle<SpriteSheet>,
     #[asset(path = "entities/selene/selene_penumbra.json")]
     pub selene_penumbra: Handle<SpriteSheet>,
+}
+
+#[derive(Debug, Clone, Resource, AssetCollection)]
+pub struct Fonts {
+    #[asset(path = "fonts/raleway/Raleway-VariableFont_wght.ttf")]
+    pub raleway: Handle<Font>,
+    #[asset(path = "fonts/raleway/Raleway-Italic-VariableFont_wght.ttf")]
+    pub raleway_italic: Handle<Font>,
 }
