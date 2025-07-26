@@ -179,6 +179,7 @@ impl FromLevel for Instance {
 
             commands.entity(hover_target).insert((
                 Collider::circle(8.),
+                CollisionEventsEnabled,
                 Animation::new(sprites.collectible_32.clone_weak(), "anim"),
                 AnimationMode::Repeat,
                 EntityColor(Color::linear_rgba(12., 2., 1., 1.)),
@@ -300,7 +301,6 @@ impl FromLevel for Instance {
                         e.commands()
                             .entity(hover_target)
                             .queue(resume)
-                            .insert(CollisionEventsEnabled)
                             .observe(
                                 move |trigger: Trigger<OnCollisionStart>,
                                       mut aligned: Query<&mut TutorialMove>|
@@ -357,6 +357,9 @@ impl FromLevel for Instance {
                                     commands
                                         .spawn((ChildOf(level_entity), TimeStun::long_smooth()));
 
+                                    #[derive(Event)]
+                                    struct Hit;
+
                                     for i in 0..3 {
                                         let Rotation { cos, sin } = (*pos - *attractor_pos)
                                             .try_normalize()
@@ -365,14 +368,28 @@ impl FromLevel for Instance {
                                             * Rotation::radians(2. * PI * i as f32 / 3.);
 
                                         commands.spawn(Timed::run(
-                                            Duration::from_millis((i + 1) * 150),
+                                            Duration::from_millis((i as u64 + 1) * 150),
                                             move |_: In<Entity>, mut commands: Commands| {
-                                                commands.spawn((
+                                                let bullet = commands.spawn((
                                                     bullet::spiky(level_entity),
                                                     HomingTarget(selene),
                                                     LinearVelocity(vec2(cos * 156., sin * 156.)),
                                                     attractor_pos,
                                                     Rotation { cos, sin },
+                                                )).observe(move |trigger: Trigger<OnCollisionStart>, mut commands: Commands| {
+                                                    if trigger.body.is_some_and(|body| body == selene) {
+                                                        commands.trigger(Hit);
+                                                    }
+                                                }).id();
+
+                                                commands.spawn((
+                                                    ChildOf(level_entity),
+                                                    Observer::new(move |trigger: Trigger<Hit>, mut commands: Commands| {
+                                                        if let Ok(mut e) = commands.get_entity(bullet) {
+                                                            e.remove::<HomingTarget>();
+                                                            commands.entity(trigger.observer()).despawn();
+                                                        }
+                                                    }),
                                                 ));
                                             },
                                         ));

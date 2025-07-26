@@ -17,6 +17,12 @@ pub struct Sprites {
     // Visual effects.
     #[asset(path = "effects/grand_attractor_spawned.json")]
     pub grand_attractor_spawned: Handle<SpriteSheet>,
+    #[asset(path = "effects/ring_2.png")]
+    pub ring_2: Handle<SpriteSection>,
+    #[asset(path = "effects/ring_3.png")]
+    pub ring_3: Handle<SpriteSection>,
+    #[asset(path = "effects/ring_4.png")]
+    pub ring_4: Handle<SpriteSection>,
     #[asset(path = "effects/ring_6.png")]
     pub ring_6: Handle<SpriteSection>,
     #[asset(path = "effects/ring_8.png")]

@@ -7,6 +7,7 @@ use bevy_vector_shapes::shapes::{
 use smallvec::{SmallVec, smallvec};
 
 use crate::{
+    Observed,
     logic::Timed,
     math::{FloatTransformer, Interp},
 };
@@ -28,6 +29,12 @@ pub struct Ring {
     pub thickness_interp: Interp<f32>,
     pub color_interp: Interp<f32>,
     pub alpha_interp: Interp<f32>,
+}
+
+impl Ring {
+    pub fn bundle(self) -> impl Bundle {
+        (self, Observed::by(Timed::despawn_on_finished))
+    }
 }
 
 impl Default for Ring {

@@ -58,6 +58,7 @@ pub struct SlashEffect;
     Health::new(10),
     MaxHealth::new(10),
     Collider::circle(5.),
+    CollisionEventsEnabled,
     TransformExtrapolation,
 )]
 pub struct SelenePenumbra;
