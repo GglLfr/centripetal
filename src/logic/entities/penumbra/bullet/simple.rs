@@ -1,5 +1,6 @@
 use std::time::Duration;
 
+use avian2d::prelude::*;
 use bevy::prelude::*;
 
 use crate::{
@@ -19,7 +20,9 @@ pub fn spiky(level_entity: Entity) -> impl Bundle {
         HomingPower(180f32.to_radians()),
         AnimationFrom::sprite(|sprites| (sprites.bullet_spiky.clone_weak(), "anim")),
         AnimationMode::Repeat,
+        TransformExtrapolation,
         EntityColor(Color::linear_rgba(4., 2., 1., 1.)),
         Observed::by(Timed::despawn_on_finished),
+        DebugRender::none(),
     )
 }

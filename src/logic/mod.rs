@@ -8,9 +8,10 @@ use leafwing_input_manager::prelude::*;
 
 use crate::{
     SaveApp, WorldHandle,
-    logic::{entities::EntitiesPlugin, levels::LevelsPlugin},
+    logic::{effects::EffectsPlugin, entities::EntitiesPlugin, levels::LevelsPlugin},
 };
 
+pub mod effects;
 pub mod entities;
 pub mod levels;
 
@@ -79,7 +80,7 @@ impl Plugin for LogicPlugin {
             .init_resource::<RegisteredLevels>()
             .init_resource::<RegisteredLevelEntities>()
             .init_resource::<RegisteredLevelIntCells>()
-            .add_plugins((LdtkPlugin, EntitiesPlugin, LevelsPlugin))
+            .add_plugins((LdtkPlugin, EffectsPlugin, EntitiesPlugin, LevelsPlugin))
             .add_systems(First, update_time_stun.before(TimeSystem))
             .add_systems(
                 PreUpdate,
@@ -87,9 +88,7 @@ impl Plugin for LogicPlugin {
             )
             .add_systems(
                 Update,
-                (handle_load_level_progress
-                    .after(handle_load_level_begin)
-                    .run_if(in_state(InGameState::Loading)),),
+                handle_load_level_progress.run_if(in_state(InGameState::Loading)),
             )
             .add_systems(OnExit(InGameState::Loading), handle_load_level_end)
             .add_systems(Startup, startup_camera)

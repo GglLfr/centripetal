@@ -24,6 +24,7 @@ use fastrand::Rng;
 use leafwing_input_manager::prelude::*;
 use seldom_state::prelude::*;
 use serde::{Deserialize, Serialize};
+use smallvec::smallvec;
 
 use crate::{
     PIXELS_PER_UNIT, SaveApp, Sprites,
@@ -33,6 +34,7 @@ use crate::{
     },
     logic::{
         CameraTarget, Fields, FromLevel, LevelApp, LevelEntities, OnTimeFinished, TimeStun, Timed,
+        effects::Ring,
         entities::{
             Health, Killed, NoKillDespawn,
             penumbra::{
@@ -192,6 +194,22 @@ impl FromLevel for Instance {
                     color: Color::linear_rgba(4., 2., 1., 1.),
                     ty: FillType::Stroke(1.5, ThicknessType::World),
                 },
+                Timed::repeat(
+                    Duration::from_secs(1),
+                    |In(e): In<Entity>, mut commands: Commands| {
+                        commands.spawn((
+                            ChildOf(e),
+                            Transform::from_xyz(0., 0., -1.),
+                            Ring {
+                                radius: 16.,
+                                thickness: 3.,
+                                colors: smallvec![Color::linear_rgb(4., 2., 1.)],
+                                ..default()
+                            },
+                            Timed::new(Duration::from_millis(750)),
+                        ));
+                    },
+                ),
                 DebugRender::none(),
             ));
 
@@ -348,7 +366,7 @@ impl FromLevel for Instance {
 
                                         commands.spawn(Timed::run(
                                             Duration::from_millis((i + 1) * 150),
-                                            move |mut commands: Commands| {
+                                            move |_: In<Entity>, mut commands: Commands| {
                                                 commands.spawn((
                                                     bullet::spiky(level_entity),
                                                     HomingTarget(selene),
@@ -362,7 +380,7 @@ impl FromLevel for Instance {
 
                                     commands.spawn(Timed::run(
                                         Duration::from_millis(750),
-                                        move |mut commands: Commands| -> Result {
+                                        move |_: In<Entity>, mut commands: Commands| -> Result {
                                             commands.get_entity(ring_0)?.queue(resume);
                                             commands.get_entity(ring_1)?.queue(resume);
                                             Ok(())

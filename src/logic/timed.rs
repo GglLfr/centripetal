@@ -8,11 +8,9 @@ use bevy::{
 use crate::{IntoResultSystem, Observed, math::FloatTransformExt};
 
 #[derive(Debug, Copy, Clone, Component)]
-#[component(on_insert = on_timed_insert)]
 pub struct Timed {
     pub lifetime: Duration,
-    started: Duration,
-    elapsed: Duration,
+    life: Duration,
     frac_f64: f64,
     frac: f32,
     finished: bool,
@@ -22,15 +20,17 @@ impl Timed {
     pub fn new(lifetime: Duration) -> Self {
         Self {
             lifetime,
-            started: Duration::ZERO,
-            elapsed: Duration::ZERO,
+            life: Duration::ZERO,
             frac_f64: 0.,
             frac: 0.,
             finished: false,
         }
     }
 
-    pub fn run<M>(lifetime: Duration, sys: impl IntoResultSystem<(), (), M>) -> impl Bundle {
+    pub fn run<M>(
+        lifetime: Duration,
+        sys: impl IntoResultSystem<In<Entity>, (), M>,
+    ) -> impl Bundle {
         let mut sys = IntoResultSystem::into_result_system(sys);
         (
             Self::new(lifetime),
@@ -38,7 +38,7 @@ impl Timed {
                 move |trigger: Trigger<OnTimeFinished>, world: &mut World| -> Result {
                     sys.initialize(world);
                     sys.validate_param(world)?;
-                    sys.run_without_applying_deferred((), world)?;
+                    sys.run_without_applying_deferred(trigger.target(), world)?;
 
                     let mut world = DeferredWorld::from(world);
                     sys.queue_deferred(world.reborrow());
@@ -54,18 +54,48 @@ impl Timed {
         )
     }
 
+    pub fn repeat<M>(
+        lifetime: Duration,
+        sys: impl IntoResultSystem<In<Entity>, (), M>,
+    ) -> impl Bundle {
+        let mut sys = IntoResultSystem::into_result_system(sys);
+        let mut initialized = false;
+
+        (
+            Self::new(lifetime),
+            Observed::by(
+                move |trigger: Trigger<OnTimeFinished>,
+                      world: &mut World,
+                      query: &mut QueryState<&mut Self>|
+                      -> Result {
+                    if !std::mem::replace(&mut initialized, true) {
+                        sys.initialize(world);
+                    }
+
+                    sys.validate_param(world)?;
+                    sys.run_without_applying_deferred(trigger.target(), world)?;
+                    sys.queue_deferred(DeferredWorld::from(&mut *world));
+
+                    let mut timed = query.get_mut(world, trigger.target())?;
+                    timed.life = trigger.overtime;
+                    timed.frac_f64 = trigger.overtime_frac_f64;
+                    timed.frac = trigger.overtime_frac;
+                    timed.finished = false;
+
+                    Ok(())
+                },
+            ),
+        )
+    }
+
     pub fn despawn_on_finished(trigger: Trigger<OnTimeFinished>, mut commands: Commands) {
         if let Ok(mut e) = commands.get_entity(trigger.target()) {
             e.despawn();
         }
     }
 
-    pub fn started(&self) -> Duration {
-        self.started
-    }
-
-    pub fn elapsed(&self) -> Duration {
-        self.elapsed
+    pub fn life(&self) -> Duration {
+        self.life
     }
 
     pub fn frac_f64(&self) -> f64 {
@@ -78,11 +108,11 @@ impl Timed {
 }
 
 #[derive(Debug, Copy, Clone, Default, Event)]
-pub struct OnTimeFinished;
-
-fn on_timed_insert(mut world: DeferredWorld, HookContext { entity, .. }: HookContext) {
-    let now = world.resource::<Time>().elapsed();
-    world.entity_mut(entity).get_mut::<Timed>().unwrap().started = now;
+pub struct OnTimeFinished {
+    pub count: usize,
+    pub overtime: Duration,
+    pub overtime_frac_f64: f64,
+    pub overtime_frac: f32,
 }
 
 pub fn update_timed(
@@ -90,18 +120,35 @@ pub fn update_timed(
     time: Res<Time>,
     mut timed_query: Query<(Entity, &mut Timed)>,
 ) {
-    let now = time.elapsed();
+    let delta = time.delta();
     timed_query.par_iter_mut().for_each(|(e, mut timed)| {
-        let elapsed = (now - timed.started).min(timed.lifetime);
-        let frac = elapsed.div_duration_f64(timed.lifetime);
+        let lifetime = timed.lifetime;
+        timed.life += delta;
 
-        timed.elapsed = elapsed;
-        timed.frac_f64 = frac;
-        timed.frac = frac as f32;
+        if timed.life < lifetime {
+            let frac = timed.life.div_duration_f64(lifetime);
+            timed.frac_f64 = frac;
+            timed.frac = frac as f32;
+        } else if !std::mem::replace(&mut timed.finished, true) {
+            timed.frac_f64 = 1.;
+            timed.frac = 1.;
 
-        if elapsed == timed.lifetime && !std::mem::replace(&mut timed.finished, true) {
+            let mut count = 0;
+            let mut overtime = std::mem::replace(&mut timed.life, lifetime);
+
+            while overtime >= lifetime {
+                count += 1;
+                overtime -= lifetime;
+            }
+
+            let frac = overtime.div_duration_f64(lifetime);
             commands.command_scope(|mut commands| {
-                commands.entity(e).trigger(OnTimeFinished);
+                commands.entity(e).trigger(OnTimeFinished {
+                    count,
+                    overtime,
+                    overtime_frac_f64: frac,
+                    overtime_frac: frac as f32,
+                });
             });
         }
     });

@@ -1575,6 +1575,7 @@ dependencies = [
  "serde",
  "serde_flexitos",
  "serde_json",
+ "smallvec",
  "vec-belt",
 ]
 

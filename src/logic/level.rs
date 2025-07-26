@@ -529,7 +529,6 @@ pub fn handle_load_level_end(
         Query<&Level>,
         Query<(Entity, &LevelEntity)>,
         Query<(Entity, &LevelIntCell)>,
-        ResMut<NextState<InGameState>>,
         Query<Entity, With<LevelUnload>>,
     )>,
     mut level_targets: Local<HashSet<(SystemId<In<Entity>, Result>, Entity)>>,
@@ -545,7 +544,6 @@ pub fn handle_load_level_end(
         levels,
         entities,
         int_cells,
-        mut state,
         to_be_unloaded,
     ) = state.get_mut(world);
 
@@ -570,8 +568,6 @@ pub fn handle_load_level_end(
             }
         }
     }
-
-    state.set(InGameState::Resumed);
 
     // Unload previous levels at the very last so some asset handles could be shared.
     unload_levels.extend(to_be_unloaded.into_iter());

@@ -29,6 +29,7 @@ seldom_state = { version = "0.14", features = ["leafwing_input"] }
 serde = { version = "1", features = ["derive"] }
 serde_flexitos = "0.2"
 serde_json = "1"
+smallvec = { version = "1", features = ["const_generics", "union"] }
 vec-belt = "1"
 
 [dependencies.avian2d]

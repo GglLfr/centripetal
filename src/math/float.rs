@@ -10,6 +10,46 @@ pub trait FloatTransformer<T: Float> {
     fn apply_within(&self, value: T, min: T, max: T) -> T;
 }
 
+impl<T: Float> FloatTransformer<T> for Box<dyn FloatTransformer<T>> {
+    fn apply_within(&self, value: T, min: T, max: T) -> T {
+        (**self).apply_within(value, min, max)
+    }
+}
+
+impl<T: Float> FloatTransformer<T> for &dyn FloatTransformer<T> {
+    fn apply_within(&self, value: T, min: T, max: T) -> T {
+        (*self).apply_within(value, min, max)
+    }
+}
+
+impl<T: Float, F: Fn(T) -> T> FloatTransformer<T> for F {
+    fn apply_within(&self, value: T, min: T, max: T) -> T {
+        self((value - min) / (max - min))
+    }
+}
+
+impl<T: Float> FloatTransformer<T> for () {
+    fn apply_within(&self, value: T, _min: T, _max: T) -> T {
+        value
+    }
+}
+
+#[derive(Debug, Copy, Clone)]
+pub struct Remap<T: Float> {
+    pub src_from: T,
+    pub src_to: T,
+    pub dst_from: T,
+    pub dst_to: T,
+}
+
+impl<T: Float> FloatTransformer<T> for Remap<T> {
+    fn apply_within(&self, value: T, min: T, max: T) -> T {
+        self.dst_from
+            + ((value - min) / (max - min) - self.src_from) / (self.src_to - self.src_from)
+                * (self.dst_to - self.dst_from)
+    }
+}
+
 #[derive(Debug, Copy, Clone)]
 pub struct Threshold<T: Float> {
     pub from: T,
@@ -87,6 +127,29 @@ impl<T: Float> FloatTransformer<T> for Pow {
             Ordering::Equal => half,
             Ordering::Greater => PowOut { exponent }.apply_within(scl, half, T::one()),
         } * bounds
+    }
+}
+
+#[derive(Debug, Copy, Clone)]
+pub enum Interp<T: Float> {
+    Identity,
+    Reverse,
+    Slope { mid: T },
+    PowIn { exponent: u32 },
+    PowOut { exponent: u32 },
+    Pow { exponent: u32 },
+}
+
+impl<T: Float> FloatTransformer<T> for Interp<T> {
+    fn apply_within(&self, value: T, min: T, max: T) -> T {
+        match *self {
+            Self::Identity => value,
+            Self::Reverse => max - value + min,
+            Self::Slope { mid } => Slope { mid }.apply_within(value, min, max),
+            Self::PowIn { exponent } => PowIn { exponent }.apply_within(value, min, max),
+            Self::PowOut { exponent } => PowOut { exponent }.apply_within(value, min, max),
+            Self::Pow { exponent } => Pow { exponent }.apply_within(value, min, max),
+        }
     }
 }
 
