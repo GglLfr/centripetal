@@ -1,6 +1,7 @@
 use std::any::TypeId;
 
 use bevy::{
+    asset::load_internal_asset,
     core_pipeline::core_2d::Transparent2d,
     prelude::*,
     render::{
@@ -71,6 +72,8 @@ impl Plugin for GraphicsPlugin {
             .register_asset_loader(SpriteSectionLoader(sender))
             .add_systems(PreUpdate, pack_incoming_sprites(receiver));
 
+        load_internal_asset!(app, SHAPE_SHADER, "pixelized_shape.wgsl", Shader::from_wgsl);
+
         if let Some(render_app) = app.get_sub_app_mut(RenderApp) {
             fn setup<T: ShapeData>(world: &mut World) {
                 let function = FboWrappedDraw::<
@@ -113,9 +116,14 @@ impl Plugin for GraphicsPlugin {
 
             let world = render_app
                 .init_resource::<LockedTextureCache>()
+                .init_resource::<BlitPixelizedShapes>()
+                .init_resource::<BlitPixelizedShapesPipelines>()
                 .add_systems(
                     Render,
-                    update_locked_texture_cache.in_set(RenderSet::Cleanup),
+                    (
+                        prepare_blit_pixelized_shape_pipelines.in_set(RenderSet::Prepare),
+                        update_locked_texture_cache.in_set(RenderSet::Cleanup),
+                    ),
                 )
                 .world_mut();
 
