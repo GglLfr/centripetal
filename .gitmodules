@@ -1,3 +1,6 @@
 [submodule "assets"]
 	path = assets
 	url = git@github.com:GglLfr/centripetal-assets
+[submodule "src/embedded_assets/shaders/shapes"]
+	path = src/embedded_assets/shaders/shapes
+	url = git@github.com:james-j-obrien/bevy_vector_shapes.git

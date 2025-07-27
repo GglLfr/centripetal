@@ -59,6 +59,7 @@ fn main() -> AppExit {
             TilemapPlugin,
             FramepacePlugin,
             Shape2dPlugin::default(),
+            ShapeShadersPlugin,
             ConfigPlugin,
             SavePlugin,
             GraphicsPlugin,
