@@ -1,12 +1,5 @@
-use bevy::{asset::load_internal_asset, prelude::*};
+use bevy::prelude::*;
 use bevy_asset_loader::prelude::*;
-use bevy_vector_shapes::{
-    render::{
-        CORE_HANDLE, DISC_HANDLE, LINE_HANDLE, NGON_HANDLE, RECT_HANDLE, ShapeData as _,
-        TRIANGLE_HANDLE,
-    },
-    shapes::{DiscData, LineData, NgonData, RectData, TriangleData},
-};
 
 use crate::{
     graphics::{SpriteSection, SpriteSheet},
@@ -63,64 +56,4 @@ pub struct Fonts {
     pub raleway: Handle<Font>,
     #[asset(path = "fonts/raleway/Raleway-Italic-VariableFont_wght.ttf")]
     pub raleway_italic: Handle<Font>,
-}
-
-#[derive(Debug, Copy, Clone, Default)]
-pub struct ShapeShadersPlugin;
-impl Plugin for ShapeShadersPlugin {
-    fn build(&self, _app: &mut App) {}
-
-    fn finish(&self, app: &mut App) {
-        load_internal_asset!(
-            app,
-            CORE_HANDLE,
-            "embedded_assets/shaders/core.wgsl",
-            Shader::from_wgsl
-        );
-
-        let defs = DiscData::shader_defs(app);
-        load_internal_asset!(
-            app,
-            DISC_HANDLE,
-            "embedded_assets/shaders/shapes/src/render/shaders/shapes/disc.wgsl",
-            Shader::from_wgsl_with_defs,
-            defs
-        );
-
-        let defs = LineData::shader_defs(app);
-        load_internal_asset!(
-            app,
-            LINE_HANDLE,
-            "embedded_assets/shaders/shapes/src/render/shaders/shapes/line.wgsl",
-            Shader::from_wgsl_with_defs,
-            defs
-        );
-
-        let defs = NgonData::shader_defs(app);
-        load_internal_asset!(
-            app,
-            NGON_HANDLE,
-            "embedded_assets/shaders/shapes/src/render/shaders/shapes/ngon.wgsl",
-            Shader::from_wgsl_with_defs,
-            defs
-        );
-
-        let defs = RectData::shader_defs(app);
-        load_internal_asset!(
-            app,
-            RECT_HANDLE,
-            "embedded_assets/shaders/shapes/src/render/shaders/shapes/rect.wgsl",
-            Shader::from_wgsl_with_defs,
-            defs
-        );
-
-        let defs = TriangleData::shader_defs(app);
-        load_internal_asset!(
-            app,
-            TRIANGLE_HANDLE,
-            "embedded_assets/shaders/shapes/src/render/shaders/shapes/tri.wgsl",
-            Shader::from_wgsl_with_defs,
-            defs
-        );
-    }
 }

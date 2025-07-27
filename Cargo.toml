@@ -76,3 +76,4 @@ dev = ["bevy/track_location"]
 
 [patch.crates-io]
 avian2d = { git = "https://github.com/Jondolf/avian" }
+bevy_vector_shapes = { git = "https://github.com/GglLfr/bevy_vector_shapes" }
