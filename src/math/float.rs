@@ -36,17 +36,13 @@ impl<T: Float> FloatTransformer<T> for () {
 
 #[derive(Debug, Copy, Clone)]
 pub struct Remap<T: Float> {
-    pub src_from: T,
-    pub src_to: T,
-    pub dst_from: T,
-    pub dst_to: T,
+    pub min: T,
+    pub max: T,
 }
 
 impl<T: Float> FloatTransformer<T> for Remap<T> {
     fn apply_within(&self, value: T, min: T, max: T) -> T {
-        self.dst_from
-            + ((value - min) / (max - min) - self.src_from) / (self.src_to - self.src_from)
-                * (self.dst_to - self.dst_from)
+        self.min + (value - min) / (max - min) * (self.max - self.min)
     }
 }
 
@@ -184,6 +180,10 @@ pub trait FloatTransformExt: Float {
 
     fn pow_out_within(self, exponent: u32, min: Self, max: Self) -> Self {
         PowOut { exponent }.apply_within(self, min, max)
+    }
+
+    fn re_map(self, min: Self, max: Self) -> Self {
+        Remap { min, max }.apply(self)
     }
 
     fn min_mag(self, min: Self) -> Self {

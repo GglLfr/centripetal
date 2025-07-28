@@ -27,25 +27,16 @@ use serde::{Deserialize, Serialize};
 use smallvec::smallvec;
 
 use crate::{
-    PIXELS_PER_UNIT, SaveApp, Sprites,
     graphics::{
         Animation, AnimationFrom, AnimationHooks, AnimationMode, EntityColor, SpriteDrawer,
         SpriteSection,
-    },
-    logic::{
-        CameraTarget, Fields, FromLevel, LevelApp, LevelEntities, OnTimeFinished, TimeStun, Timed,
-        effects::Ring,
-        entities::{
-            Health, Killed, NoKillDespawn,
+    }, logic::{
+        effects::Ring, entities::{
             penumbra::{
-                AttractedAction, AttractedInitial, AttractedPrediction, HomingTarget, LaunchAction,
-                Launched, bullet,
-            },
-        },
-        levels::in_level,
-    },
-    math::{FloatTransformExt, RngExt},
-    resume, suspend, trans_wait,
+                bullet, AttractedAction, AttractedInitial, AttractedPrediction, Attractor, HomingTarget, LaunchAction, Launched
+            }, Health, Killed, NoKillDespawn
+        }, levels::in_level, CameraTarget, Fields, FromLevel, LevelApp, LevelEntities, OnTimeFinished, TimeStun, Timed
+    }, math::{FloatTransformExt, Interp, RngExt}, resume, suspend, trans_wait, SaveApp, Sprites, PIXELS_PER_UNIT
 };
 
 #[derive(
@@ -89,6 +80,7 @@ impl FromLevel for Instance {
         SRes<Sprites>,
         SQuery<Read<Transform>>,
         SQuery<Read<AttractedInitial>>,
+        SQuery<Read<Attractor>>,
         ShapeCommands<'static, 'static>,
     );
     type Data = Read<LevelEntities>;
@@ -96,7 +88,9 @@ impl FromLevel for Instance {
     fn from_level(
         mut e: EntityCommands,
         _: &Fields,
-        (cutscene_shown, sprites, transforms, initials, shapes): SystemParamItem<Self::Param>,
+        (cutscene_shown, sprites, transforms, initials, attractors, shapes): SystemParamItem<
+            Self::Param,
+        >,
         entities: QueryItem<Self::Data>,
     ) -> Result {
         if !**cutscene_shown {
@@ -111,6 +105,7 @@ impl FromLevel for Instance {
                 });
 
             let initial = initials.get(selene).copied().unwrap_or_default();
+            let attractor_radius = attractors.get(attractor)?.radius;
             let [&selene_trns, &attractor_trns] = transforms.get_many([selene, attractor])?;
 
             #[must_use]
@@ -202,8 +197,8 @@ impl FromLevel for Instance {
                             ChildOf(e),
                             Transform::from_xyz(0., 0., -1.),
                             Ring {
-                                radius: 16.,
-                                thickness: 3.,
+                                radius_to: 16.,
+                                thickness_from: 3.,
                                 colors: smallvec![Color::linear_rgb(4., 2., 1.)],
                                 ..default()
                             },
@@ -235,6 +230,33 @@ impl FromLevel for Instance {
                                     "in",
                                     move |_: In<Entity>, mut commands: Commands| -> Result {
                                         commands.get_entity(level_entity)?.insert(Done::Success);
+                                        commands.spawn((
+                                            ChildOf(level_entity),
+                                            attractor_trns,
+                                            Ring {
+                                                radius_from: attractor_radius,
+                                                radius_to: attractor_radius + 24.,
+                                                thickness_from: 2.,
+                                                colors: smallvec![Color::linear_rgb(1., 2., 6.), Color::linear_rgb(1., 1., 2.)],
+                                                radius_interp: Interp::PowOut { exponent: 3 },
+                                                ..default()
+                                            },
+                                            Timed::new(Duration::from_millis(480)),
+                                        )).observe(Timed::despawn_on_finished);
+
+                                        commands.spawn((
+                                            ChildOf(level_entity),
+                                            attractor_trns,
+                                            Ring {
+                                                radius_to: attractor_radius,
+                                                thickness_from: 2.,
+                                                colors: smallvec![Color::linear_rgb(1., 2., 6.), Color::linear_rgb(1., 1., 2.)],
+                                                radius_interp: Interp::PowOut { exponent: 2 },
+                                                ..default()
+                                            },
+                                            Timed::new(Duration::from_millis(640)),
+                                        )).observe(Timed::despawn_on_finished);
+                                        
                                         Ok(())
                                     },
                                 )
