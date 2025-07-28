@@ -117,11 +117,14 @@ impl Plugin for GraphicsPlugin {
             let world = render_app
                 .init_resource::<LockedTextureCache>()
                 .init_resource::<BlitPixelizedShapes>()
-                .init_resource::<BlitPixelizedShapesPipelines>()
                 .add_systems(
                     Render,
                     (
-                        prepare_blit_pixelized_shape_pipelines.in_set(RenderSet::Prepare),
+                        (
+                            prepare_blit_pixelized_shape_buffers,
+                            prepare_blit_pixelized_shape_pipelines,
+                        )
+                            .in_set(RenderSet::Prepare),
                         update_locked_texture_cache.in_set(RenderSet::Cleanup),
                     ),
                 )
