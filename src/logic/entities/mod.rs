@@ -178,10 +178,19 @@ impl Plugin for EntitiesPlugin {
                 color_selene_slash,
                 update_launch_idle,
                 update_launch_charging,
-                draw_attractor_radius.run_if(in_state(GameState::InGame)),
                 draw_selene_launch_disc,
-                draw_selene_prediction_trajectory,
-            ),
+                draw_attractor_radius,
+            )
+                .run_if(in_state(GameState::InGame)),
+        )
+        .add_systems(
+            PostUpdate,
+            (
+                predict_attract_trajectory,
+                draw_selene_prediction_trajectory.run_if(in_state(GameState::InGame)),
+            )
+                .chain()
+                .after(TransformSystem::TransformPropagate),
         )
         .add_systems(
             SubstepSchedule,
@@ -191,16 +200,13 @@ impl Plugin for EntitiesPlugin {
         )
         .add_systems(
             PhysicsSchedule,
-            (
-                predict_attract_trajectory.after(SolverSet::Finalize),
-                (
-                    (detect_attracted_entities, remove_attracted_initials).chain(),
-                    trigger_launch_charging,
-                    kill_out_of_bounds,
-                )
-                    .in_set(PhysicsStepSet::SpatialQuery)
-                    .after(update_spatial_query_pipeline),
+            ((
+                (detect_attracted_entities, remove_attracted_initials).chain(),
+                trigger_launch_charging,
+                kill_out_of_bounds,
             )
+                .in_set(PhysicsStepSet::SpatialQuery)
+                .after(update_spatial_query_pipeline),)
                 .ambiguous_with_all(),
         );
     }

@@ -16,7 +16,7 @@ use bevy_vector_shapes::{
 
 use crate::{
     Sprites,
-    graphics::{Animation, AnimationMode, EntityColor},
+    graphics::{Animation, AnimationMode, EntityColor, SpriteDrawer, SpriteSection},
     logic::{
         CameraTarget, Fields, FromLevelEntity, IsPlayer, Timed,
         entities::{
@@ -42,6 +42,7 @@ pub struct SlashEffect;
     CameraTarget,
     PenumbraEntity,
     LaunchTarget,
+    SpriteDrawer,
     AttractedParams {
         ascend: 240.,
         descend: 240.,
@@ -196,15 +197,16 @@ pub fn draw_selene_launch_disc(
 }
 
 pub fn draw_selene_prediction_trajectory(
-    mut shapes: ShapePainter,
-    selene: Query<&AttractedPrediction, With<SelenePenumbra>>,
+    sprites: Res<Sprites>,
+    sprite_sections: Res<Assets<SpriteSection>>,
+    selene: Query<(&GlobalTransform, &AttractedPrediction, &SpriteDrawer), With<SelenePenumbra>>,
 ) {
+    let Some(ring) = sprite_sections.get(&sprites.ring_1) else {
+        return;
+    };
+
     const SKIP: f32 = 8.;
-
-    shapes.cap = Cap::Round;
-    shapes.thickness_type = ThicknessType::World;
-
-    for prediction in &selene {
+    for (&trns, prediction, drawer) in &selene {
         let max = prediction.max_distance;
         let mut accum = 0.;
         let mut skip = 0.;
@@ -223,11 +225,23 @@ pub fn draw_selene_prediction_trajectory(
                 let count_frac = skip / SKIP;
                 let count = count_frac as u32;
                 for i in 0..count {
-                    let pos = begin.lerp(b, i as f32 / count_frac);
+                    let rel = GlobalTransform::from(Transform {
+                        translation: begin
+                            .lerp(b, i as f32 / count_frac)
+                            .extend(trns.translation().z),
+                        ..default()
+                    });
 
-                    shapes.transform.translation = pos.extend(0.);
-                    shapes.color = Color::linear_rgba(1., 2., 4., (1. - accum / max) * 0.5);
-                    shapes.rect(Vec2::splat(1.));
+                    let rel = rel.reparented_to(&trns);
+                    drawer.draw_at(
+                        rel.translation,
+                        Rot2::IDENTITY,
+                        ring.sprite_with(
+                            Color::linear_rgba(1., 2., 4., (1. - accum / max) * 0.75),
+                            None,
+                            default(),
+                        ),
+                    );
                 }
 
                 begin = begin.lerp(b, count as f32 / count_frac);

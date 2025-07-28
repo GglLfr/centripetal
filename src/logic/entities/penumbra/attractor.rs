@@ -244,24 +244,25 @@ pub fn apply_attractor_accels(
 
 pub fn predict_attract_trajectory(
     time: Res<Time<Physics>>,
-    attractors: Query<(&Position, &Attractor, &Collider, &AttractorEntities)>,
-    mut attracted: Query<(&Position, &LinearVelocity, &mut AttractedPrediction)>,
+    attractors: Query<(&GlobalTransform, &Attractor, &Collider, &AttractorEntities)>,
+    mut attracted: Query<(&GlobalTransform, &LinearVelocity, &mut AttractedPrediction)>,
 ) {
     let dt = time.delta_secs() / 3.;
-    for (&attractor_pos, attractor, attractor_collision, attracted_entities) in &attractors {
+    for (&attractor_trns, attractor, attractor_collision, attracted_entities) in &attractors {
         let g = attractor.gravity;
+        let attractor_pos = attractor_trns.translation().truncate();
         let mut attracted = attracted.iter_many_mut(&**attracted_entities);
 
-        'outer: while let Some((&pos, &vel, mut prediction)) = attracted.fetch_next() {
+        'outer: while let Some((&trns, &vel, mut prediction)) = attracted.fetch_next() {
             let max = prediction.max_distance;
             let mut accum = 0.;
 
-            let mut pos = *pos;
+            let mut pos = trns.translation().truncate();
             let mut vel = *vel;
 
             prediction.points.clear();
             while accum < max {
-                vel += gravity_linvel(dt, pos, *attractor_pos, g).0;
+                vel += gravity_linvel(dt, pos, attractor_pos, g).0;
                 let new_pos = pos + vel * dt;
 
                 accum += (new_pos - pos).length();
