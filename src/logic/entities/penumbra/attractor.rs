@@ -1,3 +1,5 @@
+use std::{f32::consts::PI, time::Duration};
+
 use avian2d::{dynamics::solver::solver_body::SolverBody, prelude::*};
 use bevy::{
     ecs::{
@@ -11,7 +13,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     Sprites,
-    graphics::{Animation, AnimationMode, EntityColor},
+    graphics::{Animation, AnimationMode, EntityColor, SpriteDrawer, SpriteSection},
     logic::{
         Fields, FromLevelEntity,
         entities::{
@@ -19,13 +21,14 @@ use crate::{
             penumbra::{LaunchTarget, PenumbraEntity},
         },
     },
+    math::DurationExt,
 };
 
 #[derive(Debug, Copy, Clone, Default, Component)]
 pub struct NoAttract;
 
 #[derive(Debug, Clone, Component)]
-#[require(PenumbraEntity, AttractorEntities)]
+#[require(PenumbraEntity, AttractorEntities, SpriteDrawer)]
 pub struct Attractor {
     pub radius: f32,
     pub gravity: f32,
@@ -105,18 +108,6 @@ pub struct AttractedParams {
     pub prograde: f32,
     pub retrograde: f32,
     pub precise_scale: f32,
-}
-
-pub fn draw_attractor_radius(mut gizmos: Gizmos, attractors: Query<(&Position, &Attractor)>) {
-    for (&pos, attractor) in &attractors {
-        gizmos
-            .circle_2d(
-                Isometry2d::from_translation(*pos),
-                attractor.radius,
-                LinearRgba::new(0.67, 0.67, 0.67, 0.67),
-            )
-            .resolution(64);
-    }
 }
 
 pub fn detect_attracted_entities(
@@ -284,6 +275,60 @@ pub fn predict_attract_trajectory(
 
                 prediction.points.push(pos);
             }
+        }
+    }
+}
+
+pub fn draw_attractor_radius(
+    time: Res<Time>,
+    sprites: Res<Sprites>,
+    sprite_sections: Res<Assets<SpriteSection>>,
+    attractors: Query<(&Attractor, &SpriteDrawer)>,
+) {
+    let [Some(ring_1), Some(ring_2), Some(ring_3), Some(ring_4)] = [
+        sprite_sections.get(&sprites.ring_1),
+        sprite_sections.get(&sprites.ring_2),
+        sprite_sections.get(&sprites.ring_3),
+        sprite_sections.get(&sprites.ring_4),
+    ] else {
+        return;
+    };
+
+    let elapsed = time.elapsed();
+    let offset = Duration::from_millis(24);
+    let bleed = 24;
+    let lifetime = bleed * offset;
+
+    for (attractor, drawer) in &attractors {
+        let count = (2. * PI * attractor.radius / 8.).round().max(bleed as f32) as u32;
+        let step = Rotation::radians(2. * PI / count as f32);
+        let mut rotation = Rotation::IDENTITY;
+
+        let total_lifetime = (count - bleed) * offset + lifetime;
+
+        for i in 0..count {
+            let elapsed = (elapsed + i * offset)
+                .rem(total_lifetime)
+                .min(lifetime)
+                .div_duration_f32(lifetime);
+
+            let (ring, alpha) = match elapsed {
+                1. => (ring_1, 0.5),
+                e if e >= 0.8 => (ring_2, 0.6),
+                e if e >= 0.6 => (ring_3, 0.7),
+                e if e >= 0.4 => (ring_4, 0.8),
+                e if e >= 0.2 => (ring_3, 0.7),
+                _ => (ring_2, 0.6),
+            };
+
+            let (sin, cos) = rotation.sin_cos();
+            drawer.draw_at(
+                vec3(cos * attractor.radius, sin * attractor.radius, 1.),
+                Rot2::IDENTITY,
+                ring.sprite_with(Color::linear_rgba(1., 2., 4., alpha), None, default()),
+            );
+
+            rotation *= step;
         }
     }
 }

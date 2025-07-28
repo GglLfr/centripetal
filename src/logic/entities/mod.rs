@@ -5,7 +5,7 @@ use leafwing_input_manager::prelude::*;
 #[cfg(feature = "dev")]
 use crate::logic::entities::penumbra::draw_attractor_radius;
 use crate::logic::{
-    LevelApp, LevelBounds, LevelUnload,
+    GameState, LevelApp, LevelBounds, LevelUnload,
     entities::penumbra::{
         AttractedAction, Attractor, GenericPenumbra, LaunchAction, SelenePenumbra, ThornPillar,
         ThornRing, apply_attractor_accels, apply_homing_velocity, color_selene_slash,
@@ -178,7 +178,9 @@ impl Plugin for EntitiesPlugin {
                 color_selene_slash,
                 update_launch_idle,
                 update_launch_charging,
-                (draw_selene_launch_disc, draw_selene_prediction_trajectory),
+                draw_attractor_radius.run_if(in_state(GameState::InGame)),
+                draw_selene_launch_disc,
+                draw_selene_prediction_trajectory,
             ),
         )
         .add_systems(
@@ -201,8 +203,5 @@ impl Plugin for EntitiesPlugin {
             )
                 .ambiguous_with_all(),
         );
-
-        #[cfg(feature = "dev")]
-        app.add_systems(Update, draw_attractor_radius);
     }
 }
