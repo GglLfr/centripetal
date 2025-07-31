@@ -33,7 +33,8 @@ use crate::{
         SpriteSection,
     },
     logic::{
-        CameraTarget, Fields, FromLevel, LevelApp, LevelEntities, OnTimeFinished, TimeStun, Timed,
+        CameraConfines, CameraTarget, Fields, FromLevel, LevelApp, LevelEntities, OnTimeFinished,
+        TimeStun, Timed,
         effects::Ring,
         entities::{
             Health, Killed, NoKillDespawn,
@@ -238,11 +239,13 @@ impl FromLevel for Instance {
 
             e.insert((
                 Init,
+                CameraTarget,
+                CameraConfines::Fixed(attractor_trns.translation.xy()),
                 StateMachine::default()
                     .trans::<Init, _>(trans_wait(Duration::from_secs(1)), SpawningAttractor)
                     // Attractor spawning effect.
                     .on_enter::<SpawningAttractor>(move |e| {
-                        e.with_child((
+                        e.remove::<(CameraTarget, CameraConfines)>().with_child((
                             Transform {
                                 translation: attractor_trns.translation.with_z(1.),
                                 ..attractor_trns

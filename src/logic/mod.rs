@@ -3,7 +3,7 @@ use std::ops::Deref;
 use bevy::{
     ecs::system::SystemParam, prelude::*, render::camera::CameraUpdateSystem, time::TimeSystem,
 };
-use iyes_progress::ProgressPlugin;
+use iyes_progress::{CheckProgressSet, ProgressPlugin};
 use leafwing_input_manager::prelude::*;
 
 use crate::{
@@ -75,6 +75,7 @@ impl Plugin for LogicPlugin {
             .add_sub_state::<InGameState>()
             .add_plugins(
                 ProgressPlugin::<InGameState>::new()
+                    .check_progress_in(Update)
                     .with_state_transition(InGameState::Loading, InGameState::Resumed),
             )
             .init_resource::<RegisteredLevels>()
@@ -88,7 +89,9 @@ impl Plugin for LogicPlugin {
             )
             .add_systems(
                 Update,
-                handle_load_level_progress.run_if(in_state(InGameState::Loading)),
+                handle_load_level_progress
+                    .run_if(in_state(InGameState::Loading))
+                    .before(CheckProgressSet),
             )
             .add_systems(OnExit(InGameState::Loading), handle_load_level_end)
             .add_systems(Startup, startup_camera)

@@ -15,7 +15,7 @@ use bevy::{
 use crate::logic::LevelBounds;
 
 #[derive(Debug, Copy, Clone, Default, Component)]
-#[require(Transform, CameraConfines, CameraScale)]
+#[require(Transform, CameraConfines)]
 pub struct CameraTarget;
 
 #[derive(Debug, Copy, Clone, Default, Component)]
@@ -23,14 +23,6 @@ pub enum CameraConfines {
     #[default]
     Level,
     Fixed(Vec2),
-}
-
-#[derive(Debug, Copy, Clone, Component, Deref, DerefMut)]
-pub struct CameraScale(pub Vec2);
-impl Default for CameraScale {
-    fn default() -> Self {
-        Self(Vec2::splat(1.))
-    }
 }
 
 #[derive(Deref, DerefMut)]
