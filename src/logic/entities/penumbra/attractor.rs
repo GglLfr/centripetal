@@ -250,14 +250,14 @@ pub fn predict_attract_trajectory(
     let dt = time.delta_secs() / 3.;
     for (&attractor_trns, attractor, attractor_collision, attracted_entities) in &attractors {
         let g = attractor.gravity;
-        let attractor_pos = attractor_trns.translation().truncate();
+        let attractor_pos = attractor_trns.translation().xy();
         let mut attracted = attracted.iter_many_mut(&**attracted_entities);
 
         'outer: while let Some((&trns, &vel, mut prediction)) = attracted.fetch_next() {
             let max = prediction.max_distance;
             let mut accum = 0.;
 
-            let mut pos = trns.translation().truncate();
+            let mut pos = trns.translation().xy();
             let mut vel = *vel;
 
             prediction.points.clear();

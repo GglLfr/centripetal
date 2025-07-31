@@ -126,7 +126,7 @@ impl<T: Float> FloatTransformer<T> for Pow {
     }
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Clone)]
 pub enum Interp<T: Float> {
     Identity,
     Reverse,
@@ -134,6 +134,7 @@ pub enum Interp<T: Float> {
     PowIn { exponent: u32 },
     PowOut { exponent: u32 },
     Pow { exponent: u32 },
+    Chain(Vec<Self>),
 }
 
 impl<T: Float> FloatTransformer<T> for Interp<T> {
@@ -145,6 +146,9 @@ impl<T: Float> FloatTransformer<T> for Interp<T> {
             Self::PowIn { exponent } => PowIn { exponent }.apply_within(value, min, max),
             Self::PowOut { exponent } => PowOut { exponent }.apply_within(value, min, max),
             Self::Pow { exponent } => Pow { exponent }.apply_within(value, min, max),
+            Self::Chain(ref chain) => chain
+                .iter()
+                .fold(value, |value, interp| interp.apply_within(value, min, max)),
         }
     }
 }

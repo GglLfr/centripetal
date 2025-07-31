@@ -270,6 +270,10 @@ impl AnimationHooks {
         }
         Ok(())
     }
+
+    pub fn despawn_on_done(key: impl Into<String>) -> Self {
+        Self::default().on_done(key, Self::despawn)
+    }
 }
 
 impl DynamicBundle for AnimationHooks {

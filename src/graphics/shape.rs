@@ -85,8 +85,8 @@ pub fn prepare_blit_pixelized_shape_buffers(
     for (e, view, buffer) in &mut cameras {
         let ndc_to_world = view.world_from_view.compute_matrix() * view.clip_from_view.inverse();
         let value = BlitPixelizedShapesBufferValue {
-            bottom_left: ndc_to_world.project_point3(vec3(-1., -1., 0.)).truncate(),
-            top_right: ndc_to_world.project_point3(vec3(1., 1., 0.)).truncate(),
+            bottom_left: ndc_to_world.project_point3(vec3(-1., -1., 0.)).xy(),
+            top_right: ndc_to_world.project_point3(vec3(1., 1., 0.)).xy(),
         };
 
         if let Some(mut buffer) = buffer {

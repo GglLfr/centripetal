@@ -35,8 +35,7 @@ impl FromLevelEntity for ThornPillar {
         let ccw = fields.bool("ccw")?;
         let facing = fields.point_px("facing")?.as_vec2();
 
-        trns.rotation =
-            Quat::from_axis_angle(Vec3::Z, (facing - trns.translation.truncate()).to_angle());
+        trns.rotation = Quat::from_axis_angle(Vec3::Z, (facing - trns.translation.xy()).to_angle());
         e.insert((
             Self,
             AttractedInitial { ccw },

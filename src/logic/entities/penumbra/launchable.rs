@@ -64,6 +64,9 @@ impl TryLaunch {
         self.stopped = true;
     }
 
+    /// # Panics
+    ///
+    /// Panics if called on observers observing [`Self::by`], which is always triggered initially.
     pub fn hit_data(&self) -> RayHitData {
         self.current_hit.unwrap()
     }
@@ -71,10 +74,16 @@ impl TryLaunch {
 
 impl EntityCommand<Result> for TryLaunch {
     fn apply(mut self, mut entity: EntityWorldMut) -> Result {
-        self.by = entity.id(); // Sanity assignment.
+        let by = entity.id();
+        self.by = by; // Sanity assignment.
         let hits = std::mem::take(&mut self.hits);
 
         let stopped_by = entity.world_scope(|world| {
+            world.trigger_targets_ref(&mut self, by);
+            if self.stopped {
+                return by;
+            }
+
             for hit in hits {
                 self.current_hit = Some(hit);
                 world.trigger_targets_ref(&mut self, hit.entity);

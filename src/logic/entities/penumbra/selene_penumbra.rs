@@ -16,14 +16,16 @@ use bevy_vector_shapes::{
 
 use crate::{
     Sprites,
-    graphics::{Animation, AnimationMode, EntityColor, SpriteDrawer, SpriteSection},
+    graphics::{
+        Animation, AnimationHooks, AnimationMode, EntityColor, SpriteDrawer, SpriteSection,
+    },
     logic::{
-        CameraTarget, Fields, FromLevelEntity, IsPlayer, Timed,
+        CameraTarget, Fields, FromLevelEntity, IsPlayer, TimeStun, Timed,
         entities::{
-            Health, MaxHealth, TryHurt,
+            Health, Hurt, MaxHealth, TryHurt,
             penumbra::{
                 AttractedInitial, AttractedParams, AttractedPrediction, LaunchCharging,
-                LaunchCooldown, LaunchDurations, LaunchTarget, Launched, PenumbraEntity,
+                LaunchCooldown, LaunchDurations, LaunchTarget, Launched, PenumbraEntity, TryLaunch,
             },
         },
     },
@@ -96,6 +98,28 @@ impl FromLevelEntity for SelenePenumbra {
             },
             DebugRender::none(),
         ))
+        .observe(|trigger: Trigger<Hurt>, mut commands: Commands| {
+            commands.spawn((ChildOf(trigger.target()), TimeStun::short_instant()));
+        })
+        .observe(
+            |trigger: Trigger<TryLaunch>, mut commands: Commands, sprites: Res<Sprites>| {
+                commands.entity(trigger.target()).with_children(|children| {
+                    children.spawn((
+                        Transform::from_xyz(0., 0., 0f32.next_up()),
+                        Animation::new(sprites.selene_try_launch_front.clone_weak(), "anim"),
+                        AnimationHooks::despawn_on_done("anim"),
+                        EntityColor(Color::linear_rgb(1., 4., 12.)),
+                    ));
+
+                    children.spawn((
+                        Transform::from_xyz(0., 0., 0f32.next_down()),
+                        Animation::new(sprites.selene_try_launch_back.clone_weak(), "anim"),
+                        AnimationHooks::despawn_on_done("anim"),
+                        EntityColor(Color::linear_rgb(1., 4., 12.)),
+                    ));
+                });
+            },
+        )
         .observe(
             |trigger: Trigger<Launched>,
              mut commands: Commands,

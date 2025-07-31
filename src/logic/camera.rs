@@ -180,7 +180,7 @@ pub fn move_camera(
         }
     }
 
-    let trns = trns.translation.truncate();
+    let trns = trns.translation.xy();
     camera_trns.translation = match target_confines {
         CameraConfines::Level => {
             let cam_bounds = ortho.area.size();

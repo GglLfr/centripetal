@@ -191,7 +191,7 @@ pub fn update_time_stun(
     for (e, &TimeStun(kind, started)) in &stuns {
         scale = match kind {
             TimeStunKind::ShortInstant => {
-                if now - started >= Duration::from_millis(100) {
+                if now - started >= Duration::from_millis(200) {
                     commands.entity(e).despawn();
                     1.
                 } else {
@@ -204,10 +204,10 @@ pub fn update_time_stun(
                     1.
                 } else {
                     let f = (now - started).div_duration_f32(Duration::from_millis(1000));
-                    if f < 0.1 {
+                    if f < 0.2 {
                         0.
                     } else {
-                        0.2 + f.threshold(0.1, 1.) * 0.8
+                        0.2 + f.threshold(0.2, 1.) * 0.8
                     }
                 }
             }

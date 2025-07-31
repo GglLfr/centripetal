@@ -27,16 +27,25 @@ use serde::{Deserialize, Serialize};
 use smallvec::smallvec;
 
 use crate::{
+    PIXELS_PER_UNIT, SaveApp, Sprites,
     graphics::{
         Animation, AnimationFrom, AnimationHooks, AnimationMode, EntityColor, SpriteDrawer,
         SpriteSection,
-    }, logic::{
-        effects::Ring, entities::{
+    },
+    logic::{
+        CameraTarget, Fields, FromLevel, LevelApp, LevelEntities, OnTimeFinished, TimeStun, Timed,
+        effects::Ring,
+        entities::{
+            Health, Killed, NoKillDespawn,
             penumbra::{
-                bullet, AttractedAction, AttractedInitial, AttractedPrediction, Attractor, HomingTarget, LaunchAction, Launched
-            }, Health, Killed, NoKillDespawn
-        }, levels::in_level, CameraTarget, Fields, FromLevel, LevelApp, LevelEntities, OnTimeFinished, TimeStun, Timed
-    }, math::{FloatTransformExt, Interp, RngExt}, resume, suspend, trans_wait, SaveApp, Sprites, PIXELS_PER_UNIT
+                AttractedAction, AttractedInitial, AttractedPrediction, Attractor, HomingTarget,
+                LaunchAction, Launched, bullet,
+            },
+        },
+        levels::in_level,
+    },
+    math::{FloatTransformExt, Interp, RngExt},
+    resume, suspend, trans_wait,
 };
 
 #[derive(
@@ -119,9 +128,27 @@ impl FromLevel for Instance {
                 let target_pos = GlobalTransform::from(selene_trns)
                     .reparented_to(&GlobalTransform::from(effect_trns))
                     .translation
-                    .truncate();
+                    .xy();
 
                 move |world: &mut World| -> Result {
+                    world
+                        .spawn((
+                            ChildOf(level_entity),
+                            effect_trns,
+                            Ring {
+                                radius_to: 128.,
+                                thickness_from: 2.,
+                                colors: smallvec![
+                                    Color::linear_rgb(1., 2., 6.),
+                                    Color::linear_rgb(1., 1., 2.)
+                                ],
+                                radius_interp: Interp::PowOut { exponent: 2 },
+                                ..default()
+                            },
+                            Timed::new(Duration::from_millis(640)),
+                        ))
+                        .observe(Timed::despawn_on_finished);
+
                     accept(
                         world
                             .spawn((
@@ -238,25 +265,12 @@ impl FromLevel for Instance {
                                                 radius_to: attractor_radius + 24.,
                                                 thickness_from: 2.,
                                                 colors: smallvec![Color::linear_rgb(1., 2., 6.), Color::linear_rgb(1., 1., 2.)],
-                                                radius_interp: Interp::PowOut { exponent: 3 },
+                                                radius_interp: Interp::PowIn { exponent: 3 },
                                                 ..default()
                                             },
                                             Timed::new(Duration::from_millis(480)),
                                         )).observe(Timed::despawn_on_finished);
 
-                                        commands.spawn((
-                                            ChildOf(level_entity),
-                                            attractor_trns,
-                                            Ring {
-                                                radius_to: attractor_radius,
-                                                thickness_from: 2.,
-                                                colors: smallvec![Color::linear_rgb(1., 2., 6.), Color::linear_rgb(1., 1., 2.)],
-                                                radius_interp: Interp::PowOut { exponent: 2 },
-                                                ..default()
-                                            },
-                                            Timed::new(Duration::from_millis(640)),
-                                        )).observe(Timed::despawn_on_finished);
-                                        
                                         Ok(())
                                     },
                                 )
@@ -277,8 +291,7 @@ impl FromLevel for Instance {
                                     AnimationFrom::sprite(|sprites| {
                                         (sprites.grand_attractor_spawned.clone_weak(), "anim")
                                     }),
-                                    AnimationHooks::default()
-                                        .on_done("anim", AnimationHooks::despawn),
+                                    AnimationHooks::despawn_on_done("anim"),
                                     EntityColor(Color::linear_rgba(1., 2., 24., 1.)),
                                 ));
                             });
@@ -487,14 +500,16 @@ fn draw_attractor_spawn_effect(
     sprite_sections: Res<Assets<SpriteSection>>,
     effects: Query<(Entity, &AttractorSpawnEffect, &SpriteDrawer, &Timed)>,
 ) {
-    let Some(ring_6) = sprite_sections.get(&sprites.ring_6) else {
+    let rings @ [Some(..), Some(..), Some(..), Some(..), Some(..)] = [
+        sprite_sections.get(&sprites.ring_2),
+        sprite_sections.get(&sprites.ring_3),
+        sprite_sections.get(&sprites.ring_4),
+        sprite_sections.get(&sprites.ring_6),
+        sprite_sections.get(&sprites.ring_8),
+    ] else {
         return;
     };
-    let Some(ring_8) = sprite_sections.get(&sprites.ring_8) else {
-        return;
-    };
-
-    let rings = [ring_6, ring_8];
+    let rings = rings.map(Option::unwrap);
     for (e, effect, drawer, &timed) in &effects {
         let mut rng = Rng::with_seed(e.to_bits());
         let f = timed.frac();

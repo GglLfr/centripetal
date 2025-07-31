@@ -32,7 +32,7 @@ impl FromLevelEntity for ThornRing {
         let facing = fields.point_px("facing")?.as_vec2();
         let opening = fields.float("opening")?.to_radians();
 
-        let pos = trns.translation.truncate();
+        let pos = trns.translation.xy();
         let radius = (facing - pos).length();
         let resolution = radius as usize;
 
@@ -43,8 +43,7 @@ impl FromLevelEntity for ThornRing {
             vertices.push(Vec2::new(cos * radius + radius, sin * radius));
         }
 
-        trns.rotation =
-            Quat::from_axis_angle(Vec3::Z, (facing - trns.translation.truncate()).to_angle());
+        trns.rotation = Quat::from_axis_angle(Vec3::Z, (facing - trns.translation.xy()).to_angle());
         e.insert((
             Self,
             AttractedInitial { ccw },
