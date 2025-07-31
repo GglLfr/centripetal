@@ -21,7 +21,7 @@ use crate::{
             penumbra::{LaunchTarget, PenumbraEntity},
         },
     },
-    math::DurationExt,
+    math::{DurationExt, FloatTransformExt},
 };
 
 #[derive(Debug, Copy, Clone, Default, Component)]
@@ -313,14 +313,15 @@ pub fn draw_attractor_radius(
                 .min(lifetime)
                 .div_duration_f32(lifetime);
 
-            let (ring, alpha) = match elapsed {
-                1. => (ring_1, 0.5),
-                e if e >= 0.8 => (ring_2, 0.6),
-                e if e >= 0.6 => (ring_3, 0.7),
-                e if e >= 0.4 => (ring_4, 0.8),
-                e if e >= 0.2 => (ring_3, 0.7),
-                _ => (ring_2, 0.6),
+            let ring = match elapsed {
+                1. => ring_1,
+                e if e >= 0.8 => ring_2,
+                e if e >= 0.6 => ring_3,
+                e if e >= 0.4 => ring_4,
+                e if e >= 0.2 => ring_3,
+                _ => ring_2,
             };
+            let alpha = elapsed.slope(0.5).pow(2).re_map(0.4, 0.8);
 
             let (sin, cos) = rotation.sin_cos();
             drawer.draw_at(
