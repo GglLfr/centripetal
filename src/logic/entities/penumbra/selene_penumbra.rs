@@ -16,9 +16,7 @@ use bevy_vector_shapes::{
 
 use crate::{
     Sprites,
-    graphics::{
-        Animation, AnimationHooks, AnimationMode, EntityColor, SpriteDrawer, SpriteSection,
-    },
+    graphics::{Animation, AnimationHooks, AnimationMode, BaseColor, SpriteDrawer, SpriteSection},
     logic::{
         CameraTarget, Fields, FromLevelEntity, IsPlayer, TimeStun, Timed,
         entities::{
@@ -83,7 +81,7 @@ impl FromLevelEntity for SelenePenumbra {
             AttractedInitial { ccw },
             Animation::new(sprites.selene_penumbra.clone_weak(), "anim"),
             AnimationMode::Repeat,
-            EntityColor(Color::linear_rgba(1., 2., 24., 1.)),
+            BaseColor(Color::linear_rgba(1., 2., 24., 1.)),
             DiscComponent::arc(shapes.config(), 12., 0., 0.),
             ShapeMaterial {
                 alpha_mode: ShapeAlphaMode::Blend,
@@ -108,14 +106,14 @@ impl FromLevelEntity for SelenePenumbra {
                         Transform::from_xyz(0., 0., 0f32.next_up()),
                         Animation::new(sprites.selene_try_launch_front.clone_weak(), "anim"),
                         AnimationHooks::despawn_on_done("anim"),
-                        EntityColor(Color::linear_rgb(1., 4., 12.)),
+                        BaseColor(Color::linear_rgb(1., 4., 12.)),
                     ));
 
                     children.spawn((
                         Transform::from_xyz(0., 0., 0f32.next_down()),
                         Animation::new(sprites.selene_try_launch_back.clone_weak(), "anim"),
                         AnimationHooks::despawn_on_done("anim"),
-                        EntityColor(Color::linear_rgb(1., 4., 12.)),
+                        BaseColor(Color::linear_rgb(1., 4., 12.)),
                     ));
                 });
             },
@@ -141,7 +139,7 @@ impl FromLevelEntity for SelenePenumbra {
                         Animation::new(sprites.attractor_slash.clone_weak(), "anim"),
                         // TODO Maybe create a nicer way to get timer from total animation time instead of hardcoding.
                         Timed::new(Duration::from_millis(14 * 24)),
-                        EntityColor(Color::linear_rgba(50., 100., 600., 1.)),
+                        BaseColor(Color::linear_rgba(50., 100., 600., 1.)),
                         Transform {
                             translation: attractor_pos.extend(0.),
                             rotation: Quat::from_axis_angle(
@@ -161,7 +159,7 @@ impl FromLevelEntity for SelenePenumbra {
     }
 }
 
-pub fn color_selene_slash(mut slashes: Query<(&Timed, &mut EntityColor), With<SlashEffect>>) {
+pub fn color_selene_slash(mut slashes: Query<(&Timed, &mut BaseColor), With<SlashEffect>>) {
     for (timed, mut color) in &mut slashes {
         **color = Color::linear_rgba(50., 100., 600., 1.).mix(
             &Color::linear_rgba(1., 2., 24., 0.25),

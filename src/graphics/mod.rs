@@ -16,6 +16,7 @@ use bevy_vector_shapes::{
 use seldom_state::set::StateSet;
 
 mod animation;
+mod color;
 mod fbo;
 mod shape;
 mod sprite_alloc;
@@ -23,19 +24,12 @@ mod sprite_drawer;
 mod sprite_sheet;
 
 pub use animation::*;
+pub use color::*;
 pub use fbo::*;
 pub use shape::*;
 pub use sprite_alloc::*;
 pub use sprite_drawer::*;
 pub use sprite_sheet::*;
-
-#[derive(Debug, Copy, Clone, Component, Deref, DerefMut)]
-pub struct EntityColor(pub Color);
-impl Default for EntityColor {
-    fn default() -> Self {
-        Self(Color::WHITE)
-    }
-}
 
 #[derive(Debug, Copy, Clone, Default)]
 pub struct GraphicsPlugin;

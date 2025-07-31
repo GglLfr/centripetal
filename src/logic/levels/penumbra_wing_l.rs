@@ -29,7 +29,7 @@ use smallvec::smallvec;
 use crate::{
     PIXELS_PER_UNIT, SaveApp, Sprites,
     graphics::{
-        Animation, AnimationFrom, AnimationHooks, AnimationMode, EntityColor, SpriteDrawer,
+        Animation, AnimationFrom, AnimationHooks, AnimationMode, BaseColor, SpriteDrawer,
         SpriteSection,
     },
     logic::{
@@ -205,7 +205,7 @@ impl FromLevel for Instance {
                 CollisionEventsEnabled,
                 Animation::new(sprites.collectible_32.clone_weak(), "anim"),
                 AnimationMode::Repeat,
-                EntityColor(Color::linear_rgba(12., 2., 1., 1.)),
+                BaseColor(Color::linear_rgba(12., 2., 1., 1.)),
                 DiscComponent::arc(shapes.config(), 16., 0., 0.),
                 ShapeMaterial {
                     alpha_mode: ShapeAlphaMode::Blend,
@@ -278,7 +278,7 @@ impl FromLevel for Instance {
                                     },
                                 )
                                 .on_done("out", AnimationHooks::despawn),
-                            EntityColor(Color::linear_rgba(1., 2., 24., 1.)),
+                            BaseColor(Color::linear_rgba(1., 2., 24., 1.)),
                         ));
                     })
                     .trans::<SpawningAttractor, _>(done(None), SpawningSelene)
@@ -295,7 +295,7 @@ impl FromLevel for Instance {
                                         (sprites.grand_attractor_spawned.clone_weak(), "anim")
                                     }),
                                     AnimationHooks::despawn_on_done("anim"),
-                                    EntityColor(Color::linear_rgba(1., 2., 24., 1.)),
+                                    BaseColor(Color::linear_rgba(1., 2., 24., 1.)),
                                 ));
                             });
 

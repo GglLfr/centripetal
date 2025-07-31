@@ -17,7 +17,7 @@ use bevy::{
 
 use crate::{
     IntoResultSystem, Sprites,
-    graphics::{EntityColor, SpriteDrawer, SpriteSection, SpriteSheet},
+    graphics::{BaseColor, SpriteDrawer, SpriteSection, SpriteSheet},
 };
 
 #[derive(Debug)]
@@ -442,7 +442,7 @@ pub fn draw_animations(
         &AnimationData,
         &AnimationMode,
         &SpriteDrawer,
-        Option<&EntityColor>,
+        Option<&BaseColor>,
     )>,
 ) {
     animations

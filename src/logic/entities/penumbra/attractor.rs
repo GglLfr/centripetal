@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     Sprites,
-    graphics::{Animation, AnimationMode, EntityColor, SpriteDrawer, SpriteSection},
+    graphics::{Animation, AnimationMode, BaseColor, SpriteDrawer, SpriteSection},
     logic::{
         Fields, FromLevelEntity,
         entities::{
@@ -28,7 +28,15 @@ use crate::{
 pub struct NoAttract;
 
 #[derive(Debug, Clone, Component)]
-#[require(PenumbraEntity, AttractorEntities, SpriteDrawer)]
+#[require(
+    PenumbraEntity,
+    AttractorEntities,
+    SpriteDrawer,
+    Collider::circle(8.),
+    CollisionEventsEnabled,
+    BaseColor(Color::linear_rgb(1., 1., 12.)),
+    DebugRender::none()
+)]
 pub struct Attractor {
     pub radius: f32,
     pub gravity: f32,
@@ -58,12 +66,8 @@ impl FromLevelEntity for Attractor {
                 gravity: strength * strength * radius,
                 caster: Collider::circle(radius),
             },
-            Collider::circle(8.),
-            CollisionEventsEnabled,
             Animation::new(sprites.attractor_regular.clone_weak(), "anim"),
             AnimationMode::Repeat,
-            EntityColor(Color::linear_rgba(1., 1., 12., 1.)),
-            DebugRender::none(),
         ))
         .observe(
             |trigger: Trigger<OnCollisionStart>, mut commands: Commands| {
