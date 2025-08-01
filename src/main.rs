@@ -14,11 +14,13 @@ use seldom_state::prelude::*;
 use crate::{
     graphics::GraphicsPlugin,
     logic::{GameState, LoadLevel, LogicPlugin},
+    ui::UiPlugin,
 };
 
 pub mod graphics;
 pub mod logic;
 pub mod math;
+pub mod ui;
 
 mod asset;
 mod config;
@@ -63,6 +65,7 @@ fn main() -> AppExit {
             SavePlugin,
             GraphicsPlugin,
             LogicPlugin,
+            UiPlugin,
         ))
         .add_loading_state(
             LoadingState::new(GameState::Loading)

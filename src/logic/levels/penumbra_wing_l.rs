@@ -12,6 +12,7 @@ use bevy::{
     },
     prelude::*,
     sprite::Anchor,
+    ui::Val::*,
 };
 use bevy_vector_shapes::{
     prelude::{ShapeCommands, ShapeSpawner},
@@ -27,7 +28,7 @@ use serde::{Deserialize, Serialize};
 use smallvec::smallvec;
 
 use crate::{
-    PIXELS_PER_UNIT, SaveApp, Sprites,
+    Fonts, PIXELS_PER_UNIT, SaveApp, Sprites,
     graphics::{
         Animation, AnimationFrom, AnimationHooks, AnimationMode, BaseColor, SpriteDrawer,
         SpriteSection,
@@ -47,6 +48,7 @@ use crate::{
     },
     math::{FloatTransformExt, Interp, RngExt},
     resume, suspend, trans_wait,
+    ui::WorldspaceUi,
 };
 
 #[derive(
@@ -88,6 +90,7 @@ impl FromLevel for Instance {
     type Param = (
         SRes<IntroShown>,
         SRes<Sprites>,
+        SRes<Fonts>,
         SQuery<Read<Transform>>,
         SQuery<Read<AttractedInitial>>,
         SQuery<Read<Attractor>>,
@@ -98,7 +101,7 @@ impl FromLevel for Instance {
     fn from_level(
         mut e: EntityCommands,
         _: &Fields,
-        (cutscene_shown, sprites, transforms, initials, attractors, shapes): SystemParamItem<
+        (cutscene_shown, sprites, fonts, transforms, initials, attractors, shapes): SystemParamItem<
             Self::Param,
         >,
         entities: QueryItem<Self::Data>,
@@ -199,6 +202,26 @@ impl FromLevel for Instance {
                     Ok(())
                 },
             );
+
+            commands.spawn((
+                Text::new("Hello."),
+                TextFont {
+                    font: fonts.raleway.clone_weak(),
+                    font_size: 24.,
+                    ..default()
+                },
+                BoxShadow::new(
+                    Color::linear_rgba(0., 0., 0., 0.85),
+                    Px(0.),
+                    Px(0.),
+                    Px(-5.),
+                    Px(5.),
+                ),
+                WorldspaceUi {
+                    target: attractor,
+                    offset: vec2(0., -24.),
+                },
+            ));
 
             commands.entity(hover_target).insert((
                 Collider::circle(8.),

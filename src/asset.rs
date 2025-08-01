@@ -58,8 +58,6 @@ pub struct Sprites {
 
 #[derive(Debug, Clone, Resource, AssetCollection)]
 pub struct Fonts {
-    #[asset(path = "fonts/raleway/Raleway-VariableFont_wght.ttf")]
+    #[asset(path = "fonts/raleway/Raleway-Regular.ttf")]
     pub raleway: Handle<Font>,
-    #[asset(path = "fonts/raleway/Raleway-Italic-VariableFont_wght.ttf")]
-    pub raleway_italic: Handle<Font>,
 }

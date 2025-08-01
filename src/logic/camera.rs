@@ -137,6 +137,7 @@ unsafe impl<D: 'static + QueryData> SystemParam for CameraQuery<'_, D> {
         intensity: 0.5,
         ..Bloom::NATURAL
     },
+    IsDefaultUiCamera,
 )]
 pub struct MainCamera;
 
