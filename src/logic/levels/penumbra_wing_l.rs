@@ -204,7 +204,7 @@ impl FromLevel for Instance {
             );
 
             commands.spawn((
-                Text::new("Hello."),
+                Text::new("Lorem."),
                 TextFont {
                     font: fonts.raleway.clone_weak(),
                     font_size: 24.,
