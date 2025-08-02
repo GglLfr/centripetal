@@ -6,6 +6,7 @@ use crate::logic::CameraQuery;
 pub struct WorldspaceUi {
     pub target: Entity,
     pub offset: Vec2,
+    pub anchor: Vec2,
 }
 
 pub fn update_worldspace_ui(
@@ -41,9 +42,9 @@ pub fn update_worldspace_ui(
             let factor = target.scale_factor();
 
             let xy = res * (ndc.xy() + 1.) * 0.5;
-            let center = 0.5 / factor;
+            let center = ui.anchor / factor;
 
-            node.left = Px(xy.x - computed.size.x * center);
-            node.top = Px(res.y - xy.y - computed.size.y * center);
+            node.left = Px(xy.x - computed.size.x * center.x);
+            node.top = Px(res.y - xy.y - computed.size.y * (1. - center.y));
         });
 }

@@ -48,7 +48,10 @@ use crate::{
     },
     math::{FloatTransformExt, Interp, RngExt},
     resume, suspend, trans_wait,
-    ui::WorldspaceUi,
+    ui::{
+        WorldspaceUi,
+        widgets::{ScrollText, ScrollTextSection},
+    },
 };
 
 #[derive(
@@ -203,11 +206,26 @@ impl FromLevel for Instance {
                 },
             );
 
+            let font = TextFont {
+                font: fonts.raleway.clone_weak(),
+                font_size: 24.,
+                ..default()
+            };
+
             commands.spawn((
-                Text::new("Lorem."),
-                TextFont {
-                    font: fonts.raleway.clone_weak(),
-                    font_size: 24.,
+                Text::default(),
+                ScrollText::new([
+                    ScrollTextSection::new(
+                        "Lorem ipsum dolor sit amet consectetur adipiscing elit. Quisque faucibus ex sapien vitae pellentesque sem placerat. In id cursus mi pretium tellus duis convallis. Tempus leo eu aenean sed diam urna tempor. Pulvinar vivamus fringilla lacus nec metus bibendum egestas. Iaculis massa nisl malesuada lacinia integer nunc posuere. Ut hendrerit semper vel class aptent taciti sociosqu. Ad litora torquent per conubia nostra inceptos himenaeos.",
+                        font.clone(), Color::WHITE, Duration::from_millis(24)
+                    )
+                ]),
+                TextLayout {
+                    justify: JustifyText::Center,
+                    ..default()
+                },
+                Node {
+                    position_type: PositionType::Absolute,
                     ..default()
                 },
                 BoxShadow::new(
@@ -220,6 +238,7 @@ impl FromLevel for Instance {
                 WorldspaceUi {
                     target: attractor,
                     offset: vec2(0., -24.),
+                    anchor: vec2(0.5, 1.),
                 },
             ));
 

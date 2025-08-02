@@ -5,11 +5,13 @@ pub mod widgets;
 mod worldspace;
 pub use worldspace::*;
 
+use crate::ui::widgets::WidgetPlugin;
+
 #[derive(Debug, Copy, Clone, Default)]
 pub struct UiPlugin;
 impl Plugin for UiPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(
+        app.add_plugins(WidgetPlugin).add_systems(
             PostUpdate,
             update_worldspace_ui
                 .after(UiSystem::Prepare)
