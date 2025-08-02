@@ -24,6 +24,8 @@ log = { version = "*", features = [
     "release_max_level_warn",
 ] }
 mimalloc-redirect = "0.1"
+nom = "8"
+nom-language = "0.1"
 num-traits = "0.2"
 seldom_state = { version = "0.14", features = ["leafwing_input"] }
 serde = { version = "1", features = ["derive"] }

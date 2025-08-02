@@ -1,7 +1,6 @@
 use bevy::prelude::*;
 
 mod basic;
-
 pub use basic::*;
 
 #[derive(Debug, Copy, Clone, Default)]

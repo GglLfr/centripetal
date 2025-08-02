@@ -22,7 +22,6 @@ mod shape;
 mod sprite_alloc;
 mod sprite_drawer;
 mod sprite_sheet;
-
 pub use animation::*;
 pub use color::*;
 pub use fbo::*;

@@ -25,10 +25,12 @@ pub mod ui;
 mod asset;
 mod config;
 mod ecs;
+mod i18n;
 mod save;
 pub use asset::*;
 pub use config::*;
 pub use ecs::*;
+pub use i18n::*;
 pub use save::*;
 
 #[cfg(not(feature = "bevy_dynamic"))]
