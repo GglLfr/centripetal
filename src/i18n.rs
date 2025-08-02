@@ -1,10 +1,20 @@
 use std::{
     borrow::Cow,
     fmt::{self, Debug},
+    io,
     str::FromStr,
 };
 
-use bevy::{platform::collections::HashMap, prelude::*};
+use bevy::{
+    asset::{
+        AssetLoader, AsyncReadExt, LoadContext,
+        io::Reader,
+        ron::{self, de::SpannedError},
+    },
+    platform::collections::HashMap,
+    prelude::*,
+};
+use derive_more::{Display, Error, From};
 use nom::{
     IResult, Parser,
     branch::alt,
@@ -29,6 +39,39 @@ macro_rules! i18n {
             arguments: [$((::std::borrow::Cow::Borrowed(stringify!($name)), ::std::string::ToString::to_string($named))),*].into_iter().collect(),
         }
     };
+}
+
+#[derive(Debug, Clone, Default, Asset, TypePath)]
+pub struct I18nEntries(pub HashMap<String, I18nFmt>);
+
+#[derive(Debug, Display, Error, From)]
+pub enum I18nEntriesError {
+    Io(io::Error),
+    Ron(SpannedError),
+}
+
+#[derive(Debug, Copy, Clone, Default)]
+pub struct I18nEntriesLoader;
+impl AssetLoader for I18nEntriesLoader {
+    type Asset = I18nEntries;
+    type Settings = ();
+    type Error = I18nEntriesError;
+
+    async fn load(
+        &self,
+        reader: &mut dyn Reader,
+        _: &Self::Settings,
+        _: &mut LoadContext<'_>,
+    ) -> Result<Self::Asset, Self::Error> {
+        let mut input = String::new();
+        reader.read_to_string(&mut input).await?;
+
+        Ok(I18nEntries(ron::from_str(&input)?))
+    }
+
+    fn extensions(&self) -> &[&str] {
+        &["ron"]
+    }
 }
 
 #[derive(Component)]

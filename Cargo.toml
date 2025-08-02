@@ -32,6 +32,7 @@ serde = { version = "1", features = ["derive"] }
 serde_flexitos = "0.2"
 serde_json = "1"
 smallvec = { version = "1", features = ["const_generics", "union"] }
+sys-locale = "0.3"
 vec-belt = "1"
 
 [dependencies.avian2d]

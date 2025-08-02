@@ -69,11 +69,14 @@ fn main() -> AppExit {
             LogicPlugin,
             UiPlugin,
         ))
+        .init_asset::<I18nEntries>()
+        .init_asset_loader::<I18nEntriesLoader>()
         .add_loading_state(
             LoadingState::new(GameState::Loading)
                 .load_collection::<WorldHandle>()
                 .load_collection::<Sprites>()
-                .load_collection::<Fonts>(),
+                .load_collection::<Fonts>()
+                .load_collection::<Locales>(),
         )
         .add_plugins(
             ProgressPlugin::<GameState>::new()

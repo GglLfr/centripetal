@@ -1,7 +1,13 @@
+use std::str::FromStr;
+
+use avian2d::parry::utils::hashmap::HashMap;
 use bevy::prelude::*;
 use bevy_asset_loader::prelude::*;
+use derive_more::FromStr;
+use sys_locale::get_locales;
 
 use crate::{
+    I18nEntries,
     graphics::{SpriteSection, SpriteSheet},
     logic::Ldtk,
 };
@@ -60,4 +66,63 @@ pub struct Sprites {
 pub struct Fonts {
     #[asset(path = "fonts/raleway/Raleway-Regular.ttf")]
     pub raleway: Handle<Font>,
+}
+
+#[derive(Debug, Copy, Clone, FromStr, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum Locale {
+    #[default]
+    EnUS,
+}
+
+impl Locale {
+    pub fn from_bcp47(bcp: impl AsRef<str>) -> Option<Self> {
+        Self::from_str(&Self::bcp47_to_ident(bcp)).ok()
+    }
+
+    pub fn bcp47_to_ident(bcp: impl AsRef<str>) -> String {
+        let mut bcp = bcp.as_ref().chars();
+        let mut output = String::with_capacity(4);
+        output.push(bcp.next().unwrap().to_ascii_uppercase());
+        output.push(bcp.next().unwrap());
+        assert_eq!(bcp.next(), Some('-'));
+        output.push(bcp.next().unwrap());
+        output.push(bcp.next().unwrap());
+        assert_eq!(bcp.count(), 0);
+        output
+    }
+}
+
+#[derive(Debug, Clone, Resource)]
+pub struct Locales(pub HashMap<Locale, Handle<I18nEntries>>);
+impl AssetCollection for Locales {
+    fn load(world: &mut World) -> Vec<UntypedHandle> {
+        let server = world.resource::<AssetServer>();
+        get_locales()
+            .filter_map(|s| {
+                if Locale::from_bcp47(&s).is_some() {
+                    Some(
+                        server
+                            .load::<I18nEntries>(format!("i18n/{s}.ron"))
+                            .untyped(),
+                    )
+                } else {
+                    None
+                }
+            })
+            .collect()
+    }
+
+    fn create(world: &mut World) -> Self {
+        let server = world.resource::<AssetServer>();
+        Self(
+            get_locales()
+                .filter_map(|s| match Locale::from_bcp47(&s) {
+                    Some(locale) => {
+                        Some((locale, server.load::<I18nEntries>(format!("i18n/{s}.ron"))))
+                    }
+                    None => None,
+                })
+                .collect(),
+        )
+    }
 }
