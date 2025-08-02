@@ -1,18 +1,15 @@
-use std::str::FromStr;
-
 use avian2d::parry::utils::hashmap::HashMap;
-use bevy::prelude::*;
+use bevy::{ecs::system::SystemParam, prelude::*};
 use bevy_asset_loader::prelude::*;
-use derive_more::FromStr;
 use sys_locale::get_locales;
 
 use crate::{
-    I18nEntries,
+    I18nEntries, Locale,
     graphics::{SpriteSection, SpriteSheet},
     logic::Ldtk,
 };
 
-#[derive(Debug, Clone, Resource, AssetCollection, Deref, DerefMut)]
+#[derive(Debug, Clone, Resource, AssetCollection, Deref)]
 pub struct WorldHandle {
     #[asset(path = "levels/world.ldtk")]
     pub handle: Handle<Ldtk>,
@@ -68,31 +65,7 @@ pub struct Fonts {
     pub raleway: Handle<Font>,
 }
 
-#[derive(Debug, Copy, Clone, FromStr, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum Locale {
-    #[default]
-    EnUS,
-}
-
-impl Locale {
-    pub fn from_bcp47(bcp: impl AsRef<str>) -> Option<Self> {
-        Self::from_str(&Self::bcp47_to_ident(bcp)).ok()
-    }
-
-    pub fn bcp47_to_ident(bcp: impl AsRef<str>) -> String {
-        let mut bcp = bcp.as_ref().chars();
-        let mut output = String::with_capacity(4);
-        output.push(bcp.next().unwrap().to_ascii_uppercase());
-        output.push(bcp.next().unwrap());
-        assert_eq!(bcp.next(), Some('-'));
-        output.push(bcp.next().unwrap());
-        output.push(bcp.next().unwrap());
-        assert_eq!(bcp.count(), 0);
-        output
-    }
-}
-
-#[derive(Debug, Clone, Resource)]
+#[derive(Debug, Clone, Resource, Deref)]
 pub struct Locales(pub HashMap<Locale, Handle<I18nEntries>>);
 impl AssetCollection for Locales {
     fn load(world: &mut World) -> Vec<UntypedHandle> {
@@ -124,5 +97,17 @@ impl AssetCollection for Locales {
                 })
                 .collect(),
         )
+    }
+}
+
+#[derive(SystemParam)]
+pub struct LocaleQuery<'w> {
+    locales: Res<'w, Locales>,
+    locale_assets: Res<'w, Assets<I18nEntries>>,
+}
+
+impl LocaleQuery<'_> {
+    pub fn get(&self, locale: Locale) -> &I18nEntries {
+        self.locale_assets.get(&self.locales[&locale]).unwrap()
     }
 }

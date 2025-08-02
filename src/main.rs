@@ -71,6 +71,7 @@ fn main() -> AppExit {
         ))
         .init_asset::<I18nEntries>()
         .init_asset_loader::<I18nEntriesLoader>()
+        .init_resource::<I18nContext>()
         .add_loading_state(
             LoadingState::new(GameState::Loading)
                 .load_collection::<WorldHandle>()
@@ -82,6 +83,7 @@ fn main() -> AppExit {
             ProgressPlugin::<GameState>::new()
                 .with_state_transition(GameState::Loading, GameState::Menu),
         )
+        .add_systems(PostUpdate, i18n_notify_just_added)
         .add_systems(OnEnter(GameState::Menu), dev_init)
         .run()
 }

@@ -12,7 +12,6 @@ use bevy::{
     },
     prelude::*,
     sprite::Anchor,
-    ui::Val::*,
 };
 use bevy_vector_shapes::{
     prelude::{ShapeCommands, ShapeSpawner},
@@ -28,11 +27,12 @@ use serde::{Deserialize, Serialize};
 use smallvec::smallvec;
 
 use crate::{
-    Fonts, PIXELS_PER_UNIT, SaveApp, Sprites,
+    PIXELS_PER_UNIT, SaveApp, Sprites,
     graphics::{
         Animation, AnimationFrom, AnimationHooks, AnimationMode, BaseColor, SpriteDrawer,
         SpriteSection,
     },
+    i18n,
     logic::{
         CameraConfines, CameraTarget, Fields, FromLevel, LevelApp, LevelEntities, OnTimeFinished,
         TimeStun, Timed,
@@ -48,10 +48,7 @@ use crate::{
     },
     math::{FloatTransformExt, Interp, RngExt},
     resume, suspend, trans_wait,
-    ui::{
-        WorldspaceUi,
-        widgets::{ScrollText, ScrollTextSection},
-    },
+    ui::{WorldspaceUi, widgets},
 };
 
 #[derive(
@@ -93,7 +90,6 @@ impl FromLevel for Instance {
     type Param = (
         SRes<IntroShown>,
         SRes<Sprites>,
-        SRes<Fonts>,
         SQuery<Read<Transform>>,
         SQuery<Read<AttractedInitial>>,
         SQuery<Read<Attractor>>,
@@ -104,7 +100,7 @@ impl FromLevel for Instance {
     fn from_level(
         mut e: EntityCommands,
         _: &Fields,
-        (cutscene_shown, sprites, fonts, transforms, initials, attractors, shapes): SystemParamItem<
+        (cutscene_shown, sprites, transforms, initials, attractors, shapes): SystemParamItem<
             Self::Param,
         >,
         entities: QueryItem<Self::Data>,
@@ -206,38 +202,12 @@ impl FromLevel for Instance {
                 },
             );
 
-            let font = TextFont {
-                font: fonts.raleway.clone_weak(),
-                font_size: 24.,
-                ..default()
-            };
-
             commands.spawn((
-                Text::default(),
-                ScrollText::new([
-                    ScrollTextSection::new(
-                        "Lorem ipsum dolor sit amet consectetur adipiscing elit. Quisque faucibus ex sapien vitae pellentesque sem placerat. In id cursus mi pretium tellus duis convallis. Tempus leo eu aenean sed diam urna tempor. Pulvinar vivamus fringilla lacus nec metus bibendum egestas. Iaculis massa nisl malesuada lacinia integer nunc posuere. Ut hendrerit semper vel class aptent taciti sociosqu. Ad litora torquent per conubia nostra inceptos himenaeos.",
-                        font.clone(), Color::WHITE, Duration::from_millis(24)
-                    )
-                ]),
-                TextLayout {
-                    justify: JustifyText::Center,
-                    ..default()
-                },
-                Node {
-                    position_type: PositionType::Absolute,
-                    ..default()
-                },
-                BoxShadow::new(
-                    Color::linear_rgba(0., 0., 0., 0.85),
-                    Px(0.),
-                    Px(0.),
-                    Px(-5.),
-                    Px(5.),
-                ),
+                widgets::shadow_bg(),
+                widgets::scroll_text(i18n!("dev.lorem")),
                 WorldspaceUi {
                     target: attractor,
-                    offset: vec2(0., -24.),
+                    offset: vec2(0., -16.),
                     anchor: vec2(0.5, 1.),
                 },
             ));

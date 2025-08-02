@@ -1,3 +1,5 @@
+#![allow(unused)]
+
 use bevy::{
     asset::weak_handle,
     core_pipeline::core_2d::CORE_2D_DEPTH_FORMAT,

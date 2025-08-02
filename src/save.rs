@@ -28,6 +28,7 @@ impl Serialize for dyn SaveResource {
 
 #[derive(Resource)]
 pub struct SaveRegistry {
+    #[expect(unused, reason = "I haven't added proper save commands yet")]
     base_dir: PathBuf,
     removals: Vec<fn(&mut World)>,
     defaults: Vec<Box<dyn FnMut(&mut World) -> Result + 'static + Send + Sync>>,
