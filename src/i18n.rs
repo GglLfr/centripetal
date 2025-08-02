@@ -221,7 +221,6 @@ fn parse_i18n_end<'a, T>(input: &'a str) -> I18nResult<'a, T> {
 }
 
 fn parse_i18n_fmt<'a>(input: &'a str) -> I18nResult<'a, I18nFmt> {
-    #[derive(Debug, Clone)]
     enum Fmt<'a> {
         Slice(&'a str),
         Char(char),
