@@ -6,7 +6,7 @@ use leafwing_input_manager::prelude::*;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    Config, PlayerKeybinds,
+    Config, KeyboardBindings,
     logic::entities::penumbra::{AttractedAction, LaunchAction},
 };
 
@@ -22,9 +22,9 @@ pub enum PlayerAction {
 #[component(on_insert = sync_input_map)]
 pub struct IsPlayer;
 pub fn sync_input_map(mut world: DeferredWorld, HookContext { entity, .. }: HookContext) {
-    let keybinds = (*world.resource::<Config<PlayerKeybinds>>()).clone();
-    let mut e = world.entity_mut(entity);
-    *e.get_mut::<InputMap<PlayerAction>>().unwrap() = keybinds.player;
-    *e.get_mut::<InputMap<AttractedAction>>().unwrap() = keybinds.attracted;
-    *e.get_mut::<InputMap<LaunchAction>>().unwrap() = keybinds.launch;
+    let keybinds = world
+        .resource::<Config<KeyboardBindings>>()
+        .create_input_maps();
+
+    world.commands().entity(entity).insert(keybinds);
 }

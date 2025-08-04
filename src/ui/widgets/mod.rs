@@ -41,10 +41,10 @@ pub fn scroll_text(i18n: I18n) -> impl Bundle {
                             span: string.into(),
                             font: TextFont {
                                 font: match (style.bold, style.italic) {
-                                    (true, true) => fonts.raleway.clone_weak(),
-                                    (true, false) => fonts.raleway.clone_weak(),
-                                    (false, true) => fonts.raleway.clone_weak(),
-                                    (false, false) => fonts.raleway.clone_weak(),
+                                    (true, true) => fonts.bold_italic.clone_weak(),
+                                    (true, false) => fonts.bold.clone_weak(),
+                                    (false, true) => fonts.italic.clone_weak(),
+                                    (false, false) => fonts.regular.clone_weak(),
                                 },
                                 font_size: style.size as f32,
                                 line_height: LineHeight::RelativeToFont(1.5),

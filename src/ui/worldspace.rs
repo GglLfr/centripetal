@@ -3,6 +3,7 @@ use bevy::{prelude::*, ui::Val::*};
 use crate::logic::CameraQuery;
 
 #[derive(Debug, Copy, Clone, Component)]
+#[require(Node)]
 pub struct WorldspaceUi {
     pub target: Entity,
     pub offset: Vec2,

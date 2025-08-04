@@ -12,6 +12,7 @@ use bevy::{
     },
     prelude::*,
     sprite::Anchor,
+    ui::Val::*,
 };
 use bevy_vector_shapes::{
     prelude::{ShapeCommands, ShapeSpawner},
@@ -27,12 +28,12 @@ use serde::{Deserialize, Serialize};
 use smallvec::smallvec;
 
 use crate::{
-    PIXELS_PER_UNIT, SaveApp, Sprites,
+    Fonts, PIXELS_PER_UNIT, SaveApp, Sprites,
     graphics::{
         Animation, AnimationFrom, AnimationHooks, AnimationMode, BaseColor, SpriteDrawer,
         SpriteSection,
     },
-    i18n,
+    i18n, keycode_desc,
     logic::{
         CameraConfines, CameraTarget, Fields, FromLevel, LevelApp, LevelEntities, OnTimeFinished,
         TimeStun, Timed,
@@ -90,6 +91,7 @@ impl FromLevel for Instance {
     type Param = (
         SRes<IntroShown>,
         SRes<Sprites>,
+        SRes<Fonts>,
         SQuery<Read<Transform>>,
         SQuery<Read<AttractedInitial>>,
         SQuery<Read<Attractor>>,
@@ -100,7 +102,7 @@ impl FromLevel for Instance {
     fn from_level(
         mut e: EntityCommands,
         _: &Fields,
-        (cutscene_shown, sprites, transforms, initials, attractors, shapes): SystemParamItem<
+        (cutscene_shown, sprites, fonts, transforms, initials, attractors, shapes): SystemParamItem<
             Self::Param,
         >,
         entities: QueryItem<Self::Data>,
@@ -201,6 +203,31 @@ impl FromLevel for Instance {
                     Ok(())
                 },
             );
+
+            let ui_selene_hover = commands
+                .spawn((
+                    widgets::shadow_bg(),
+                    WorldspaceUi {
+                        target: selene,
+                        offset: vec2(0., -16.),
+                        anchor: vec2(0.5, 1.),
+                    },
+                    children![(
+                        Node {
+                            width: Px(48.),
+                            height: Px(48.),
+                            ..default()
+                        },
+                        Text::new(keycode_desc(KeyCode::ArrowUp).unwrap()),
+                        TextFont {
+                            font: fonts.regular.clone(),
+                            font_size: 20.,
+                            ..default()
+                        }
+                    )],
+                ))
+                //.queue(suspend)
+                .id();
 
             commands.spawn((
                 widgets::shadow_bg(),
