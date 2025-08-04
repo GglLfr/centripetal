@@ -11,7 +11,7 @@ use bevy::{
         entity_disabling::Disabled,
         never::Never,
         query::Access,
-        system::{IntoObserverSystem, SystemParamValidationError},
+        system::{IntoObserverSystem, RunSystemOnce, SystemParamValidationError},
         world::{DeferredWorld, unsafe_world_cell::UnsafeWorldCell},
     },
     prelude::*,
@@ -19,17 +19,55 @@ use bevy::{
 };
 use seldom_state::prelude::*;
 
-pub struct Observed<E: Event, B: Bundle, M: 'static, T: IntoObserverSystem<E, B, M> + Sync>(
-    pub T,
-    PhantomData<fn(E, B, M)>,
+pub struct Affected<M: 'static, T: IntoResultSystem<In<Entity>, (), M>>(
+    pub T::System,
+    PhantomData<fn(M)>,
 );
-impl<E: Event, B: Bundle, M, T: IntoObserverSystem<E, B, M> + Sync> Observed<E, B, M, T> {
-    pub fn by(observer: T) -> Self {
-        Self(observer, PhantomData)
+
+impl<M: 'static, T: IntoResultSystem<In<Entity>, (), M>> Affected<M, T> {
+    pub fn by(effect: T) -> Self {
+        Self(T::into_result_system(effect), PhantomData)
     }
 }
 
-impl<E: Event, B: Bundle, M: 'static, T: IntoObserverSystem<E, B, M> + Sync> DynamicBundle
+impl<M: 'static, T: IntoResultSystem<In<Entity>, (), M>> DynamicBundle for Affected<M, T> {
+    type Effect = Self;
+
+    fn get_components(self, _: &mut impl FnMut(StorageType, OwningPtr<'_>)) -> Self::Effect {
+        self
+    }
+}
+
+unsafe impl<M: 'static, T: IntoResultSystem<In<Entity>, (), M>> Bundle for Affected<M, T> {
+    fn component_ids(_: &mut ComponentsRegistrator, _: &mut impl FnMut(ComponentId)) {}
+
+    fn get_component_ids(_: &Components, _: &mut impl FnMut(Option<ComponentId>)) {}
+
+    fn register_required_components(_: &mut ComponentsRegistrator, _: &mut RequiredComponents) {}
+}
+
+impl<M: 'static, T: IntoResultSystem<In<Entity>, (), M>> BundleEffect for Affected<M, T> {
+    fn apply(self, entity: &mut EntityWorldMut) {
+        let id = entity.id();
+        entity
+            .world_scope(|world| world.run_system_once_with(self.0, id))
+            .expect("Couldn't run system")
+            .expect("Failed to apply effect");
+    }
+}
+
+pub struct Observed<E: Event, B: Bundle, M: 'static, T: IntoObserverSystem<E, B, M>>(
+    pub T::System,
+    PhantomData<fn(E, B, M)>,
+);
+
+impl<E: Event, B: Bundle, M, T: IntoObserverSystem<E, B, M>> Observed<E, B, M, T> {
+    pub fn by(observer: T) -> Self {
+        Self(T::into_system(observer), PhantomData)
+    }
+}
+
+impl<E: Event, B: Bundle, M: 'static, T: IntoObserverSystem<E, B, M>> DynamicBundle
     for Observed<E, B, M, T>
 {
     type Effect = Self;
@@ -39,7 +77,7 @@ impl<E: Event, B: Bundle, M: 'static, T: IntoObserverSystem<E, B, M> + Sync> Dyn
     }
 }
 
-unsafe impl<E: Event, B: Bundle, M: 'static, T: IntoObserverSystem<E, B, M> + Sync> Bundle
+unsafe impl<E: Event, B: Bundle, M: 'static, T: IntoObserverSystem<E, B, M>> Bundle
     for Observed<E, B, M, T>
 {
     fn component_ids(_: &mut ComponentsRegistrator, _: &mut impl FnMut(ComponentId)) {}
@@ -49,7 +87,7 @@ unsafe impl<E: Event, B: Bundle, M: 'static, T: IntoObserverSystem<E, B, M> + Sy
     fn register_required_components(_: &mut ComponentsRegistrator, _: &mut RequiredComponents) {}
 }
 
-impl<E: Event, B: Bundle, M: 'static, T: IntoObserverSystem<E, B, M> + Sync> BundleEffect
+impl<E: Event, B: Bundle, M: 'static, T: IntoObserverSystem<E, B, M>> BundleEffect
     for Observed<E, B, M, T>
 {
     fn apply(self, entity: &mut EntityWorldMut) {
@@ -60,13 +98,13 @@ impl<E: Event, B: Bundle, M: 'static, T: IntoObserverSystem<E, B, M> + Sync> Bun
 pub struct Direct;
 pub struct Resulted;
 
-pub trait IntoResultSystem<In: SystemInput, Out: 'static, Marker> {
+pub trait IntoResultSystem<In: SystemInput, Out: 'static, Marker>: 'static {
     type System: System<In = In, Out = Result<Out>>;
 
     fn into_result_system(this: Self) -> Self::System;
 }
 
-impl<In: SystemInput, Out: 'static, Marker, S: IntoSystem<In, Out, Marker>>
+impl<In: SystemInput, Out: 'static, Marker, S: 'static + IntoSystem<In, Out, Marker>>
     IntoResultSystem<In, Out, (Direct, Marker)> for S
 {
     type System = ResultSystem<S::System>;
@@ -76,7 +114,7 @@ impl<In: SystemInput, Out: 'static, Marker, S: IntoSystem<In, Out, Marker>>
     }
 }
 
-impl<In: SystemInput, Out: 'static, Marker, S: IntoSystem<In, Result<Out>, Marker>>
+impl<In: SystemInput, Out: 'static, Marker, S: 'static + IntoSystem<In, Result<Out>, Marker>>
     IntoResultSystem<In, Out, (Resulted, Marker)> for S
 {
     type System = S::System;
@@ -86,7 +124,7 @@ impl<In: SystemInput, Out: 'static, Marker, S: IntoSystem<In, Result<Out>, Marke
     }
 }
 
-impl<In: SystemInput, Out: 'static, Marker, S: IntoSystem<In, Never, Marker>>
+impl<In: SystemInput, Out: 'static, Marker, S: 'static + IntoSystem<In, Never, Marker>>
     IntoResultSystem<In, Out, (fn() -> Never, Marker)> for S
 {
     type System = NeverSystem<S::System, Result<Out>>;

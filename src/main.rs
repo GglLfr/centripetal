@@ -3,7 +3,7 @@
 use avian2d::prelude::*;
 #[cfg(feature = "dev")]
 use bevy::log::DEFAULT_FILTER;
-use bevy::{log::LogPlugin, prelude::*};
+use bevy::{log::LogPlugin, prelude::*, ui::UiSystem};
 use bevy_asset_loader::prelude::*;
 use bevy_ecs_tilemap::prelude::*;
 use bevy_framepace::FramepacePlugin;
@@ -72,6 +72,7 @@ fn main() -> AppExit {
         .init_asset::<I18nEntries>()
         .init_asset_loader::<I18nEntriesLoader>()
         .init_resource::<I18nContext>()
+        .init_resource::<RebindObservers>()
         .add_loading_state(
             LoadingState::new(GameState::Loading)
                 .load_collection::<WorldHandle>()
@@ -83,7 +84,7 @@ fn main() -> AppExit {
             ProgressPlugin::<GameState>::new()
                 .with_state_transition(GameState::Loading, GameState::Menu),
         )
-        .add_systems(PostUpdate, i18n_notify_just_added)
+        .add_systems(PostUpdate, i18n_notify_just_added.before(UiSystem::Content))
         .add_systems(OnEnter(GameState::Menu), dev_init)
         .run()
 }

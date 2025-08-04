@@ -28,12 +28,12 @@ use serde::{Deserialize, Serialize};
 use smallvec::smallvec;
 
 use crate::{
-    Fonts, PIXELS_PER_UNIT, SaveApp, Sprites,
+    PIXELS_PER_UNIT, SaveApp, Sprites,
     graphics::{
         Animation, AnimationFrom, AnimationHooks, AnimationMode, BaseColor, SpriteDrawer,
         SpriteSection,
     },
-    i18n, keycode_desc,
+    i18n,
     logic::{
         CameraConfines, CameraTarget, Fields, FromLevel, LevelApp, LevelEntities, OnTimeFinished,
         TimeStun, Timed,
@@ -91,7 +91,6 @@ impl FromLevel for Instance {
     type Param = (
         SRes<IntroShown>,
         SRes<Sprites>,
-        SRes<Fonts>,
         SQuery<Read<Transform>>,
         SQuery<Read<AttractedInitial>>,
         SQuery<Read<Attractor>>,
@@ -102,7 +101,7 @@ impl FromLevel for Instance {
     fn from_level(
         mut e: EntityCommands,
         _: &Fields,
-        (cutscene_shown, sprites, fonts, transforms, initials, attractors, shapes): SystemParamItem<
+        (cutscene_shown, sprites, transforms, initials, attractors, shapes): SystemParamItem<
             Self::Param,
         >,
         entities: QueryItem<Self::Data>,
@@ -174,6 +173,70 @@ impl FromLevel for Instance {
                 }
             }
 
+            let ui_selene_hover = commands
+                .spawn((
+                    Node {
+                        display: Display::Grid,
+                        grid_template_columns: vec![RepeatedGridTrack::min_content(2)],
+                        row_gap: Px(3.),
+                        column_gap: Px(9.),
+                        ..default()
+                    },
+                    WorldspaceUi {
+                        target: selene,
+                        offset: vec2(0., -16.),
+                        anchor: vec2(0.5, 1.),
+                    },
+                    children![
+                        (
+                            Node {
+                                align_items: AlignItems::Center,
+                                justify_content: JustifyContent::End,
+                                ..default()
+                            },
+                            children![(
+                                widgets::icon(),
+                                children![(
+                                    widgets::keyboard_binding(|binds| binds.attracted_hover[0]),
+                                    TextColor(Color::BLACK),
+                                )],
+                            )]
+                        ),
+                        (
+                            Node::default(),
+                            children![(
+                                widgets::shadow_bg(),
+                                widgets::text(i18n!("tutorial.hover.descend")),
+                                TextLayout::new(JustifyText::Left, LineBreak::NoWrap),
+                            )]
+                        ),
+                        (
+                            Node {
+                                align_items: AlignItems::Center,
+                                justify_content: JustifyContent::End,
+                                ..default()
+                            },
+                            children![(
+                                widgets::icon(),
+                                children![(
+                                    widgets::keyboard_binding(|binds| binds.attracted_hover[1]),
+                                    TextColor(Color::BLACK),
+                                )],
+                            )]
+                        ),
+                        (
+                            Node::default(),
+                            (
+                                widgets::shadow_bg(),
+                                widgets::text(i18n!("tutorial.hover.ascend")),
+                                TextLayout::new(JustifyText::Left, LineBreak::NoWrap),
+                            )
+                        ),
+                    ],
+                ))
+                .queue(suspend)
+                .id();
+
             commands.entity(selene).insert(NoKillDespawn).observe(
                 move |trigger: Trigger<Killed>,
                       mut commands: Commands,
@@ -204,40 +267,19 @@ impl FromLevel for Instance {
                 },
             );
 
-            let ui_selene_hover = commands
-                .spawn((
-                    widgets::shadow_bg(),
-                    WorldspaceUi {
-                        target: selene,
-                        offset: vec2(0., -16.),
-                        anchor: vec2(0.5, 1.),
-                    },
-                    children![(
-                        Node {
-                            width: Px(48.),
-                            height: Px(48.),
-                            ..default()
-                        },
-                        Text::new(keycode_desc(KeyCode::ArrowUp).unwrap()),
-                        TextFont {
-                            font: fonts.regular.clone(),
-                            font_size: 20.,
-                            ..default()
-                        }
-                    )],
-                ))
-                //.queue(suspend)
-                .id();
-
-            commands.spawn((
+            /*let ui_selene_hover = commands
+            .spawn((
                 widgets::shadow_bg(),
-                widgets::scroll_text(i18n!("dev.lorem")),
-                WorldspaceUi {
-                    target: attractor,
-                    offset: vec2(0., -16.),
-                    anchor: vec2(0.5, 1.),
-                },
-            ));
+                children![(
+                    widgets::icon(),
+                    children![(
+                        widgets::keyboard_binding(|binds| binds.attracted_hover[0]),
+                        TextColor(Color::BLACK),
+                    )],
+                )],
+            ))
+            //.queue(suspend)
+            .id();*/
 
             commands.entity(hover_target).insert((
                 Collider::circle(8.),

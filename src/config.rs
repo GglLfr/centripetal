@@ -8,6 +8,7 @@ use async_fs::File;
 use bevy::asset::AsyncReadExt;
 use bevy::{
     asset::{AsyncWriteExt, ron},
+    ecs::{component::HookContext, entity::EntityHashSet, world::DeferredWorld},
     prelude::*,
     tasks::{ConditionalSendFuture, IoTaskPool, Task, futures::check_ready},
     window::{PresentMode, PrimaryWindow, WindowMode, WindowResolution},
@@ -169,7 +170,7 @@ impl WindowConfig {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Resource, Serialize, Deserialize)]
 #[serde(default)]
 pub struct KeyboardBindings {
     pub player_attack: KeyCode,
@@ -229,6 +230,23 @@ impl KeyboardBindings {
         )
     }
 }
+
+#[derive(Debug, Clone, Default, Resource)]
+pub struct RebindObservers(EntityHashSet);
+
+#[derive(Debug, Copy, Clone, Component)]
+#[component(on_add = on_rebind_add, on_remove = on_rebind_remove)]
+pub struct RebindObserved;
+fn on_rebind_add(mut world: DeferredWorld, HookContext { entity, .. }: HookContext) {
+    world.resource_mut::<RebindObservers>().0.insert(entity);
+}
+
+fn on_rebind_remove(mut world: DeferredWorld, HookContext { entity, .. }: HookContext) {
+    world.resource_mut::<RebindObservers>().0.remove(&entity);
+}
+
+#[derive(Debug, Copy, Clone, Default, Event)]
+pub struct Rebind;
 
 #[derive(Debug, Resource)]
 struct ConfigTask(Task<io::Result<(Config<WindowConfig>, Config<KeyboardBindings>)>>);
@@ -315,10 +333,10 @@ pub fn keycode_desc(code: KeyCode) -> Option<&'static str> {
         KeyCode::Insert => Some("Iɴꜱ"),
         KeyCode::PageDown => Some("Pɢᴅɴ"),
         KeyCode::PageUp => Some("Pɢᴜᴘ"),
-        KeyCode::ArrowDown => Some("↓"),
-        KeyCode::ArrowLeft => Some("←"),
-        KeyCode::ArrowRight => Some("→"),
-        KeyCode::ArrowUp => Some("↑"),
+        KeyCode::ArrowDown => Some("Dᴏᴡɴ"),
+        KeyCode::ArrowLeft => Some("Lᴇꜰᴛ"),
+        KeyCode::ArrowRight => Some("Rɪɢʜᴛ"),
+        KeyCode::ArrowUp => Some("Uᴘ"),
         KeyCode::NumLock => None,
         KeyCode::Numpad0 => None,
         KeyCode::Numpad1 => None,
