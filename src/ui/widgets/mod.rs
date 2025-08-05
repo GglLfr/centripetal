@@ -10,7 +10,8 @@ mod scroll_text;
 pub use scroll_text::*;
 
 use crate::{
-    Affected, Config, Fonts, I18n, KeyboardBindings, Observed, OnI18nNotify, Rebind, keycode_desc,
+    Affected, Config, Fonts, I18n, I18nNotify, I18nNotifyCommand, KeyboardBindings, Observed,
+    Rebind, keycode_desc,
 };
 
 pub fn shadow_bg() -> impl Bundle {
@@ -41,7 +42,7 @@ pub fn text(i18n: I18n) -> impl Bundle {
         i18n,
         Text::default(),
         Observed::by(
-            |trigger: Trigger<OnI18nNotify>, mut commands: Commands, fonts: Res<Fonts>| -> Result {
+            |trigger: Trigger<I18nNotify>, mut commands: Commands, fonts: Res<Fonts>| -> Result {
                 trigger.format(
                     |key| trigger.arguments.get(key).map(String::as_str),
                     |string, style| {
@@ -67,6 +68,9 @@ pub fn text(i18n: I18n) -> impl Bundle {
                 Ok(())
             },
         ),
+        Affected::by(|In(entity): In<Entity>, mut commands: Commands| {
+            commands.entity(entity).queue(I18nNotifyCommand);
+        }),
     )
 }
 
@@ -76,7 +80,7 @@ pub fn scroll_text(i18n: I18n) -> impl Bundle {
         Text::default(),
         ScrollText::default(),
         Observed::by(
-            |trigger: Trigger<OnI18nNotify>,
+            |trigger: Trigger<I18nNotify>,
              fonts: Res<Fonts>,
              mut query: Query<(&mut ScrollText, &mut ScrollTextState)>|
              -> Result {
@@ -109,6 +113,9 @@ pub fn scroll_text(i18n: I18n) -> impl Bundle {
                 Ok(())
             },
         ),
+        Affected::by(|In(entity): In<Entity>, mut commands: Commands| {
+            commands.entity(entity).queue(I18nNotifyCommand);
+        }),
     )
 }
 

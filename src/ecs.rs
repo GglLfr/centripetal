@@ -56,19 +56,32 @@ impl<M: 'static, T: IntoResultSystem<In<Entity>, (), M>> BundleEffect for Affect
     }
 }
 
-pub struct Observed<E: Event, B: Bundle, M: 'static, T: IntoObserverSystem<E, B, M>>(
-    pub T::System,
-    PhantomData<fn(E, B, M)>,
-);
+#[derive(Debug)]
+pub struct Observed<
+    E: Event,
+    B: Bundle,
+    M: 'static,
+    T: IntoObserverSystem<E, B, M> + 'static + Send + Sync,
+>(pub T, PhantomData<fn(E, B, M)>);
 
-impl<E: Event, B: Bundle, M, T: IntoObserverSystem<E, B, M>> Observed<E, B, M, T> {
-    pub fn by(observer: T) -> Self {
-        Self(T::into_system(observer), PhantomData)
+impl<E: Event, B: Bundle, M, T: IntoObserverSystem<E, B, M> + Clone + 'static + Send + Sync> Clone
+    for Observed<E, B, M, T>
+{
+    fn clone(&self) -> Self {
+        Self(self.0.clone(), PhantomData)
     }
 }
 
-impl<E: Event, B: Bundle, M: 'static, T: IntoObserverSystem<E, B, M>> DynamicBundle
-    for Observed<E, B, M, T>
+impl<E: Event, B: Bundle, M, T: IntoObserverSystem<E, B, M> + 'static + Send + Sync>
+    Observed<E, B, M, T>
+{
+    pub fn by(observer: T) -> Self {
+        Self(observer, PhantomData)
+    }
+}
+
+impl<E: Event, B: Bundle, M: 'static, T: IntoObserverSystem<E, B, M> + 'static + Send + Sync>
+    DynamicBundle for Observed<E, B, M, T>
 {
     type Effect = Self;
 
@@ -77,8 +90,8 @@ impl<E: Event, B: Bundle, M: 'static, T: IntoObserverSystem<E, B, M>> DynamicBun
     }
 }
 
-unsafe impl<E: Event, B: Bundle, M: 'static, T: IntoObserverSystem<E, B, M>> Bundle
-    for Observed<E, B, M, T>
+unsafe impl<E: Event, B: Bundle, M: 'static, T: IntoObserverSystem<E, B, M> + 'static + Send + Sync>
+    Bundle for Observed<E, B, M, T>
 {
     fn component_ids(_: &mut ComponentsRegistrator, _: &mut impl FnMut(ComponentId)) {}
 
@@ -87,11 +100,35 @@ unsafe impl<E: Event, B: Bundle, M: 'static, T: IntoObserverSystem<E, B, M>> Bun
     fn register_required_components(_: &mut ComponentsRegistrator, _: &mut RequiredComponents) {}
 }
 
-impl<E: Event, B: Bundle, M: 'static, T: IntoObserverSystem<E, B, M>> BundleEffect
-    for Observed<E, B, M, T>
+impl<E: Event, B: Bundle, M: 'static, T: IntoObserverSystem<E, B, M> + 'static + Send + Sync>
+    BundleEffect for Observed<E, B, M, T>
 {
     fn apply(self, entity: &mut EntityWorldMut) {
         entity.observe(self.0);
+    }
+}
+
+#[derive(Debug, Copy, Clone, Default)]
+pub struct WithChild<B: Bundle>(pub B);
+impl<B: Bundle> DynamicBundle for WithChild<B> {
+    type Effect = Self;
+
+    fn get_components(self, _: &mut impl FnMut(StorageType, OwningPtr<'_>)) -> Self::Effect {
+        self
+    }
+}
+
+unsafe impl<B: Bundle> Bundle for WithChild<B> {
+    fn component_ids(_: &mut ComponentsRegistrator, _: &mut impl FnMut(ComponentId)) {}
+
+    fn get_component_ids(_: &Components, _: &mut impl FnMut(Option<ComponentId>)) {}
+
+    fn register_required_components(_: &mut ComponentsRegistrator, _: &mut RequiredComponents) {}
+}
+
+impl<B: Bundle> BundleEffect for WithChild<B> {
+    fn apply(self, entity: &mut EntityWorldMut) {
+        entity.with_child(self.0);
     }
 }
 
@@ -311,17 +348,59 @@ pub fn trans_wait_on<Ctx: 'static + Send + Sync + Default>(
     .into_trigger()
 }
 
+pub fn insert_recursive_delayed<S: RelationshipTarget, B: Bundle>(
+    mut bundle: impl FnMut(Entity) -> B + 'static + Send + Sync,
+) -> impl EntityCommand {
+    fn recurse<S: RelationshipTarget, B: Bundle>(
+        bundle: &mut (impl FnMut(Entity) -> B + 'static + Send + Sync),
+        out: &mut Vec<B>,
+        e: Entity,
+        world: &World,
+    ) {
+        out.push(bundle(e));
+        for e in world
+            .get::<S>(e)
+            .into_iter()
+            .flat_map(|target| target.iter())
+        {
+            recurse::<S, B>(bundle, out, e, world);
+        }
+    }
+
+    move |e: EntityWorldMut| {
+        let mut out = Vec::new();
+        recurse::<S, _>(&mut bundle, &mut out, e.id(), e.world());
+
+        let world = e.into_world_mut();
+        for b in out {
+            world.spawn(b);
+        }
+    }
+}
+
 pub fn suspend(mut e: EntityWorldMut) {
     e.insert_recursive::<Children>(Disabled);
 }
 
 pub fn resume(mut e: EntityWorldMut) {
     // I don't know why, but I *have* to do this otherwise observers break.
-    if let Some(Disabled) = e.take::<Disabled>()
-        && let Some(body) = e.take::<(RigidBody, Collider, Transform, GlobalTransform)>()
-    {
+    if let Some(Disabled) = e.take::<Disabled>() {
         e.remove_recursive::<Children, Disabled>();
+        let trns = e.take::<(Transform, GlobalTransform)>();
+        let physics = e.take::<(RigidBody, Collider)>();
+
         e.remove_with_requires::<(RigidBody, Collider, Transform)>();
-        e.insert(body);
+        match (trns, physics) {
+            (None, None) => {}
+            (None, Some(physics)) => {
+                e.insert(physics);
+            }
+            (Some(trns), None) => {
+                e.insert(trns);
+            }
+            (Some(trns), Some(physics)) => {
+                e.insert((trns, physics));
+            }
+        }
     }
 }

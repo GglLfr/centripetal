@@ -247,7 +247,7 @@ pub fn apply_attractor_accels(
 }
 
 pub fn predict_attract_trajectory(
-    time: Res<Time<Physics>>,
+    time: Res<Time>,
     attractors: Query<(&Position, &Attractor, &Collider, &AttractorEntities)>,
     mut attracted: Query<(&Position, &LinearVelocity, &mut AttractedPrediction)>,
 ) {

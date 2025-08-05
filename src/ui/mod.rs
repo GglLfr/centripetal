@@ -13,11 +13,17 @@ use crate::ui::widgets::WidgetPlugin;
 pub struct UiPlugin;
 impl Plugin for UiPlugin {
     fn build(&self, app: &mut App) {
-        app.add_plugins(WidgetPlugin).add_systems(
-            PostUpdate,
-            update_worldspace_ui
-                .after(UiSystem::Prepare)
-                .before(UiSystem::Layout),
-        );
+        app.add_plugins(WidgetPlugin)
+            .add_systems(
+                PostUpdate,
+                (
+                    update_worldspace_ui
+                        .after(UiSystem::Prepare)
+                        .before(UiSystem::Layout),
+                    fade_interpolate,
+                ),
+            )
+            .add_observer(on_fade_insert)
+            .add_observer(on_fade_done);
     }
 }

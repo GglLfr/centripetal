@@ -35,7 +35,7 @@ impl Timed {
         (
             Self::new(lifetime),
             Observed::by(
-                move |trigger: Trigger<OnTimeFinished>, world: &mut World| -> Result {
+                move |trigger: Trigger<TimeFinished>, world: &mut World| -> Result {
                     sys.initialize(world);
                     sys.validate_param(world)?;
                     sys.run_without_applying_deferred(trigger.target(), world)?;
@@ -60,7 +60,7 @@ impl Timed {
         (
             Self::new(lifetime),
             Observed::by(
-                move |trigger: Trigger<OnTimeFinished>,
+                move |trigger: Trigger<TimeFinished>,
                       world: &mut World,
                       query: &mut QueryState<&mut Self>|
                       -> Result {
@@ -84,7 +84,7 @@ impl Timed {
         )
     }
 
-    pub fn despawn_on_finished(trigger: Trigger<OnTimeFinished>, mut commands: Commands) {
+    pub fn despawn_on_finished(trigger: Trigger<TimeFinished>, mut commands: Commands) {
         if let Ok(mut e) = commands.get_entity(trigger.target()) {
             e.despawn();
         }
@@ -104,7 +104,7 @@ impl Timed {
 }
 
 #[derive(Debug, Copy, Clone, Default, Event)]
-pub struct OnTimeFinished {
+pub struct TimeFinished {
     pub count: usize,
     pub overtime: Duration,
     pub overtime_frac_f64: f64,
@@ -139,7 +139,7 @@ pub fn update_timed(
 
             let frac = overtime.div_duration_f64(lifetime);
             commands.command_scope(|mut commands| {
-                commands.entity(e).trigger(OnTimeFinished {
+                commands.entity(e).trigger(TimeFinished {
                     count,
                     overtime,
                     overtime_frac_f64: frac,

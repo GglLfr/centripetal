@@ -39,7 +39,7 @@ impl Plugin for GraphicsPlugin {
             .add_systems(
                 PostUpdate,
                 (
-                    update_animations.before(StateSet::Transition),
+                    update_animations.after(StateSet::Transition),
                     draw_animations,
                     flush_drawer_to_children,
                 )

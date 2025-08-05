@@ -33,9 +33,9 @@ use crate::{
         Animation, AnimationFrom, AnimationHooks, AnimationMode, BaseColor, SpriteDrawer,
         SpriteSection,
     },
-    i18n,
+    i18n, insert_recursive_delayed,
     logic::{
-        CameraConfines, CameraTarget, Fields, FromLevel, LevelApp, LevelEntities, OnTimeFinished,
+        CameraConfines, CameraTarget, Fields, FromLevel, LevelApp, LevelEntities, TimeFinished,
         TimeStun, Timed,
         effects::Ring,
         entities::{
@@ -49,7 +49,7 @@ use crate::{
     },
     math::{FloatTransformExt, Interp, RngExt},
     resume, suspend, trans_wait,
-    ui::{WorldspaceUi, widgets},
+    ui::{Fade, WorldspaceUi, widgets},
 };
 
 #[derive(
@@ -121,6 +121,9 @@ impl FromLevel for Instance {
             let attractor_radius = attractors.get(attractor)?.radius;
             let [&selene_trns, &attractor_trns] = transforms.get_many([selene, attractor])?;
 
+            #[derive(Debug, Copy, Clone, Default, Event)]
+            struct Respawned;
+
             #[must_use]
             fn spawn_selene(
                 level_entity: Entity,
@@ -162,10 +165,11 @@ impl FromLevel for Instance {
                             ))
                             .observe(Timed::despawn_on_finished)
                             .observe(
-                                move |_: Trigger<OnTimeFinished>,
-                                      mut commands: Commands|
-                                      -> Result {
-                                    commands.get_entity(selene)?.queue(resume);
+                                move |_: Trigger<TimeFinished>, mut commands: Commands| -> Result {
+                                    commands
+                                        .get_entity(selene)?
+                                        .queue(resume)
+                                        .trigger(Respawned);
                                     Ok(())
                                 },
                             ),
@@ -176,7 +180,7 @@ impl FromLevel for Instance {
             let ui_selene_hover = commands
                 .spawn((
                     Node {
-                        display: Display::Grid,
+                        display: Display::None,
                         grid_template_columns: vec![RepeatedGridTrack::min_content(2)],
                         row_gap: Px(3.),
                         column_gap: Px(9.),
@@ -234,52 +238,58 @@ impl FromLevel for Instance {
                         ),
                     ],
                 ))
-                .queue(suspend)
                 .id();
 
-            commands.entity(selene).insert(NoKillDespawn).observe(
-                move |trigger: Trigger<Killed>,
-                      mut commands: Commands,
-                      mut query: Query<(&Transform, &mut AttractedPrediction)>|
-                      -> Result {
-                    let (&trns, mut prediction) = query.get_mut(trigger.target())?;
-                    prediction.points.clear();
+            commands
+                .entity(selene)
+                .insert(NoKillDespawn)
+                .observe(
+                    move |_: Trigger<Respawned>,
+                          mut commands: Commands,
+                          mut query: Query<&mut Node>|
+                          -> Result {
+                        query.get_mut(ui_selene_hover)?.display = Display::Grid;
+                        commands
+                            .get_entity(ui_selene_hover)?
+                            .queue(insert_recursive_delayed::<Children, _>(Fade::enter));
 
-                    commands
-                        .get_entity(selene)?
-                        .insert((
+                        Ok(())
+                    },
+                )
+                .observe(
+                    move |trigger: Trigger<Killed>,
+                          mut commands: Commands,
+                          mut query: Query<(&Transform, &mut AttractedPrediction)>|
+                          -> Result {
+                        let (&trns, mut prediction) = query.get_mut(trigger.target())?;
+                        prediction.points.clear();
+
+                        commands
+                            .get_entity(selene)?
+                            .insert((
+                                selene_trns,
+                                initial,
+                                LinearVelocity::ZERO,
+                                AngularVelocity::ZERO,
+                                Health::new(10),
+                            ))
+                            .queue(suspend);
+
+                        commands.queue(spawn_selene(
+                            level_entity,
+                            selene,
+                            trns,
                             selene_trns,
-                            initial,
-                            LinearVelocity::ZERO,
-                            AngularVelocity::ZERO,
-                            Health::new(10),
-                        ))
-                        .queue(suspend);
+                            |_| Ok(()),
+                        ));
 
-                    commands.queue(spawn_selene(
-                        level_entity,
-                        selene,
-                        trns,
-                        selene_trns,
-                        |_| Ok(()),
-                    ));
-                    Ok(())
-                },
-            );
+                        commands
+                            .get_entity(ui_selene_hover)?
+                            .queue(insert_recursive_delayed::<Children, _>(Fade::exit));
 
-            /*let ui_selene_hover = commands
-            .spawn((
-                widgets::shadow_bg(),
-                children![(
-                    widgets::icon(),
-                    children![(
-                        widgets::keyboard_binding(|binds| binds.attracted_hover[0]),
-                        TextColor(Color::BLACK),
-                    )],
-                )],
-            ))
-            //.queue(suspend)
-            .id();*/
+                        Ok(())
+                    },
+                );
 
             commands.entity(hover_target).insert((
                 Collider::circle(8.),
@@ -387,7 +397,7 @@ impl FromLevel for Instance {
                             selene_trns,
                             move |e| {
                                 e.observe(
-                                    move |_: Trigger<OnTimeFinished>,
+                                    move |_: Trigger<TimeFinished>,
                                           mut commands: Commands|
                                           -> Result {
                                         commands.get_entity(level_entity)?.insert(Done::Success);

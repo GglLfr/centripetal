@@ -185,11 +185,8 @@ impl Plugin for EntitiesPlugin {
         )
         .add_systems(
             PostUpdate,
-            (
-                predict_attract_trajectory,
-                draw_selene_prediction_trajectory.run_if(in_state(GameState::InGame)),
-            )
-                .chain()
+            draw_selene_prediction_trajectory
+                .run_if(in_state(GameState::InGame))
                 .after(TransformSystem::TransformPropagate),
         )
         .add_systems(
@@ -199,15 +196,18 @@ impl Plugin for EntitiesPlugin {
                 .ambiguous_with_all(),
         )
         .add_systems(
-            PhysicsSchedule,
-            ((
-                (detect_attracted_entities, remove_attracted_initials).chain(),
+            FixedPostUpdate,
+            (
+                (
+                    detect_attracted_entities,
+                    remove_attracted_initials,
+                    predict_attract_trajectory,
+                )
+                    .chain(),
                 trigger_launch_charging,
                 kill_out_of_bounds,
             )
-                .in_set(PhysicsStepSet::SpatialQuery)
-                .after(update_spatial_query_pipeline),)
-                .ambiguous_with_all(),
+                .after(PhysicsSet::StepSimulation),
         );
     }
 }

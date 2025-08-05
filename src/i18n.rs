@@ -11,7 +11,7 @@ use bevy::{
         io::Reader,
         ron::{self, de::SpannedError},
     },
-    ecs::{component::HookContext, entity::EntityHashSet, world::DeferredWorld},
+    ecs::entity::EntityHashSet,
     platform::collections::HashMap,
     prelude::*,
 };
@@ -107,7 +107,6 @@ impl Locale {
 pub struct I18nContext {
     current_locale: Locale,
     listeners: EntityHashSet,
-    just_added: Vec<Entity>,
 }
 
 impl Default for I18nContext {
@@ -117,22 +116,13 @@ impl Default for I18nContext {
                 .and_then(Locale::from_bcp47)
                 .unwrap_or(Locale::EnUS),
             listeners: default(),
-            just_added: Vec::new(),
-        }
-    }
-}
-
-pub fn i18n_notify_just_added(mut ctx: ResMut<I18nContext>, mut commands: Commands) {
-    for added in ctx.just_added.drain(..) {
-        if let Ok(mut e) = commands.get_entity(added) {
-            e.queue(I18nNotify);
         }
     }
 }
 
 #[derive(Debug, Copy, Clone, Default)]
-pub struct I18nNotify;
-impl EntityCommand<Result> for I18nNotify {
+pub struct I18nNotifyCommand;
+impl EntityCommand<Result> for I18nNotifyCommand {
     fn apply(self, mut entity: EntityWorldMut) -> Result {
         let Some(I18n { key, arguments }) = entity.get::<I18n>().cloned() else {
             return Ok(());
@@ -148,7 +138,7 @@ impl EntityCommand<Result> for I18nNotify {
             .ok_or(format!("I18n key `{key}` does not exist"))?
             .clone();
 
-        entity.trigger(OnI18nNotify {
+        entity.trigger(I18nNotify {
             locale,
             fmt,
             arguments,
@@ -158,7 +148,7 @@ impl EntityCommand<Result> for I18nNotify {
 }
 
 #[derive(Debug, Clone, Event, Deref, DerefMut)]
-pub struct OnI18nNotify {
+pub struct I18nNotify {
     pub locale: Locale,
     #[deref]
     pub fmt: I18nEntry,
@@ -166,25 +156,9 @@ pub struct OnI18nNotify {
 }
 
 #[derive(Debug, Clone, Component)]
-#[component(on_add = i18n_on_add, on_remove = i18n_on_remove)]
 pub struct I18n {
     pub key: Cow<'static, str>,
     pub arguments: HashMap<Cow<'static, str>, String>,
-}
-
-fn i18n_on_add(mut world: DeferredWorld, HookContext { entity, .. }: HookContext) {
-    let mut ctx = world.resource_mut::<I18nContext>();
-    ctx.listeners.insert(entity);
-    ctx.just_added.push(entity);
-
-    world.commands().entity(entity).queue(I18nNotify);
-}
-
-fn i18n_on_remove(mut world: DeferredWorld, HookContext { entity, .. }: HookContext) {
-    world
-        .resource_mut::<I18nContext>()
-        .listeners
-        .remove(&entity);
 }
 
 #[derive(Debug, Clone, Default, PartialEq)]

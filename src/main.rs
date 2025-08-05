@@ -3,7 +3,7 @@
 use avian2d::prelude::*;
 #[cfg(feature = "dev")]
 use bevy::log::DEFAULT_FILTER;
-use bevy::{log::LogPlugin, prelude::*, ui::UiSystem};
+use bevy::{log::LogPlugin, prelude::*};
 use bevy_asset_loader::prelude::*;
 use bevy_ecs_tilemap::prelude::*;
 use bevy_framepace::FramepacePlugin;
@@ -84,7 +84,6 @@ fn main() -> AppExit {
             ProgressPlugin::<GameState>::new()
                 .with_state_transition(GameState::Loading, GameState::Menu),
         )
-        .add_systems(PostUpdate, i18n_notify_just_added.before(UiSystem::Content))
         .add_systems(OnEnter(GameState::Menu), dev_init)
         .run()
 }
