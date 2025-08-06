@@ -6,6 +6,7 @@ use smallvec::SmallVec;
 use crate::{
     Observed,
     logic::{TimeFinished, Timed},
+    ui::{ui_hide, ui_show},
 };
 
 #[derive(Debug, Clone, Default, Component)]
@@ -81,8 +82,10 @@ fn do_fade(
 
 pub fn on_fade_insert(
     trigger: Trigger<OnInsert, Fade>,
+    mut commands: Commands,
     mut parent: Query<(&mut Fade, &ChildOf)>,
     query: Query<(
+        Entity,
         Option<&BackgroundColor>,
         Option<&BoxShadow>,
         Option<&TextColor>,
@@ -91,7 +94,7 @@ pub fn on_fade_insert(
     let Ok((mut fade, child_of)) = parent.get_mut(trigger.target()) else {
         return;
     };
-    let Ok((background, box_shadow, text_color)) = query.get(child_of.parent()) else {
+    let Ok((e, background, box_shadow, text_color)) = query.get(child_of.parent()) else {
         return;
     };
 
@@ -103,17 +106,35 @@ pub fn on_fade_insert(
             .unwrap_or_default(),
         text: text_color.map(|col| col.0).unwrap_or_default(),
     };
+
+    commands.entity(e).queue(ui_show);
 }
 
 pub fn on_fade_done(
     trigger: Trigger<TimeFinished>,
+    mut commands: Commands,
     source: Query<(FadeSource, &ChildOf)>,
-    mut item: Query<FadeItem>,
+    mut item: Query<(Entity, FadeItem)>,
 ) {
-    if let Ok((source, child_of)) = source.get(trigger.target())
-        && let Ok(item) = item.get_mut(child_of.parent())
+    if let Ok(((fade, timed), child_of)) = source.get(trigger.target())
+        && let Ok((e, item)) = item.get_mut(child_of.parent())
     {
-        do_fade(source, item);
+        do_fade(
+            (
+                &Fade {
+                    // `enter: true` to make it return to its original colors.
+                    // `timed.frac()` returns `1.` here.
+                    enter: true,
+                    ..fade.clone()
+                },
+                timed,
+            ),
+            item,
+        );
+
+        if !fade.enter {
+            commands.entity(e).queue(ui_hide);
+        }
     }
 }
 

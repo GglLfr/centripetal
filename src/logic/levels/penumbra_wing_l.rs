@@ -49,7 +49,7 @@ use crate::{
     },
     math::{FloatTransformExt, Interp, RngExt},
     resume, suspend, trans_wait,
-    ui::{Fade, WorldspaceUi, widgets},
+    ui::{Fade, WorldspaceUi, ui_hide, widgets},
 };
 
 #[derive(
@@ -180,7 +180,7 @@ impl FromLevel for Instance {
             let ui_selene_hover = commands
                 .spawn((
                     Node {
-                        display: Display::None,
+                        display: Display::Grid,
                         grid_template_columns: vec![RepeatedGridTrack::min_content(2)],
                         row_gap: Px(3.),
                         column_gap: Px(9.),
@@ -238,17 +238,14 @@ impl FromLevel for Instance {
                         ),
                     ],
                 ))
+                .queue(ui_hide)
                 .id();
 
             commands
                 .entity(selene)
                 .insert(NoKillDespawn)
                 .observe(
-                    move |_: Trigger<Respawned>,
-                          mut commands: Commands,
-                          mut query: Query<&mut Node>|
-                          -> Result {
-                        query.get_mut(ui_selene_hover)?.display = Display::Grid;
+                    move |_: Trigger<Respawned>, mut commands: Commands| -> Result {
                         commands
                             .get_entity(ui_selene_hover)?
                             .queue(insert_recursive_delayed::<Children, _>(Fade::enter));
