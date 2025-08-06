@@ -195,7 +195,7 @@ pub fn update_time_stun(
                     commands.entity(e).despawn();
                     1.
                 } else {
-                    0.
+                    0.075
                 }
             }
             TimeStunKind::LongSmooth => {
@@ -205,7 +205,7 @@ pub fn update_time_stun(
                 } else {
                     let f = (now - started).div_duration_f32(Duration::from_millis(1000));
                     if f < 0.2 {
-                        0.
+                        0.075
                     } else {
                         0.2 + f.threshold(0.2, 1.) * 0.8
                     }

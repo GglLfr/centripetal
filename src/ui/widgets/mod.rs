@@ -30,8 +30,10 @@ pub fn icon() -> impl Bundle {
             min_width: Px(24.),
             min_height: Px(24.),
             justify_content: JustifyContent::Center,
+            border: UiRect::all(Px(2.)),
             ..default()
         },
+        BorderColor(Color::srgba(0., 0.1, 0.2, 0.75)),
         BackgroundColor(Srgba::hex("#ECF8FBFF").unwrap().into()),
         BorderRadius::all(Px(8.)),
     )

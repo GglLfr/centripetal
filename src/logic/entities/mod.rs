@@ -203,11 +203,10 @@ impl Plugin for EntitiesPlugin {
                     remove_attracted_initials,
                     predict_attract_trajectory,
                 )
-                    .chain(),
-                trigger_launch_charging,
-                kill_out_of_bounds,
-            )
-                .after(PhysicsSet::StepSimulation),
+                    .chain()
+                    .after(PhysicsSet::StepSimulation),
+                (trigger_launch_charging, kill_out_of_bounds).after(PhysicsSet::Writeback),
+            ),
         );
     }
 }
