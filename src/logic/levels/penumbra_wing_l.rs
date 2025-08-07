@@ -518,11 +518,13 @@ impl FromLevel for Instance {
                         move |trigger: Trigger<OnCollisionEnd>,
                               mut commands: Commands,
                               mut shown_ui: ResMut<ShownTutorialUi>,
-                              mut aligned: Query<&mut TutorialMove>|
+                              mut aligned: Query<&mut TutorialMove>,
+                              mut switched: Local<bool>|
                               -> Result {
                             let mut aligned = aligned.get_mut(level_entity)?;
                             if trigger.body.is_some_and(|body| body == selene)
                                 && std::mem::replace(&mut aligned.aligned, false)
+                                && !std::mem::replace(&mut *switched, true)
                                 && aligned.align_time >= TUTORIAL_MOVE_ALIGN_HELP
                                 && commands
                                     .get_entity(ui_selene_accel)
@@ -563,8 +565,69 @@ impl FromLevel for Instance {
             );
 
         // PHASE 4 (parrying tutorial)
+        let ui_selene_launch = commands
+            .spawn((
+                Node {
+                    display: Display::Grid,
+                    grid_template_columns: vec![RepeatedGridTrack::min_content(2)],
+                    row_gap: Px(3.),
+                    column_gap: Px(9.),
+                    ..default()
+                },
+                WorldspaceUi {
+                    target: selene,
+                    offset: vec2(0., -16.),
+                    anchor: vec2(0.5, 1.),
+                },
+                children![
+                    (
+                        Node {
+                            align_items: AlignItems::Center,
+                            justify_content: JustifyContent::End,
+                            ..default()
+                        },
+                        children![(
+                            widgets::icon(),
+                            children![(
+                                widgets::keyboard_binding(|binds| binds.launch),
+                                TextColor(Color::BLACK),
+                            )],
+                        )],
+                    ),
+                    (
+                        Node::default(),
+                        children![(
+                            widgets::shadow_bg(),
+                            widgets::text(i18n!("tutorial.hover.launch")),
+                            TextLayout::new(JustifyText::Left, LineBreak::NoWrap),
+                        )],
+                    ),
+                ],
+            ))
+            .queue(ui_hide)
+            .id();
+
         states = states
             .on_enter::<TutorialLaunch>(move |e| {
+                e.commands().queue(move |world: &mut World| {
+                    if world
+                        .get_entity_mut(ui_selene_launch)
+                        .map(ui_fade_in)
+                        .is_ok()
+                    {
+                        world.resource_scope(
+                            move |world: &mut World, mut shown_ui: Mut<ShownTutorialUi>| {
+                                if let Ok(ui) = world.get_entity_mut(std::mem::replace(
+                                    &mut **shown_ui,
+                                    ui_selene_launch,
+                                )) {
+                                    ui_fade_out(ui);
+                                }
+                            },
+                        );
+                    }
+                });
+
                 e.commands().entity(selene).observe(
                     move |trigger: Trigger<Launched>,
                             mut commands: Commands,
@@ -579,7 +642,10 @@ impl FromLevel for Instance {
 
                             #[derive(Event)]
                             struct Hit;
+                            #[derive(Debug, Resource, Deref, DerefMut)]
+                            struct HasHit(bool);
 
+                            commands.insert_resource(HasHit(false));
                             for i in 0..3 {
                                 let Rotation { cos, sin } = (*pos - *attractor_pos)
                                     .try_normalize()
@@ -589,31 +655,58 @@ impl FromLevel for Instance {
 
                                 commands.spawn(Timed::run(
                                     Duration::from_millis((i as u64 + 1) * 150),
-                                    move |_: In<Entity>, mut commands: Commands| {
-                                        let bullet = commands.spawn((
+                                    move |_: In<Entity>, mut commands: Commands, hit: Res<HasHit>| {
+                                        let mut bullet = commands.spawn((
                                             bullet::spiky(level_entity),
-                                            HomingTarget(selene),
                                             LinearVelocity(vec2(cos * 156., sin * 156.)),
                                             attractor_pos,
                                             Rotation { cos, sin },
-                                        )).observe(move |trigger: Trigger<OnCollisionStart>, mut commands: Commands| {
-                                            if trigger.body.is_some_and(|body| body == selene) {
-                                                commands.trigger(Hit);
-                                            }
-                                        }).id();
-
-                                        commands.spawn((
-                                            ChildOf(level_entity),
-                                            Observer::new(move |trigger: Trigger<Hit>, mut commands: Commands| {
-                                                if let Ok(mut e) = commands.get_entity(bullet) {
-                                                    e.remove::<HomingTarget>();
-                                                    commands.entity(trigger.observer()).despawn();
-                                                }
-                                            }),
                                         ));
+
+                                        if !**hit {
+                                            bullet.insert(HomingTarget(selene)).observe(move |trigger: Trigger<OnCollisionStart>, mut commands: Commands| {
+                                                if trigger.body.is_some_and(|body| body == selene) {
+                                                    commands.trigger(Hit);
+                                                    commands.insert_resource(HasHit(true));
+                                                }
+                                            });
+
+                                            let id = bullet.id();
+                                            bullet.commands().spawn((
+                                                ChildOf(id),
+                                                Observer::new(move |trigger: Trigger<Hit>, mut commands: Commands| {
+                                                    if let Ok(mut e) = commands.get_entity(id) {
+                                                        e.remove::<HomingTarget>();
+                                                        commands.entity(trigger.observer()).despawn();
+                                                    }
+                                                }),
+                                            ));
+                                        }
                                     },
                                 ));
                             }
+
+                            let parried_or_dodged = commands
+                                .spawn(Timed::run(
+                                    Duration::from_secs(2),
+                                    move |_: In<Entity>, mut commands: Commands| -> Result {
+                                        commands.get_entity(level_entity)?.insert(Done::Success);
+                                        Ok(())
+                                    },
+                                ))
+                                .id();
+
+                            commands.spawn((
+                                ChildOf(level_entity),
+                                Observer::new(move |trigger: Trigger<Hit>, mut commands: Commands| -> Result {
+                                    commands.entity(trigger.observer()).despawn();
+                                    if let Ok(mut e) = commands.get_entity(parried_or_dodged) {
+                                        e.despawn();
+                                        commands.get_entity(level_entity)?.insert(Done::Failure);
+                                    }
+                                    Ok(())
+                                }),
+                            ));
 
                             commands.spawn(Timed::run(
                                 Duration::from_millis(750),
@@ -626,6 +719,20 @@ impl FromLevel for Instance {
                         }
                     },
                 );
+            })
+            .on_exit::<TutorialLaunch>(move |e| {
+                e.commands().queue(move |world: &mut World| {
+                    let temporary = world.spawn_empty().id();
+                    world.resource_scope(
+                        move |world: &mut World, mut shown_ui: Mut<ShownTutorialUi>| {
+                            if let Ok(ui) =
+                                world.get_entity_mut(std::mem::replace(&mut **shown_ui, temporary))
+                            {
+                                ui_fade_out(ui);
+                            }
+                        },
+                    );
+                });
             })
             .trans::<TutorialLaunch, _>(done(None), TutorialParry);
 
