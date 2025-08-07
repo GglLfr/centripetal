@@ -204,7 +204,7 @@ impl FromLevel for Instance {
                                     widgets::keyboard_binding(|binds| binds.attracted_hover[0]),
                                     TextColor(Color::BLACK),
                                 )],
-                            )]
+                            )],
                         ),
                         (
                             Node::default(),
@@ -212,7 +212,7 @@ impl FromLevel for Instance {
                                 widgets::shadow_bg(),
                                 widgets::text(i18n!("tutorial.hover.descend")),
                                 TextLayout::new(JustifyText::Left, LineBreak::NoWrap),
-                            )]
+                            )],
                         ),
                         (
                             Node {
@@ -226,15 +226,15 @@ impl FromLevel for Instance {
                                     widgets::keyboard_binding(|binds| binds.attracted_hover[1]),
                                     TextColor(Color::BLACK),
                                 )],
-                            )]
+                            )],
                         ),
                         (
                             Node::default(),
-                            (
+                            children![(
                                 widgets::shadow_bg(),
                                 widgets::text(i18n!("tutorial.hover.ascend")),
                                 TextLayout::new(JustifyText::Left, LineBreak::NoWrap),
-                            )
+                            )],
                         ),
                     ],
                 ))
