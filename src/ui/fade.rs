@@ -4,8 +4,8 @@ use bevy::{ecs::query::QueryItem, prelude::*};
 use smallvec::SmallVec;
 
 use crate::{
-    Observed,
-    logic::{TimeFinished, Timed},
+    Observed, WithChild,
+    logic::Timed,
     ui::{ui_hide, ui_show},
 };
 
@@ -21,26 +21,24 @@ pub struct Fade {
 }
 
 impl Fade {
-    pub fn enter(e: Entity) -> impl Bundle + Clone {
-        (
-            ChildOf(e),
+    pub fn enter() -> impl Bundle + Clone {
+        WithChild((
             Self {
                 enter: true,
                 ..default()
             },
             Observed::by(Timed::despawn_on_finished),
-        )
+        ))
     }
 
-    pub fn exit(e: Entity) -> impl Bundle + Clone {
-        (
-            ChildOf(e),
+    pub fn exit() -> impl Bundle + Clone {
+        WithChild((
             Self {
                 enter: false,
                 ..default()
             },
             Observed::by(Timed::despawn_on_finished),
-        )
+        ))
     }
 }
 
@@ -118,8 +116,8 @@ pub fn on_fade_insert(
     commands.entity(e).queue(ui_show);
 }
 
-pub fn on_fade_done(
-    trigger: Trigger<TimeFinished>,
+pub fn on_fade_replace(
+    trigger: Trigger<OnReplace, Fade>,
     mut commands: Commands,
     source: Query<(FadeSource, &ChildOf)>,
     mut item: Query<(Entity, FadeItem)>,
@@ -131,11 +129,12 @@ pub fn on_fade_done(
             (
                 &Fade {
                     // `enter: true` to make it return to its original colors.
-                    // `timed.frac()` returns `1.` here.
+                    // `timed.frac()` returns `1.` here; see below.
                     enter: true,
                     ..fade.clone()
                 },
-                timed,
+                // Make it as if the timer has finished already.
+                &Timed::new_at(timed.lifetime, timed.lifetime),
             ),
             item,
         );

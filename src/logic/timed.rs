@@ -27,6 +27,18 @@ impl Timed {
         }
     }
 
+    pub fn new_at(lifetime: Duration, life: Duration) -> Self {
+        let life = life.min(lifetime);
+        let frac = life.div_duration_f64(lifetime);
+        Self {
+            lifetime,
+            life,
+            frac_f64: frac,
+            frac: frac as f32,
+            finished: false,
+        }
+    }
+
     pub fn run<M>(
         lifetime: Duration,
         sys: impl IntoResultSystem<In<Entity>, (), M>,

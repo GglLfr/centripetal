@@ -10,7 +10,7 @@ use bevy::{
         },
         entity_disabling::Disabled,
         never::Never,
-        query::Access,
+        query::{Access, QueryFilter},
         system::{IntoObserverSystem, RunSystemOnce, SystemParamValidationError},
         world::{DeferredWorld, unsafe_world_cell::UnsafeWorldCell},
     },
@@ -348,33 +348,64 @@ pub fn trans_wait_on<Ctx: 'static + Send + Sync + Default>(
     .into_trigger()
 }
 
-pub fn insert_recursive_delayed<S: RelationshipTarget, B: Bundle>(
+pub fn despawn_recursive_if<S: RelationshipTarget, F: QueryFilter>(e: EntityWorldMut) {
+    fn inner<S: RelationshipTarget, F: QueryFilter>(
+        world: &mut World,
+        entity: Entity,
+        query: &QueryState<(), F>,
+    ) {
+        let related = world
+            .get::<S>(entity)
+            .into_iter()
+            .flat_map(S::iter)
+            .collect::<Box<[_]>>();
+
+        if query.get_manual(world, entity).is_ok() {
+            world.despawn(entity);
+        }
+
+        for child in related {
+            inner::<S, F>(world, child, query);
+        }
+    }
+
+    let id = e.id();
+    let world = e.into_world_mut();
+
+    let query = QueryState::<(), F>::new(world);
+    inner::<S, F>(world, id, &query);
+}
+
+pub fn insert_recursive_if<S: RelationshipTarget, F: QueryFilter, B: Bundle>(
     mut bundle: impl FnMut(Entity) -> B + 'static + Send + Sync,
 ) -> impl EntityCommand {
-    fn recurse<S: RelationshipTarget, B: Bundle>(
+    fn inner<S: RelationshipTarget, F: QueryFilter, B: Bundle>(
         bundle: &mut (impl FnMut(Entity) -> B + 'static + Send + Sync),
-        out: &mut Vec<B>,
-        e: Entity,
-        world: &World,
+        world: &mut World,
+        entity: Entity,
+        query: &QueryState<(), F>,
     ) {
-        out.push(bundle(e));
-        for e in world
-            .get::<S>(e)
+        let related = world
+            .get::<S>(entity)
             .into_iter()
-            .flat_map(|target| target.iter())
-        {
-            recurse::<S, B>(bundle, out, e, world);
+            .flat_map(S::iter)
+            .collect::<Box<[_]>>();
+
+        if query.get_manual(world, entity).is_ok() {
+            world.entity_mut(entity).insert(bundle(entity));
+        }
+
+        for child in related {
+            inner::<S, F, B>(bundle, world, child, query);
         }
     }
 
     move |e: EntityWorldMut| {
-        let mut out = Vec::new();
-        recurse::<S, _>(&mut bundle, &mut out, e.id(), e.world());
-
+        let id = e.id();
         let world = e.into_world_mut();
-        for b in out {
-            world.spawn(b);
-        }
+
+        let query = QueryState::<(), F>::new(world);
+        inner::<S, F, B>(&mut bundle, world, id, &query);
     }
 }
 

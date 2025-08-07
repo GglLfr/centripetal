@@ -7,7 +7,7 @@ mod worldspace;
 pub use fade::*;
 pub use worldspace::*;
 
-use crate::ui::widgets::WidgetPlugin;
+use crate::{despawn_recursive_if, insert_recursive_if, ui::widgets::WidgetPlugin};
 
 #[derive(Debug, Copy, Clone, Default)]
 pub struct UiPlugin;
@@ -24,7 +24,7 @@ impl Plugin for UiPlugin {
                 ),
             )
             .add_observer(on_fade_insert)
-            .add_observer(on_fade_done);
+            .add_observer(on_fade_replace);
     }
 }
 
@@ -48,4 +48,20 @@ pub fn ui_show(mut e: EntityWorldMut) {
     {
         node.display = prev.0;
     }
+}
+
+pub fn ui_fade_in(e: EntityWorldMut) {
+    let entity = e.id();
+    let world = e.into_world_mut();
+
+    despawn_recursive_if::<Children, With<Fade>>(world.entity_mut(entity));
+    insert_recursive_if::<Children, (), _>(|_| Fade::enter()).apply(world.entity_mut(entity));
+}
+
+pub fn ui_fade_out(e: EntityWorldMut) {
+    let entity = e.id();
+    let world = e.into_world_mut();
+
+    despawn_recursive_if::<Children, With<Fade>>(world.entity_mut(entity));
+    insert_recursive_if::<Children, (), _>(|_| Fade::exit()).apply(world.entity_mut(entity));
 }

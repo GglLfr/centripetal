@@ -33,7 +33,7 @@ use crate::{
         Animation, AnimationFrom, AnimationHooks, AnimationMode, BaseColor, SpriteDrawer,
         SpriteSection,
     },
-    i18n, insert_recursive_delayed,
+    i18n,
     logic::{
         CameraConfines, CameraTarget, Fields, FromLevel, LevelApp, LevelEntities, TimeFinished,
         TimeStun, Timed,
@@ -49,7 +49,7 @@ use crate::{
     },
     math::{FloatTransformExt, Interp, RngExt},
     resume, suspend, trans_wait,
-    ui::{Fade, WorldspaceUi, ui_hide, widgets},
+    ui::{WorldspaceUi, ui_fade_in, ui_fade_out, ui_hide, widgets},
 };
 
 #[derive(
@@ -246,10 +246,7 @@ impl FromLevel for Instance {
                 .insert(NoKillDespawn)
                 .observe(
                     move |_: Trigger<Respawned>, mut commands: Commands| -> Result {
-                        commands
-                            .get_entity(ui_selene_hover)?
-                            .queue(insert_recursive_delayed::<Children, _>(Fade::enter));
-
+                        commands.get_entity(ui_selene_hover)?.queue(ui_fade_in);
                         Ok(())
                     },
                 )
@@ -280,9 +277,7 @@ impl FromLevel for Instance {
                             |_| Ok(()),
                         ));
 
-                        commands
-                            .get_entity(ui_selene_hover)?
-                            .queue(insert_recursive_delayed::<Children, _>(Fade::exit));
+                        commands.get_entity(ui_selene_hover)?.queue(ui_fade_out);
 
                         Ok(())
                     },
