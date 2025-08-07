@@ -10,7 +10,6 @@ use crate::{
 };
 
 #[derive(Debug, Clone, Default, Component)]
-#[component(storage = "SparseSet")]
 #[require(Timed::new(Duration::from_millis(750)))]
 pub struct Fade {
     pub enter: bool,
