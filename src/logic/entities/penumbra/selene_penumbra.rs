@@ -18,7 +18,7 @@ use crate::{
     Sprites,
     graphics::{Animation, AnimationHooks, AnimationMode, BaseColor, SpriteDrawer, SpriteSection},
     logic::{
-        CameraTarget, Fields, FromLevelEntity, IsPlayer, TimeStun, Timed,
+        CameraTarget, Fields, FromLevelEntity, IsPlayer, Level, LevelUnload, TimeStun, Timed,
         entities::{
             Health, Hurt, MaxHealth, TryHurt,
             penumbra::{
@@ -32,6 +32,9 @@ use crate::{
 
 #[derive(Debug, Copy, Clone, Default, Component)]
 pub struct LaunchDisc;
+
+#[derive(Debug, Copy, Clone, Default, Component)]
+pub struct HurtEffect;
 
 #[derive(Debug, Copy, Clone, Default, Component)]
 pub struct SlashEffect;
@@ -96,9 +99,33 @@ impl FromLevelEntity for SelenePenumbra {
             },
             DebugRender::none(),
         ))
-        .observe(|trigger: Trigger<Hurt>, mut commands: Commands| {
-            commands.spawn((ChildOf(trigger.target()), TimeStun::short_instant()));
-        })
+        .observe(
+            |trigger: Trigger<Hurt>,
+             mut commands: Commands,
+             sprites: Res<Sprites>,
+             transforms: Query<&GlobalTransform>,
+             level: Query<Entity, (With<Level>, Without<LevelUnload>)>| {
+                let Ok(level_entity) = level.single() else {
+                    return;
+                };
+                let Ok(&trns) = transforms.get(trigger.target()) else {
+                    return;
+                };
+
+                commands.spawn((ChildOf(level_entity), TimeStun::short_instant()));
+                commands.spawn((
+                    HurtEffect,
+                    ChildOf(level_entity),
+                    Animation::new(sprites.selene_penumbra_hurt.clone_weak(), "anim"),
+                    AnimationHooks::despawn_on_done("anim"),
+                    BaseColor(Color::linear_rgb(25., 50., 300.)),
+                    // TODO Maybe create a nicer way to get timer from total animation time instead of hardcoding.
+                    Timed::new(Duration::from_millis(6 * 50)),
+                    Transform::from(trns),
+                    trns,
+                ));
+            },
+        )
         .observe(
             |trigger: Trigger<TryLaunch>, mut commands: Commands, sprites: Res<Sprites>| {
                 commands.entity(trigger.target()).with_children(|children| {
@@ -139,7 +166,7 @@ impl FromLevelEntity for SelenePenumbra {
                         Animation::new(sprites.attractor_slash.clone_weak(), "anim"),
                         // TODO Maybe create a nicer way to get timer from total animation time instead of hardcoding.
                         Timed::new(Duration::from_millis(14 * 24)),
-                        BaseColor(Color::linear_rgba(50., 100., 600., 1.)),
+                        BaseColor(Color::linear_rgb(50., 100., 600.)),
                         Transform {
                             translation: attractor_pos.extend(0.),
                             rotation: Quat::from_axis_angle(
@@ -156,6 +183,14 @@ impl FromLevelEntity for SelenePenumbra {
         );
 
         Ok(())
+    }
+}
+
+pub fn color_selene_hurt(mut hurts: Query<(&Timed, &mut BaseColor), With<HurtEffect>>) {
+    for (timed, mut color) in &mut hurts {
+        **color = Color::linear_rgb(25., 50., 300.)
+            .mix(&Color::linear_rgb(0., 1., 12.), timed.frac().pow_out(16))
+            .with_alpha(1. - timed.frac().pow_out(4));
     }
 }
 

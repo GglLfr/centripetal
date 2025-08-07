@@ -8,10 +8,10 @@ use crate::logic::{
     GameState, LevelApp, LevelBounds, LevelUnload,
     entities::penumbra::{
         AttractedAction, Attractor, GenericPenumbra, LaunchAction, SelenePenumbra, ThornPillar,
-        ThornRing, apply_attractor_accels, apply_homing_velocity, color_selene_slash,
-        detect_attracted_entities, draw_selene_launch_disc, draw_selene_prediction_trajectory,
-        predict_attract_trajectory, remove_attracted_initials, trigger_launch_charging,
-        update_launch_charging, update_launch_idle,
+        ThornRing, apply_attractor_accels, apply_homing_velocity, color_selene_hurt,
+        color_selene_slash, detect_attracted_entities, draw_selene_launch_disc,
+        draw_selene_prediction_trajectory, predict_attract_trajectory, remove_attracted_initials,
+        trigger_launch_charging, update_launch_charging, update_launch_idle,
     },
 };
 
@@ -139,21 +139,16 @@ pub struct NoKillDespawn;
 pub fn kill_out_of_bounds(
     commands: ParallelCommands,
     level_bounds: Query<&LevelBounds, Without<LevelUnload>>,
-    entities: Query<(Entity, &Position, Has<NoKillDespawn>)>,
+    entities: Query<(Entity, &Position)>,
 ) {
     let Ok(&level_bounds) = level_bounds.single() else {
         return;
     };
 
-    entities.par_iter().for_each(|(e, &pos, no_kill_despawn)| {
+    entities.par_iter().for_each(|(e, &pos)| {
         if pos.x < 0. || pos.x > level_bounds.x || pos.y < 0. || pos.y > level_bounds.x {
             commands.command_scope(|mut commands| {
-                let mut e = commands.entity(e);
-                e.trigger(Killed::new());
-
-                if !no_kill_despawn {
-                    e.despawn();
-                }
+                commands.entity(e).queue(TryHurt::new(i32::MAX as u32));
             });
         }
     });
@@ -175,6 +170,7 @@ impl Plugin for EntitiesPlugin {
         .add_systems(
             Update,
             (
+                color_selene_hurt,
                 color_selene_slash,
                 update_launch_idle,
                 update_launch_charging,

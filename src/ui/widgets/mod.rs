@@ -33,7 +33,7 @@ pub fn icon() -> impl Bundle {
             border: UiRect::all(Px(2.)),
             ..default()
         },
-        BorderColor(Color::srgba(0., 0.1, 0.2, 0.75)),
+        BorderColor(Color::linear_rgba(0., 0.1, 0.2, 0.75)),
         BackgroundColor(Srgba::hex("#ECF8FBFF").unwrap().into()),
         BorderRadius::all(Px(8.)),
     )

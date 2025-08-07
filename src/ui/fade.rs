@@ -15,6 +15,7 @@ use crate::{
 pub struct Fade {
     pub enter: bool,
     pub background: Color,
+    pub border: Color,
     pub box_shadow: SmallVec<[Color; 1]>,
     pub text: Color,
 }
@@ -47,13 +48,14 @@ pub type FadeSource<'a> = (&'a Fade, &'a Timed);
 
 pub type FadeItem<'a> = (
     Option<&'a mut BackgroundColor>,
+    Option<&'a mut BorderColor>,
     Option<&'a mut BoxShadow>,
     Option<&'a mut TextColor>,
 );
 
 fn do_fade(
     (fade, timed): QueryItem<FadeSource>,
-    (background_color, box_shadow, text_color): QueryItem<FadeItem>,
+    (background_color, border_color, box_shadow, text_color): QueryItem<FadeItem>,
 ) {
     let f = if fade.enter {
         timed.frac()
@@ -63,6 +65,10 @@ fn do_fade(
 
     if let Some(mut background_color) = background_color {
         background_color.0 = Color::NONE.mix(&fade.background, f);
+    }
+
+    if let Some(mut border_color) = border_color {
+        border_color.0 = Color::NONE.mix(&fade.border, f);
     }
 
     if let Some(mut box_shadow) = box_shadow {
@@ -87,6 +93,7 @@ pub fn on_fade_insert(
     query: Query<(
         Entity,
         Option<&BackgroundColor>,
+        Option<&BorderColor>,
         Option<&BoxShadow>,
         Option<&TextColor>,
     )>,
@@ -94,13 +101,14 @@ pub fn on_fade_insert(
     let Ok((mut fade, child_of)) = parent.get_mut(trigger.target()) else {
         return;
     };
-    let Ok((e, background, box_shadow, text_color)) = query.get(child_of.parent()) else {
+    let Ok((e, background, border, box_shadow, text_color)) = query.get(child_of.parent()) else {
         return;
     };
 
     *fade = Fade {
         enter: fade.enter,
         background: background.map(|col| col.0).unwrap_or_default(),
+        border: border.map(|col| col.0).unwrap_or_default(),
         box_shadow: box_shadow
             .map(|box_shadow| box_shadow.iter().map(|sample| sample.color).collect())
             .unwrap_or_default(),

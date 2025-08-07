@@ -53,6 +53,8 @@ pub struct Sprites {
     pub selene: Handle<SpriteSheet>,
     #[asset(path = "entities/selene/selene_penumbra.json")]
     pub selene_penumbra: Handle<SpriteSheet>,
+    #[asset(path = "entities/selene/hurt_penumbra.json")]
+    pub selene_penumbra_hurt: Handle<SpriteSheet>,
     #[asset(path = "entities/selene/try_launch_front.json")]
     pub selene_try_launch_front: Handle<SpriteSheet>,
     #[asset(path = "entities/selene/try_launch_back.json")]
