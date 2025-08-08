@@ -33,7 +33,10 @@ pub use ecs::*;
 pub use i18n::*;
 pub use save::*;
 
-#[cfg(not(feature = "bevy_dynamic"))]
+#[cfg(all(
+    feature = "mimalloc",
+    not(feature = "bevy_dynamic"),
+))]
 #[global_allocator]
 static ALLOC: mimalloc_redirect::MiMalloc = mimalloc_redirect::MiMalloc;
 
