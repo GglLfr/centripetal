@@ -42,8 +42,6 @@ jobs:
           New-Item -ItemType Directory -Path 'out'
           Move-Item -Path 'assets' -Destination 'out' -Force
           Move-Item -Path 'target/release/centripetal.exe' -Destination 'out' -Force
-          Move-Item -Path 'target/release/build/mimalloc-redirect-*/out/bin/mimalloc.dll' -Destination 'out' -Force
-          Move-Item -Path 'target/release/build/mimalloc-redirect-*/out/bin/mimalloc-redirect.dll' -Destination 'out' -Force
       - name: Upload game as a GitHub Action artifact
         uses: actions/upload-artifact@v4
         with:
