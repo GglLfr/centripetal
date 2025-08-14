@@ -1,11 +1,10 @@
-use crate::prelude::*;
-use sys_locale::get_locales;
-
 use crate::{
     I18nEntries, Locale,
     graphics::{SpriteSection, SpriteSheet},
     logic::Ldtk,
+    prelude::*,
 };
+use sys_locale::get_locales;
 
 #[derive(Debug, Clone, Resource, AssetCollection, Deref)]
 pub struct WorldHandle {

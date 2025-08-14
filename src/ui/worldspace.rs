@@ -1,6 +1,4 @@
-use bevy::{prelude::*, ui::Val::*};
-
-use crate::logic::CameraQuery;
+use crate::{logic::CameraQuery, prelude::*};
 
 #[derive(Debug, Copy, Clone, Component)]
 #[require(Node)]

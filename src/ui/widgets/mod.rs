@@ -1,12 +1,10 @@
-use std::time::Duration;
-
-use bevy::{
-    prelude::*,
-    text::{FontSmoothing, LineHeight, TextBounds},
-    ui::{UiSystem, Val::*},
-};
+use crate::prelude::*;
 
 mod scroll_text;
+use bevy::{
+    text::{FontSmoothing, LineHeight, TextBounds},
+    ui::UiSystem,
+};
 pub use scroll_text::*;
 
 use crate::{

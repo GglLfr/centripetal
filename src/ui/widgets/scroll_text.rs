@@ -1,9 +1,4 @@
-use std::{
-    ops::{Deref, DerefMut},
-    time::Duration,
-};
-
-use bevy::prelude::*;
+use crate::prelude::*;
 
 #[derive(Debug, Clone, Component, Default)]
 #[require(TextLayout, ScrollTextState)]

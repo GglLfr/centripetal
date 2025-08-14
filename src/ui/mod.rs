@@ -1,4 +1,5 @@
-use bevy::{prelude::*, ui::UiSystem};
+use crate::prelude::*;
+use bevy::ui::UiSystem;
 
 pub mod widgets;
 

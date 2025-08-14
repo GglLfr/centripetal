@@ -1,11 +1,7 @@
-use std::time::Duration;
-
-use bevy::{ecs::query::QueryItem, prelude::*};
-use smallvec::SmallVec;
-
 use crate::{
     Observed, WithChild,
     logic::Timed,
+    prelude::*,
     ui::{ui_hide, ui_show},
 };
 

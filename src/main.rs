@@ -89,6 +89,7 @@ pub mod prelude {
         },
         sprite::Anchor,
         tasks::{AsyncComputeTaskPool, ComputeTaskPool, IoTaskPool},
+        ui::Val::*,
     };
     pub use bevy_asset_loader::prelude::*;
     pub use bevy_ecs_tilemap::prelude::*;
@@ -104,8 +105,7 @@ pub mod prelude {
     pub use std::{
         any::{Any, TypeId},
         borrow::Cow,
-        fmt::{self, Debug, Display},
-        fs, io,
+        fmt, fs, io,
         marker::PhantomData,
         ops::{Deref, DerefMut, Range},
         path::{Path, PathBuf},
