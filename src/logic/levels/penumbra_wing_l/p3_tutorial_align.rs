@@ -1,10 +1,3 @@
-use std::time::Duration;
-
-use avian2d::prelude::*;
-use bevy::prelude::*;
-use bevy_vector_shapes::{prelude::*, render::ShapePipelineType};
-use smallvec::smallvec;
-
 use crate::{
     Sprites,
     graphics::{Animation, AnimationMode, BaseColor},
@@ -13,6 +6,7 @@ use crate::{
         effects::Ring,
         levels::penumbra_wing_l::{Instance, p2_spawn_selene},
     },
+    prelude::*,
 };
 
 const TUTORIAL_MOVE_ALIGN_HELP: Duration = Duration::from_millis(500);

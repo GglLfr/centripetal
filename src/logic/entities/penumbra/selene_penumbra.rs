@@ -1,19 +1,3 @@
-use std::{f32::consts::TAU, time::Duration};
-
-use avian2d::prelude::*;
-use bevy::{
-    ecs::{
-        query::QueryItem,
-        system::{SystemParamItem, lifetimeless::SRes},
-    },
-    prelude::*,
-};
-use bevy_vector_shapes::{
-    prelude::*,
-    render::ShapePipelineType,
-    shapes::{DiscComponent, FillType, ShapeAlphaMode, ShapeFill, ShapeMaterial, ThicknessType},
-};
-
 use crate::{
     Sprites,
     graphics::{Animation, AnimationHooks, AnimationMode, BaseColor, SpriteDrawer, SpriteSection},
@@ -27,8 +11,10 @@ use crate::{
             },
         },
     },
-    math::FloatTransformExt,
+    math::FloatTransformExt as _,
+    prelude::*,
 };
+use std::f32::consts::TAU;
 
 #[derive(Debug, Copy, Clone, Default, Component)]
 pub struct LaunchDisc;

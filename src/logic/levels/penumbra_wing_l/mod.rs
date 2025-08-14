@@ -1,17 +1,3 @@
-use bevy::{
-    asset::uuid::{Uuid, uuid},
-    ecs::{
-        query::QueryItem,
-        system::{
-            SystemParamItem,
-            lifetimeless::{Read, SQuery, SRes},
-        },
-    },
-    prelude::*,
-};
-
-use serde::{Deserialize, Serialize};
-
 use crate::{
     SaveApp as _,
     logic::{
@@ -19,6 +5,7 @@ use crate::{
         entities::penumbra::{AttractedInitial, Attractor},
         levels::in_level,
     },
+    prelude::*,
     suspend,
 };
 

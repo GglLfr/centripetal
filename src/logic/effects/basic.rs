@@ -1,15 +1,8 @@
-use std::time::Duration;
-
-use bevy::prelude::*;
-use bevy_vector_shapes::shapes::{
-    DiscComponent, FillType, ShapeFill, ShapeMaterial, ThicknessType,
-};
-use smallvec::{SmallVec, smallvec};
-
 use crate::{
     Observed,
     logic::Timed,
     math::{FloatTransformExt as _, FloatTransformer, Interp},
+    prelude::*,
 };
 
 #[derive(Debug, Clone, Component)]

@@ -1,15 +1,4 @@
-use std::{f32::consts::TAU, time::Duration};
-
-use avian2d::{dynamics::solver::solver_body::SolverBody, prelude::*};
-use bevy::{
-    ecs::{
-        query::QueryItem,
-        system::{SystemParamItem, lifetimeless::SRes},
-    },
-    prelude::*,
-};
-use leafwing_input_manager::prelude::*;
-use serde::{Deserialize, Serialize};
+use std::f32::consts::TAU;
 
 use crate::{
     Sprites,
@@ -21,7 +10,8 @@ use crate::{
             penumbra::{LaunchTarget, PenumbraEntity},
         },
     },
-    math::{DurationExt, FloatTransformExt},
+    math::{DurationExt as _, FloatTransformExt as _},
+    prelude::*,
 };
 
 #[derive(Debug, Copy, Clone, Default, Component)]

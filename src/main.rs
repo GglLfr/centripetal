@@ -30,15 +30,19 @@ pub use save::*;
 
 pub mod prelude {
     pub use async_fs::File;
-    pub use avian2d::prelude::*;
+    pub use avian2d::{dynamics::solver::solver_body::SolverBody, prelude::*};
     pub use bevy::{
         asset::{
-            AssetLoader, AsyncReadExt as _, AsyncWriteExt as _, LoadContext, LoadDirectError,
-            ParseAssetPathError, RenderAssetUsages, io::Reader, ron,
+            AssetLoader, AssetPath, AsyncReadExt as _, AsyncWriteExt as _, LoadContext,
+            LoadDirectError, LoadState, ParseAssetPathError, RecursiveDependencyLoadState,
+            RenderAssetUsages, UntypedAssetId, VisitAssetDependencies,
+            io::Reader,
+            ron,
+            uuid::{Uuid, uuid},
         },
         core_pipeline::core_2d::{CORE_2D_DEPTH_FORMAT, Transparent2d},
         ecs::{
-            archetype::ArchetypeComponentId,
+            archetype::{Archetype, ArchetypeComponentId},
             bundle::{BundleEffect, DynamicBundle},
             component::{
                 ComponentId, Components, ComponentsRegistrator, HookContext, RequiredComponents,
@@ -48,16 +52,18 @@ pub mod prelude {
             entity_disabling::Disabled,
             never::Never,
             query::{
-                Access, QueryData, QueryEntityError, QueryFilter, ROQueryItem, ReadOnlyQueryData,
+                Access, QueryData, QueryEntityError, QueryFilter, QueryItem, QuerySingleError,
+                ROQueryItem, ReadOnlyQueryData,
             },
             system::{
                 BoxedSystem, IntoObserverSystem, ReadOnlySystemParam, RunSystemError,
-                RunSystemOnce as _, SystemParam, SystemParamItem, SystemParamValidationError,
-                SystemState, lifetimeless::*,
+                RunSystemOnce as _, StaticSystemParam, SystemId, SystemMeta, SystemParam,
+                SystemParamItem, SystemParamValidationError, SystemState, lifetimeless::*,
             },
             world::{DeferredWorld, unsafe_world_cell::UnsafeWorldCell},
         },
         image::{ImageSampler, TextureFormatPixelInfo as _},
+        math::FloatOrd,
         platform::{
             collections::{HashMap, HashSet},
             sync::{
@@ -77,6 +83,7 @@ pub mod prelude {
             },
             render_resource::{binding_types::*, *},
             renderer::{RenderDevice, RenderQueue},
+            sync_world::SyncToRenderWorld,
             texture::{CachedTexture, GpuImage, TextureCache},
             view::{ExtractedView, ViewTarget},
         },
@@ -85,8 +92,9 @@ pub mod prelude {
     };
     pub use bevy_asset_loader::prelude::*;
     pub use bevy_ecs_tilemap::prelude::*;
-    pub use bevy_vector_shapes::prelude::*;
+    pub use bevy_vector_shapes::{prelude::*, render::ShapePipelineType};
     pub use derive_more::{Display, Error, From, FromStr};
+    pub use fastrand::Rng;
     pub use iyes_progress::prelude::*;
     pub use leafwing_input_manager::prelude::*;
     pub use serde::{Deserialize, Deserializer, Serialize, Serializer, de, ser};

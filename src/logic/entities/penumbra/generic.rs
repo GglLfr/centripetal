@@ -1,14 +1,9 @@
-use bevy::{
-    ecs::{
-        query::QueryItem,
-        system::{SystemParamItem, lifetimeless::Write},
+use crate::{
+    logic::{
+        Fields, FromLevelEntity,
+        entities::penumbra::{AttractedInitial, PenumbraEntity},
     },
     prelude::*,
-};
-
-use crate::logic::{
-    Fields, FromLevelEntity,
-    entities::penumbra::{AttractedInitial, PenumbraEntity},
 };
 
 #[derive(Debug, Copy, Clone, Default, Component)]

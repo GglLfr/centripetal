@@ -1,6 +1,7 @@
-use bevy::prelude::*;
-
-use crate::logic::{Level, LevelUnload, move_camera};
+use crate::{
+    logic::{Level, LevelUnload, move_camera},
+    prelude::*,
+};
 
 mod penumbra_wing_l;
 

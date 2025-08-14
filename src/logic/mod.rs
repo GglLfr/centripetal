@@ -1,14 +1,7 @@
-use std::ops::Deref;
-
-use bevy::{
-    ecs::system::SystemParam, prelude::*, render::camera::CameraUpdateSystem, time::TimeSystem,
-};
-use iyes_progress::{CheckProgressSet, ProgressPlugin};
-use leafwing_input_manager::prelude::*;
-
 use crate::{
-    SaveApp, WorldHandle,
+    SaveApp as _, WorldHandle,
     logic::{effects::EffectsPlugin, entities::EntitiesPlugin, levels::LevelsPlugin},
+    prelude::*,
 };
 
 pub mod effects;
@@ -20,6 +13,7 @@ mod control;
 mod ldtk;
 mod level;
 mod timed;
+use bevy::{render::camera::CameraUpdateSystem, time::TimeSystem};
 pub use camera::*;
 pub use control::*;
 pub use ldtk::*;

@@ -1,18 +1,14 @@
-use avian2d::{math::PI, prelude::*};
-use bevy::{
-    ecs::{
-        query::QueryItem,
-        system::{SystemParamItem, lifetimeless::Write},
+use std::f32::consts::TAU;
+
+use crate::{
+    logic::{
+        Fields, FromLevelEntity,
+        entities::{
+            TryHurt,
+            penumbra::{AttractedInitial, PenumbraEntity, TryLaunch},
+        },
     },
     prelude::*,
-};
-
-use crate::logic::{
-    Fields, FromLevelEntity,
-    entities::{
-        TryHurt,
-        penumbra::{AttractedInitial, PenumbraEntity, TryLaunch},
-    },
 };
 
 #[derive(Debug, Copy, Clone, Default, Component)]
@@ -38,7 +34,7 @@ impl FromLevelEntity for ThornRing {
 
         let mut vertices = Vec::new();
         for i in 0..=resolution {
-            let angle = (opening / 2.).lerp(PI * 2. - opening / 2., i as f32 / resolution as f32);
+            let angle = (opening / 2.).lerp(TAU - opening / 2., i as f32 / resolution as f32);
             let (sin, cos) = angle.sin_cos();
             vertices.push(Vec2::new(cos * radius + radius, sin * radius));
         }

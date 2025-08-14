@@ -1,18 +1,20 @@
-use avian2d::{dynamics::integrator::IntegrationSet, prelude::*};
-use bevy::prelude::*;
-use leafwing_input_manager::prelude::*;
+use avian2d::dynamics::integrator::IntegrationSet;
 
 #[cfg(feature = "dev")]
 use crate::logic::entities::penumbra::draw_attractor_radius;
-use crate::logic::{
-    GameState, LevelApp, LevelBounds, LevelUnload,
-    entities::penumbra::{
-        AttractedAction, Attractor, GenericPenumbra, LaunchAction, SelenePenumbra, ThornPillar,
-        ThornRing, apply_attractor_accels, apply_homing_velocity, color_selene_hurt,
-        color_selene_slash, detect_attracted_entities, draw_selene_launch_disc,
-        draw_selene_prediction_trajectory, predict_attract_trajectory, remove_attracted_initials,
-        trigger_launch_charging, update_launch_charging, update_launch_idle,
+use crate::{
+    logic::{
+        GameState, LevelApp, LevelBounds, LevelUnload,
+        entities::penumbra::{
+            AttractedAction, Attractor, GenericPenumbra, LaunchAction, SelenePenumbra, ThornPillar,
+            ThornRing, apply_attractor_accels, apply_homing_velocity, color_selene_hurt,
+            color_selene_slash, detect_attracted_entities, draw_selene_launch_disc,
+            draw_selene_prediction_trajectory, predict_attract_trajectory,
+            remove_attracted_initials, trigger_launch_charging, update_launch_charging,
+            update_launch_idle,
+        },
     },
+    prelude::*,
 };
 
 pub mod penumbra;

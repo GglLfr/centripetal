@@ -1,8 +1,3 @@
-use std::time::Duration;
-
-use avian2d::prelude::*;
-use bevy::prelude::*;
-
 use crate::{
     Observed,
     graphics::{AnimationFrom, AnimationMode, BaseColor},
@@ -10,6 +5,7 @@ use crate::{
         Timed,
         entities::penumbra::{HomingPower, NoAttract, PenumbraEntity},
     },
+    prelude::*,
 };
 
 pub fn spiky(level_entity: Entity) -> impl Bundle {

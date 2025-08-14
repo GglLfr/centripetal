@@ -1,10 +1,3 @@
-use std::{f32::consts::TAU, time::Duration};
-
-use avian2d::prelude::*;
-use bevy::{prelude::*, sprite::Anchor};
-use fastrand::Rng;
-use smallvec::smallvec;
-
 use crate::{
     PIXELS_PER_UNIT, Sprites,
     graphics::{SpriteDrawer, SpriteSection},
@@ -15,8 +8,10 @@ use crate::{
         levels::penumbra_wing_l::{Instance, p1_spawn_attractor},
     },
     math::{FloatTransformExt as _, Interp, RngExt as _},
+    prelude::*,
     resume, suspend,
 };
+use std::f32::consts::TAU;
 
 #[derive(Debug, Clone, Component, Default)]
 #[require(SpriteDrawer, Timed::new(Duration::from_millis(2500)))]

@@ -1,11 +1,4 @@
-use std::time::Duration;
-
-use bevy::{
-    ecs::{component::HookContext, world::DeferredWorld},
-    prelude::*,
-};
-
-use crate::{IntoResultSystem, Observed, math::FloatTransformExt};
+use crate::{IntoResultSystem, Observed, math::FloatTransformExt, prelude::*};
 
 #[derive(Debug, Copy, Clone, Component)]
 pub struct Timed {

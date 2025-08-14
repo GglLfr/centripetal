@@ -1,12 +1,3 @@
-use avian2d::prelude::*;
-use bevy::{
-    ecs::{
-        query::QueryItem,
-        system::{SystemParamItem, lifetimeless::Write},
-    },
-    prelude::*,
-};
-
 use crate::{
     PIXELS_PER_UNIT,
     logic::{
@@ -16,6 +7,7 @@ use crate::{
             penumbra::{AttractedInitial, PenumbraEntity, TryLaunch},
         },
     },
+    prelude::*,
 };
 
 #[derive(Debug, Copy, Clone, Default, Component)]

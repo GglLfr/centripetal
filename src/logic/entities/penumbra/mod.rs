@@ -1,7 +1,4 @@
-use avian2d::{dynamics::solver::solver_body::SolverBody, prelude::*};
-use bevy::prelude::*;
-
-use crate::math::FloatTransformExt;
+use crate::{math::FloatTransformExt as _, prelude::*};
 
 pub mod bullet;
 

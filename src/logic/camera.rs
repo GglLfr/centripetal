@@ -1,18 +1,6 @@
-use bevy::{
-    core_pipeline::bloom::Bloom,
-    ecs::{
-        archetype::Archetype,
-        component::Tick,
-        query::{QueryData, QueryItem, QuerySingleError},
-        system::{SystemMeta, SystemParam, SystemParamValidationError},
-        world::{DeferredWorld, unsafe_world_cell::UnsafeWorldCell},
-    },
-    platform::sync::{Mutex, PoisonError},
-    prelude::*,
-    render::camera::ScalingMode,
-};
+use bevy::{core_pipeline::bloom::Bloom, render::camera::ScalingMode};
 
-use crate::logic::LevelBounds;
+use crate::{logic::LevelBounds, prelude::*};
 
 #[derive(Debug, Copy, Clone, Default, Component)]
 #[require(Transform, CameraConfines)]

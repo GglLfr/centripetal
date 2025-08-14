@@ -1,20 +1,6 @@
-use std::io;
-
-use bevy::{
-    asset::{
-        AssetLoader, AssetPath, AsyncReadExt, LoadContext, ParseAssetPathError, RenderAssetUsages,
-        UntypedAssetId, VisitAssetDependencies, io::Reader, uuid::Uuid,
-    },
-    image::ImageLoaderSettings,
-    platform::collections::HashMap,
-    prelude::*,
-};
+use crate::prelude::*;
+use bevy::image::ImageLoaderSettings;
 use blocking::unblock;
-use derive_more::{Display, Error, From};
-use serde::{
-    Deserialize, Deserializer,
-    de::{self, Visitor},
-};
 
 #[derive(Debug, Clone, Asset, TypePath)]
 pub struct Ldtk {
@@ -144,7 +130,7 @@ struct LevelPath {
 
 fn de_color<'de, D: Deserializer<'de>>(de: D) -> Result<Srgba, D::Error> {
     struct Visit;
-    impl<'de> Visitor<'de> for Visit {
+    impl<'de> de::Visitor<'de> for Visit {
         type Value = Srgba;
 
         fn visit_str<E: de::Error>(self, v: &str) -> Result<Self::Value, E> {
