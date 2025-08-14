@@ -20,6 +20,7 @@ pub use thorn_ring::*;
 pub struct PenumbraEntity;
 
 #[derive(Debug, Copy, Clone, Component, Deref, DerefMut)]
+#[component(storage = "SparseSet")]
 pub struct HomingTarget(pub Entity);
 
 #[derive(Debug, Copy, Clone, Component, Deref, DerefMut)]

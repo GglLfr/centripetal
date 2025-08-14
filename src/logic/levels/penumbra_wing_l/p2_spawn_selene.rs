@@ -2,7 +2,7 @@ use crate::{
     PIXELS_PER_UNIT, Sprites,
     graphics::{SpriteDrawer, SpriteSection},
     logic::{
-        TimeFinished, Timed,
+        CameraConfines, CameraTarget, TimeFinished, Timed,
         effects::Ring,
         entities::{Health, Killed, NoKillDespawn, penumbra::AttractedPrediction},
         levels::penumbra_wing_l::{Instance, p1_spawn_attractor},
@@ -137,6 +137,7 @@ pub fn init(
         selene,
         selene_initial,
         selene_trns,
+        attractor,
         attractor_trns,
         ..
     }): InRef<Instance>,
@@ -180,8 +181,8 @@ pub fn init(
     commands.entity(level_entity).observe(
         move |trigger: Trigger<OnRemove, p1_spawn_attractor::SpawningAttractor>,
               mut commands: Commands| {
-            commands.entity(level_entity).insert(SpawningSelene);
             commands.entity(trigger.observer()).despawn();
+            commands.entity(level_entity).insert(SpawningSelene);
 
             // Spawn Selene with an animation, and...
             commands.queue(spawn_selene(
@@ -194,8 +195,12 @@ pub fn init(
                         move |_: Trigger<TimeFinished>, mut commands: Commands| -> Result {
                             // ...proceed to the next phase after she's spawned.
                             commands
+                                .get_entity(attractor)?
+                                .remove::<(CameraTarget, CameraConfines)>();
+                            commands
                                 .get_entity(level_entity)?
                                 .remove::<SpawningSelene>();
+
                             Ok(())
                         },
                     );

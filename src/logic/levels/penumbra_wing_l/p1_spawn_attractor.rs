@@ -24,7 +24,11 @@ pub fn init(
     mut commands: Commands,
 ) -> Result {
     // Entry point.
-    commands.get_entity(level_entity)?.insert(SpawningAttractor);
+    commands.get_entity(level_entity)?.insert((
+        SpawningAttractor,
+        CameraTarget,
+        CameraConfines::Fixed(attractor_trns.translation.xy()),
+    ));
 
     // Delay 1 second...
     commands.spawn((

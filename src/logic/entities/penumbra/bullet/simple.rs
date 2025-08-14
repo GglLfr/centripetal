@@ -22,6 +22,8 @@ pub fn spiky(level_entity: Entity) -> impl Bundle {
         TransformExtrapolation,
         BaseColor(Color::linear_rgba(4., 2., 1., 1.)),
         Observed::by(Timed::despawn_on_finished),
+        // TODO Replace this with collision layers so attractors don't kill it but they still despawn at the border.
+        // Health::new(1),
         DebugRender::none(),
     )
 }

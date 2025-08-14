@@ -21,7 +21,7 @@ impl Plugin for UiPlugin {
                 PostUpdate,
                 (
                     update_worldspace_ui
-                        .after(UiSystem::Prepare)
+                        .after(UiSystem::Content)
                         .before(UiSystem::Layout),
                     fade_interpolate,
                 ),

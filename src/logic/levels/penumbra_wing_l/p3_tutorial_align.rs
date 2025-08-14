@@ -1,12 +1,24 @@
+use std::f32::consts::TAU;
+
 use crate::{
     Sprites,
     graphics::{Animation, AnimationMode, BaseColor},
+    i18n,
     logic::{
         Timed,
         effects::Ring,
-        levels::penumbra_wing_l::{Instance, p2_spawn_selene},
+        entities::{
+            Killed,
+            penumbra::{AttractedAction, LaunchAction},
+        },
+        levels::penumbra_wing_l::{
+            Instance, SeleneUi,
+            p2_spawn_selene::{self, Respawned},
+        },
     },
     prelude::*,
+    resume,
+    ui::{WorldspaceUi, ui_fade_in, ui_fade_out, ui_hide, widgets},
 };
 
 const TUTORIAL_MOVE_ALIGN_HELP: Duration = Duration::from_millis(500);
@@ -19,9 +31,50 @@ pub struct TutorialAlign {
     within: bool,
 }
 
+pub fn update_align_time(
+    mut commands: Commands,
+    time: Res<Time>,
+    mut aligned: Query<(&Instance, &mut TutorialAlign)>,
+    mut target: Query<&mut DiscComponent>,
+) {
+    let delta: Duration = time.delta();
+    let Ok((instance, mut align)) = aligned.single_mut() else {
+        return;
+    };
+
+    align.time = if align.within {
+        (align.time + delta).min(TUTORIAL_MOVE_ALIGN_DURATION)
+    } else {
+        align.time.saturating_sub(delta)
+    };
+
+    if align.time == TUTORIAL_MOVE_ALIGN_DURATION {
+        commands
+            .entity(instance.level_entity)
+            .remove::<TutorialAlign>();
+
+        // TODO FX for this.
+        if let Ok(mut e) = commands.get_entity(instance.hover_target) {
+            e.despawn();
+        }
+    }
+
+    let Ok(mut component) = target.get_mut(instance.hover_target) else {
+        return;
+    };
+
+    component.end_angle = TAU * align.time.div_duration_f32(TUTORIAL_MOVE_ALIGN_DURATION);
+    component.cap = if align.time > Duration::ZERO {
+        Cap::Round
+    } else {
+        Cap::None
+    };
+}
+
 pub fn init(
     InRef(&Instance {
         level_entity,
+        selene,
         hover_target,
         ..
     }): InRef<Instance>,
@@ -66,14 +119,231 @@ pub fn init(
         DebugRender::none(),
     ));
 
+    let ui_selene_hover = commands
+        .spawn((
+            Node {
+                display: Display::Grid,
+                grid_template_columns: vec![RepeatedGridTrack::min_content(2)],
+                row_gap: Px(3.),
+                column_gap: Px(9.),
+                ..default()
+            },
+            WorldspaceUi {
+                target: selene,
+                offset: vec2(0., -16.),
+                anchor: vec2(0.5, 1.),
+            },
+            children![
+                (
+                    Node {
+                        align_items: AlignItems::Center,
+                        justify_content: JustifyContent::End,
+                        ..default()
+                    },
+                    children![(
+                        widgets::icon(),
+                        children![(
+                            widgets::keyboard_binding(|binds| binds.attracted_hover[0]),
+                            TextColor(Color::BLACK),
+                        )],
+                    )],
+                ),
+                (
+                    Node::default(),
+                    children![(
+                        widgets::shadow_bg(),
+                        widgets::text(i18n!("tutorial.hover.descend")),
+                        TextLayout::new(JustifyText::Left, LineBreak::NoWrap),
+                    )],
+                ),
+                (
+                    Node {
+                        align_items: AlignItems::Center,
+                        justify_content: JustifyContent::End,
+                        ..default()
+                    },
+                    children![(
+                        widgets::icon(),
+                        children![(
+                            widgets::keyboard_binding(|binds| binds.attracted_hover[1]),
+                            TextColor(Color::BLACK),
+                        )],
+                    )],
+                ),
+                (
+                    Node::default(),
+                    children![(
+                        widgets::shadow_bg(),
+                        widgets::text(i18n!("tutorial.hover.ascend")),
+                        TextLayout::new(JustifyText::Left, LineBreak::NoWrap),
+                    )],
+                ),
+            ],
+        ))
+        .queue(ui_hide)
+        .id();
+
+    let ui_selene_accel = commands
+        .spawn((
+            Node {
+                display: Display::Grid,
+                grid_template_columns: vec![RepeatedGridTrack::min_content(2)],
+                row_gap: Px(3.),
+                column_gap: Px(9.),
+                ..default()
+            },
+            WorldspaceUi {
+                target: selene,
+                offset: vec2(0., -16.),
+                anchor: vec2(0.5, 1.),
+            },
+            children![
+                (
+                    Node {
+                        align_items: AlignItems::Center,
+                        justify_content: JustifyContent::End,
+                        ..default()
+                    },
+                    children![(
+                        widgets::icon(),
+                        children![(
+                            widgets::keyboard_binding(|binds| binds.attracted_accel[0]),
+                            TextColor(Color::BLACK),
+                        )],
+                    )],
+                ),
+                (
+                    Node::default(),
+                    children![(
+                        widgets::shadow_bg(),
+                        widgets::text(i18n!("tutorial.hover.retrograde")),
+                        TextLayout::new(JustifyText::Left, LineBreak::NoWrap),
+                    )],
+                ),
+                (
+                    Node {
+                        align_items: AlignItems::Center,
+                        justify_content: JustifyContent::End,
+                        ..default()
+                    },
+                    children![(
+                        widgets::icon(),
+                        children![(
+                            widgets::keyboard_binding(|binds| binds.attracted_accel[1]),
+                            TextColor(Color::BLACK),
+                        )],
+                    )],
+                ),
+                (
+                    Node::default(),
+                    children![(
+                        widgets::shadow_bg(),
+                        widgets::text(i18n!("tutorial.hover.prograde")),
+                        TextLayout::new(JustifyText::Left, LineBreak::NoWrap),
+                    )],
+                ),
+            ],
+        ))
+        .queue(ui_hide)
+        .id();
+
+    // Fade out UI during death and fade it back in on respawn.
+    commands.entity(selene).observe(
+        move |_: Trigger<Killed>, mut commands: Commands, mut ui: ResMut<SeleneUi>| {
+            if let Some(e) = ui.take()
+                && let Ok(mut e) = commands.get_entity(e)
+            {
+                e.queue(ui_fade_out);
+
+                let ui_entity = e.id();
+                commands.entity(selene).observe(
+                    move |trigger: Trigger<Respawned>,
+                          mut commands: Commands,
+                          mut ui: ResMut<SeleneUi>| {
+                        commands.entity(trigger.observer()).despawn();
+                        // Needs `is_none()` here to ensure we don't accidentally replace an existing UI.
+                        // Such condition should be considered a bug; this is only a failsafe.
+                        if ui.is_none()
+                            && let Ok(mut e) = commands.get_entity(ui_entity)
+                        {
+                            e.queue(ui_fade_in);
+                            **ui = Some(e.id());
+                        }
+                    },
+                );
+            }
+        },
+    );
+
     // Entry point.
+    // Refer to `update_align_time` for when this phase is finished.
     commands.entity(level_entity).observe(
         move |trigger: Trigger<OnRemove, p2_spawn_selene::SpawningSelene>,
-              mut commands: Commands| {
+              mut commands: Commands,
+              mut ui: ResMut<SeleneUi>,
+              mut actions: Query<(
+            &mut ActionState<AttractedAction>,
+            &mut ActionState<LaunchAction>,
+        )>|
+              -> Result {
+            commands.entity(trigger.observer()).despawn();
             commands
                 .entity(level_entity)
                 .insert(TutorialAlign::default());
-            commands.entity(trigger.observer()).despawn();
+
+            **ui = Some(ui_selene_hover);
+            commands.get_entity(ui_selene_hover)?.queue(ui_fade_in);
+
+            // Only `Hover` and `Accel` are enabled initially.
+            let (mut attracted, mut launch) = actions.get_mut(selene)?;
+            attracted.disable_action(&AttractedAction::Parry);
+            launch.disable_action(&LaunchAction);
+
+            commands
+                .get_entity(hover_target)?
+                .queue(resume)
+                // Set `within = true` when Selene overlaps to increment the counter.
+                .observe(
+                    move |trigger: Trigger<OnCollisionStart>,
+                          mut aligned: Query<&mut TutorialAlign>|
+                          -> Result {
+                        if trigger.body.is_some_and(|body| body == selene) {
+                            aligned.get_mut(level_entity)?.within = true;
+                        }
+
+                        Ok(())
+                    },
+                )
+                // Otherwise, set `within = false` to decrement the counter.
+                .observe(
+                    move |trigger: Trigger<OnCollisionEnd>,
+                          mut commands: Commands,
+                          mut shown_ui: ResMut<SeleneUi>,
+                          mut aligned: Query<&mut TutorialAlign>|
+                          -> Result {
+                        // Hint about prograding/retrograding when unaligning.
+                        let mut aligned = aligned.get_mut(level_entity)?;
+                        if trigger.body.is_some_and(|body| body == selene)
+                            && std::mem::replace(&mut aligned.within, false)
+                            && aligned.time >= TUTORIAL_MOVE_ALIGN_HELP
+                            && commands
+                                .get_entity(ui_selene_accel)
+                                .map(|mut e| {
+                                    e.queue(ui_fade_in);
+                                })
+                                .is_ok()
+                            && let Some(ui) = shown_ui.replace(ui_selene_accel)
+                            && let Ok(mut ui) = commands.get_entity(ui)
+                        {
+                            ui.queue(ui_fade_out);
+                            commands.entity(trigger.observer()).despawn();
+                        }
+
+                        Ok(())
+                    },
+                );
+
+            Ok(())
         },
     );
 

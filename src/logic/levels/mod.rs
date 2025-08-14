@@ -1,3 +1,5 @@
+use bevy::ui::UiSystem;
+
 use crate::{
     logic::{Level, LevelUnload, move_camera},
     prelude::*,
@@ -9,8 +11,13 @@ mod penumbra_wing_l;
 pub struct LevelsPlugin;
 impl Plugin for LevelsPlugin {
     fn build(&self, app: &mut App) {
-        app.configure_sets(PostUpdate, LevelTransitionSet.before(move_camera))
-            .add_plugins((penumbra_wing_l::plugin,));
+        app.configure_sets(
+            PostUpdate,
+            LevelTransitionSet
+                .before(move_camera)
+                .before(UiSystem::Content),
+        )
+        .add_plugins((penumbra_wing_l::plugin,));
     }
 }
 
