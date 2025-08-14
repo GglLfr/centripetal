@@ -1572,7 +1572,6 @@ dependencies = [
  "nom 8.0.0",
  "nom-language",
  "num-traits",
- "seldom_state",
  "serde",
  "serde_flexitos",
  "serde_json",
@@ -3939,23 +3938,6 @@ dependencies = [
  "memmap2",
  "smithay-client-toolkit",
  "tiny-skia",
-]
-
-[[package]]
-name = "seldom_state"
-version = "0.14.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dbf7a739419a8fcd4b4341067a5ac4559d0e2dbfe98b788ea866b5a81c58b28e"
-dependencies = [
- "bevy_app",
- "bevy_derive",
- "bevy_ecs",
- "bevy_log",
- "bevy_math",
- "bevy_utils",
- "either",
- "leafwing-input-manager",
- "variadics_please",
 ]
 
 [[package]]

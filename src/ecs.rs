@@ -17,7 +17,6 @@ use bevy::{
     prelude::*,
     ptr::OwningPtr,
 };
-use seldom_state::prelude::*;
 
 pub struct Affected<M: 'static, T: IntoResultSystem<In<Entity>, (), M>>(
     pub T::System,
@@ -331,21 +330,6 @@ pub fn wait_on<Ctx: 'static + Send + Sync + Default>(
         let prev = *started.get_or_insert(now);
         now - prev >= duration
     }
-}
-
-pub fn trans_wait(duration: Duration) -> impl EntityTrigger<Out = bool> {
-    trans_wait_on::<()>(duration)
-}
-
-pub fn trans_wait_on<Ctx: 'static + Send + Sync + Default>(
-    duration: Duration,
-) -> impl EntityTrigger<Out = bool> {
-    (move |_: In<Entity>, time: Res<Time<Ctx>>, mut started: Local<Option<Duration>>| {
-        let now = time.elapsed();
-        let prev = *started.get_or_insert(now);
-        now - prev >= duration
-    })
-    .into_trigger()
 }
 
 pub fn despawn_recursive_if<S: RelationshipTarget, F: QueryFilter>(e: EntityWorldMut) {

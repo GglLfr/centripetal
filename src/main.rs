@@ -1,15 +1,10 @@
 #![allow(clippy::type_complexity)]
 
-use avian2d::prelude::*;
 #[cfg(feature = "dev")]
 use bevy::log::DEFAULT_FILTER;
-use bevy::{log::LogPlugin, prelude::*};
-use bevy_asset_loader::prelude::*;
-use bevy_ecs_tilemap::prelude::*;
+use bevy::log::LogPlugin;
 use bevy_framepace::FramepacePlugin;
-use bevy_vector_shapes::prelude::*;
-use iyes_progress::prelude::*;
-use seldom_state::prelude::*;
+use prelude::*;
 
 use crate::{
     graphics::GraphicsPlugin,
@@ -33,10 +28,16 @@ pub use ecs::*;
 pub use i18n::*;
 pub use save::*;
 
-#[cfg(all(
-    feature = "mimalloc",
-    not(feature = "bevy_dynamic"),
-))]
+pub mod prelude {
+    pub use avian2d::prelude::*;
+    pub use bevy::prelude::*;
+    pub use bevy_asset_loader::prelude::*;
+    pub use bevy_ecs_tilemap::prelude::*;
+    pub use bevy_vector_shapes::prelude::*;
+    pub use iyes_progress::prelude::*;
+}
+
+#[cfg(all(feature = "mimalloc", not(feature = "bevy_dynamic"),))]
 #[global_allocator]
 static ALLOC: mimalloc_redirect::MiMalloc = mimalloc_redirect::MiMalloc;
 
@@ -62,7 +63,6 @@ fn main() -> AppExit {
             PhysicsPlugins::default().with_length_unit(PIXELS_PER_UNIT as f32),
             #[cfg(feature = "dev")]
             PhysicsDebugPlugin::default(),
-            StateMachinePlugin::default(),
             TilemapPlugin,
             FramepacePlugin,
             Shape2dPlugin::default(),

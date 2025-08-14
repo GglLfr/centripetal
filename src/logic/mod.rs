@@ -101,10 +101,6 @@ impl Plugin for LogicPlugin {
                     .after(CameraUpdateSystem)
                     .before(TransformSystem::TransformPropagate),
             )
-            .configure_sets(
-                PostUpdate,
-                seldom_state::set::StateSet::Transition.before(move_camera),
-            )
             .save_resource::<LoadLevel>();
     }
 }

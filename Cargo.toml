@@ -27,7 +27,6 @@ mimalloc-redirect = { version = "0.1", optional = true }
 nom = "8"
 nom-language = "0.1"
 num-traits = "0.2"
-seldom_state = { version = "0.14", features = ["leafwing_input"] }
 serde = { version = "1", features = ["derive"] }
 serde_flexitos = "0.2"
 serde_json = "1"

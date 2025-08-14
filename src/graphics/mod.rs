@@ -13,7 +13,6 @@ use bevy_vector_shapes::{
     render::{DrawShape2dCommand, ShapeData},
     shapes::{DiscData, LineData, NgonData, RectData, TriangleData},
 };
-use seldom_state::set::StateSet;
 
 mod animation;
 mod color;
@@ -30,6 +29,8 @@ pub use sprite_alloc::*;
 pub use sprite_drawer::*;
 pub use sprite_sheet::*;
 
+use crate::logic::levels::LevelTransitionSet;
+
 #[derive(Debug, Copy, Clone, Default)]
 pub struct GraphicsPlugin;
 impl Plugin for GraphicsPlugin {
@@ -39,7 +40,7 @@ impl Plugin for GraphicsPlugin {
             .add_systems(
                 PostUpdate,
                 (
-                    update_animations.after(StateSet::Transition),
+                    update_animations.after(LevelTransitionSet),
                     draw_animations,
                     flush_drawer_to_children,
                 )

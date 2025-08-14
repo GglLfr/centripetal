@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 
-use crate::logic::{Level, LevelUnload};
+use crate::logic::{Level, LevelUnload, move_camera};
 
 mod penumbra_wing_l;
 
@@ -8,9 +8,13 @@ mod penumbra_wing_l;
 pub struct LevelsPlugin;
 impl Plugin for LevelsPlugin {
     fn build(&self, app: &mut App) {
-        app.add_plugins((penumbra_wing_l::plugin,));
+        app.configure_sets(PostUpdate, LevelTransitionSet.before(move_camera))
+            .add_plugins((penumbra_wing_l::plugin,));
     }
 }
+
+#[derive(Debug, Copy, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Hash, SystemSet)]
+pub struct LevelTransitionSet;
 
 pub fn in_level(
     level_id: impl Into<String>,
