@@ -43,7 +43,7 @@ impl Timed {
         lifetime: Duration,
         sys: impl IntoResultSystem<In<Entity>, (), M>,
     ) -> impl Bundle {
-        let mut sys = IntoResultSystem::into_result_system(sys);
+        let mut sys = IntoResultSystem::into_system(sys);
         (
             Self::new(lifetime),
             Observed::by(
@@ -66,7 +66,7 @@ impl Timed {
         lifetime: Duration,
         sys: impl IntoResultSystem<In<Entity>, (), M>,
     ) -> impl Bundle {
-        let mut sys = IntoResultSystem::into_result_system(sys);
+        let mut sys = IntoResultSystem::into_system(sys);
         let mut initialized = false;
 
         (

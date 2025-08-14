@@ -1,4 +1,4 @@
-use std::{f32::consts::PI, time::Duration};
+use std::{f32::consts::TAU, time::Duration};
 
 use avian2d::{dynamics::solver::solver_body::SolverBody, prelude::*};
 use bevy::{
@@ -304,8 +304,8 @@ pub fn draw_attractor_radius(
     let lifetime = bleed * offset;
 
     for (attractor, drawer) in &attractors {
-        let count = (2. * PI * attractor.radius / 8.).round().max(bleed as f32) as u32;
-        let step = Rotation::radians(2. * PI / count as f32);
+        let count = (TAU * attractor.radius / 8.).round().max(bleed as f32) as u32;
+        let step = Rotation::radians(TAU / count as f32);
         let mut rotation = Rotation::IDENTITY;
 
         let total_lifetime = (count - bleed) * offset + lifetime;

@@ -74,7 +74,7 @@ impl Plugin for LogicPlugin {
             .add_sub_state::<InGameState>()
             .add_plugins(
                 ProgressPlugin::<InGameState>::new()
-                    .check_progress_in(Update)
+                    .check_progress_in(PostUpdate)
                     .with_state_transition(InGameState::Loading, InGameState::Resumed),
             )
             .init_resource::<RegisteredLevels>()
@@ -87,7 +87,7 @@ impl Plugin for LogicPlugin {
                 (handle_load_level_begin, update_timed).run_if(in_state(InGameState::Resumed)),
             )
             .add_systems(
-                Update,
+                PostUpdate,
                 handle_load_level_progress
                     .run_if(in_state(InGameState::Loading))
                     .before(CheckProgressSet),

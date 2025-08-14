@@ -7,7 +7,7 @@ use bevy::{
             ComponentId, Components, ComponentsRegistrator, HookContext, RequiredComponents,
             StorageType,
         },
-        system::{BoxedSystem, IntoPipeSystem, RunSystemError},
+        system::{BoxedSystem, RunSystemError},
         world::DeferredWorld,
     },
     platform::collections::HashMap,
@@ -26,7 +26,7 @@ impl AnimationFrom {
     pub fn new<M, S: 'static + Into<String>>(
         system: impl IntoSystem<In<Entity>, (Handle<SpriteSheet>, S), M>,
     ) -> Self {
-        Self(Box::new(IntoPipeSystem::into_system(system.pipe(
+        Self(Box::new(IntoSystem::into_system(system.pipe(
             |In((handle, string)): In<(Handle<SpriteSheet>, S)>| (handle, string.into()),
         ))))
     }
@@ -223,7 +223,7 @@ impl AnimationHooks {
         self.enter
             .entry(key.into())
             .or_default()
-            .push(Box::new(IntoResultSystem::into_result_system(system)));
+            .push(Box::new(IntoResultSystem::into_system(system)));
         self
     }
 
@@ -235,7 +235,7 @@ impl AnimationHooks {
         self.done
             .entry(key.into())
             .or_default()
-            .push(Box::new(IntoResultSystem::into_result_system(system)));
+            .push(Box::new(IntoResultSystem::into_system(system)));
         self
     }
 
@@ -247,7 +247,7 @@ impl AnimationHooks {
         self.exit
             .entry(key.into())
             .or_default()
-            .push(Box::new(IntoResultSystem::into_result_system(system)));
+            .push(Box::new(IntoResultSystem::into_system(system)));
         self
     }
 

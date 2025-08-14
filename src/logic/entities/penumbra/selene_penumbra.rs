@@ -1,4 +1,4 @@
-use std::{f32::consts::PI, time::Duration};
+use std::{f32::consts::TAU, time::Duration};
 
 use avian2d::prelude::*;
 use bevy::{
@@ -133,14 +133,14 @@ impl FromLevelEntity for SelenePenumbra {
                         Transform::from_xyz(0., 0., 0f32.next_up()),
                         Animation::new(sprites.selene_try_launch_front.clone_weak(), "anim"),
                         AnimationHooks::despawn_on_done("anim"),
-                        BaseColor(Color::linear_rgb(1., 4., 12.)),
+                        BaseColor(Color::linear_rgb(1., 2., 6.)),
                     ));
 
                     children.spawn((
                         Transform::from_xyz(0., 0., 0f32.next_down()),
                         Animation::new(sprites.selene_try_launch_back.clone_weak(), "anim"),
                         AnimationHooks::despawn_on_done("anim"),
-                        BaseColor(Color::linear_rgb(1., 4., 12.)),
+                        BaseColor(Color::linear_rgb(1., 2., 6.)),
                     ));
                 });
             },
@@ -223,7 +223,7 @@ pub fn draw_selene_launch_disc(
             && let Some(&duration) = durations.get(charging.index)
         {
             let len = durations.len();
-            let arc_frac = 2. * PI / len as f32;
+            let arc_frac = TAU / len as f32;
             let f = charging.time.div_duration_f32(duration);
 
             disc.cap = Cap::Round;

@@ -2,8 +2,10 @@ use bevy::{prelude::*, ui::UiSystem};
 
 pub mod widgets;
 
+mod dialog;
 mod fade;
 mod worldspace;
+pub use dialog::*;
 pub use fade::*;
 pub use worldspace::*;
 

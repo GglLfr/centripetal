@@ -26,7 +26,7 @@ pub struct Affected<M: 'static, T: IntoResultSystem<In<Entity>, (), M>>(
 
 impl<M: 'static, T: IntoResultSystem<In<Entity>, (), M>> Affected<M, T> {
     pub fn by(effect: T) -> Self {
-        Self(T::into_result_system(effect), PhantomData)
+        Self(T::into_system(effect), PhantomData)
     }
 }
 
@@ -138,7 +138,7 @@ pub struct Resulted;
 pub trait IntoResultSystem<In: SystemInput, Out: 'static, Marker>: 'static {
     type System: System<In = In, Out = Result<Out>>;
 
-    fn into_result_system(this: Self) -> Self::System;
+    fn into_system(this: Self) -> Self::System;
 }
 
 impl<In: SystemInput, Out: 'static, Marker, S: 'static + IntoSystem<In, Out, Marker>>
@@ -146,7 +146,7 @@ impl<In: SystemInput, Out: 'static, Marker, S: 'static + IntoSystem<In, Out, Mar
 {
     type System = ResultSystem<S::System>;
 
-    fn into_result_system(this: Self) -> Self::System {
+    fn into_system(this: Self) -> Self::System {
         ResultSystem(IntoSystem::into_system(this))
     }
 }
@@ -156,7 +156,7 @@ impl<In: SystemInput, Out: 'static, Marker, S: 'static + IntoSystem<In, Result<O
 {
     type System = S::System;
 
-    fn into_result_system(this: Self) -> Self::System {
+    fn into_system(this: Self) -> Self::System {
         IntoSystem::into_system(this)
     }
 }
@@ -166,7 +166,7 @@ impl<In: SystemInput, Out: 'static, Marker, S: 'static + IntoSystem<In, Never, M
 {
     type System = NeverSystem<S::System, Result<Out>>;
 
-    fn into_result_system(this: Self) -> Self::System {
+    fn into_system(this: Self) -> Self::System {
         NeverSystem(IntoSystem::into_system(this), PhantomData)
     }
 }
@@ -360,12 +360,13 @@ pub fn despawn_recursive_if<S: RelationshipTarget, F: QueryFilter>(e: EntityWorl
             .flat_map(S::iter)
             .collect::<Box<[_]>>();
 
-        if query.get_manual(world, entity).is_ok() {
-            world.despawn(entity);
-        }
-
         for child in related {
             inner::<S, F>(world, child, query);
+        }
+
+        // Children are iterated first to ensure removals happen from the leaves first.
+        if query.get_manual(world, entity).is_ok() {
+            world.despawn(entity);
         }
     }
 
