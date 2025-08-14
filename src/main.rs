@@ -29,12 +29,81 @@ pub use i18n::*;
 pub use save::*;
 
 pub mod prelude {
+    pub use async_fs::File;
     pub use avian2d::prelude::*;
-    pub use bevy::prelude::*;
+    pub use bevy::{
+        asset::{
+            AssetLoader, AsyncReadExt as _, AsyncWriteExt as _, LoadContext, LoadDirectError,
+            ParseAssetPathError, RenderAssetUsages, io::Reader, ron,
+        },
+        core_pipeline::core_2d::{CORE_2D_DEPTH_FORMAT, Transparent2d},
+        ecs::{
+            archetype::ArchetypeComponentId,
+            bundle::{BundleEffect, DynamicBundle},
+            component::{
+                ComponentId, Components, ComponentsRegistrator, HookContext, RequiredComponents,
+                StorageType, Tick,
+            },
+            entity::{EntityHashMap, EntityHashSet},
+            entity_disabling::Disabled,
+            never::Never,
+            query::{
+                Access, QueryData, QueryEntityError, QueryFilter, ROQueryItem, ReadOnlyQueryData,
+            },
+            system::{
+                BoxedSystem, IntoObserverSystem, ReadOnlySystemParam, RunSystemError,
+                RunSystemOnce as _, SystemParam, SystemParamItem, SystemParamValidationError,
+                SystemState, lifetimeless::*,
+            },
+            world::{DeferredWorld, unsafe_world_cell::UnsafeWorldCell},
+        },
+        image::{ImageSampler, TextureFormatPixelInfo as _},
+        platform::{
+            collections::{HashMap, HashSet},
+            sync::{
+                LazyLock, Mutex, MutexGuard, PoisonError, RwLock, RwLockReadGuard, RwLockWriteGuard,
+            },
+        },
+        prelude::*,
+        ptr::{OwningPtr, Ptr, PtrMut},
+        reflect::{DynamicTypePath, erased_serde},
+        render::{
+            MainWorld, Render, RenderApp, RenderSet,
+            camera::ExtractedCamera,
+            render_asset::RenderAssets,
+            render_phase::{
+                DrawFunctions, PhaseItem, RenderCommand, RenderCommandResult, RenderCommandState,
+                TrackedRenderPass,
+            },
+            render_resource::{binding_types::*, *},
+            renderer::{RenderDevice, RenderQueue},
+            texture::{CachedTexture, GpuImage, TextureCache},
+            view::{ExtractedView, ViewTarget},
+        },
+        sprite::Anchor,
+        tasks::{AsyncComputeTaskPool, ComputeTaskPool, IoTaskPool},
+    };
     pub use bevy_asset_loader::prelude::*;
     pub use bevy_ecs_tilemap::prelude::*;
     pub use bevy_vector_shapes::prelude::*;
+    pub use derive_more::{Display, Error, From, FromStr};
     pub use iyes_progress::prelude::*;
+    pub use leafwing_input_manager::prelude::*;
+    pub use serde::{Deserialize, Deserializer, Serialize, Serializer, de, ser};
+    pub use smallvec::{SmallVec, smallvec};
+    pub use vec_belt::VecBelt;
+
+    pub use std::{
+        any::{Any, TypeId},
+        borrow::Cow,
+        fmt::{self, Debug, Display},
+        fs, io,
+        marker::PhantomData,
+        ops::{Deref, DerefMut, Range},
+        path::{Path, PathBuf},
+        str::FromStr,
+        time::Duration,
+    };
 }
 
 #[cfg(all(feature = "mimalloc", not(feature = "bevy_dynamic"),))]

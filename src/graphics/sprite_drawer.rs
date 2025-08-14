@@ -1,7 +1,6 @@
-use std::ops::Deref;
+use bevy::asset::weak_handle;
 
-use bevy::{asset::weak_handle, prelude::*};
-use vec_belt::VecBelt;
+use crate::prelude::*;
 
 #[derive(Component)]
 #[require(Transform, Visibility)]

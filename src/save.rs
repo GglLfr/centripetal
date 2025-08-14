@@ -1,14 +1,6 @@
-use std::{fs, io, path::PathBuf};
-
-use bevy::{
-    platform::sync::{LazyLock, PoisonError, RwLock},
-    prelude::*,
-    reflect::{DynamicTypePath, erased_serde},
-};
-use serde::{Deserialize, Serialize, Serializer};
 use serde_flexitos::{GetError, MapRegistry, Registry, serialize_trait_object};
 
-use crate::Dirs;
+use crate::{Dirs, prelude::*};
 
 pub trait SaveResource: Resource + DynamicTypePath + erased_serde::Serialize {
     fn insert(self: Box<Self>, world: &mut World);

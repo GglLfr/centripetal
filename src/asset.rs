@@ -1,6 +1,4 @@
-use avian2d::parry::utils::hashmap::HashMap;
-use bevy::{ecs::system::SystemParam, prelude::*};
-use bevy_asset_loader::prelude::*;
+use crate::prelude::*;
 use sys_locale::get_locales;
 
 use crate::{

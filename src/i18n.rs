@@ -1,21 +1,3 @@
-use std::{
-    borrow::Cow,
-    fmt::{self, Debug},
-    io,
-    str::FromStr,
-};
-
-use bevy::{
-    asset::{
-        AssetLoader, AsyncReadExt, LoadContext,
-        io::Reader,
-        ron::{self, de::SpannedError},
-    },
-    ecs::entity::EntityHashSet,
-    platform::collections::HashMap,
-    prelude::*,
-};
-use derive_more::{Display, Error, From, FromStr};
 use nom::{
     IResult, Parser,
     branch::alt,
@@ -27,14 +9,9 @@ use nom::{
     sequence::{delimited, pair, preceded},
 };
 use nom_language::error::{VerboseError, convert_error};
-use serde::{
-    Deserialize, Deserializer,
-    de::{self, Visitor},
-};
-use smallvec::SmallVec;
 use sys_locale::get_locale;
 
-use crate::Locales;
+use crate::{Locales, prelude::*};
 
 #[macro_export]
 macro_rules! i18n {
@@ -52,7 +29,7 @@ pub struct I18nEntries(pub HashMap<String, I18nEntry>);
 #[derive(Debug, Display, Error, From)]
 pub enum I18nEntriesError {
     Io(io::Error),
-    Ron(SpannedError),
+    Ron(ron::de::SpannedError),
 }
 
 #[derive(Debug, Copy, Clone, Default)]
@@ -244,7 +221,7 @@ impl<'de> Deserialize<'de> for I18nEntry {
         D: Deserializer<'de>,
     {
         struct Visit;
-        impl<'de> Visitor<'de> for Visit {
+        impl<'de> de::Visitor<'de> for Visit {
             type Value = I18nEntry;
 
             fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>

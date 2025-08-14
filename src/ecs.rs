@@ -1,22 +1,4 @@
-use std::{borrow::Cow, marker::PhantomData, time::Duration};
-
-use avian2d::prelude::*;
-use bevy::{
-    ecs::{
-        archetype::ArchetypeComponentId,
-        bundle::{BundleEffect, DynamicBundle},
-        component::{
-            ComponentId, Components, ComponentsRegistrator, RequiredComponents, StorageType, Tick,
-        },
-        entity_disabling::Disabled,
-        never::Never,
-        query::{Access, QueryFilter},
-        system::{IntoObserverSystem, RunSystemOnce, SystemParamValidationError},
-        world::{DeferredWorld, unsafe_world_cell::UnsafeWorldCell},
-    },
-    prelude::*,
-    ptr::OwningPtr,
-};
+use crate::prelude::*;
 
 pub struct Affected<M: 'static, T: IntoResultSystem<In<Entity>, (), M>>(
     pub T::System,

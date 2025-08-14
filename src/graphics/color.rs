@@ -1,4 +1,4 @@
-use bevy::prelude::*;
+use crate::prelude::*;
 
 #[derive(Debug, Copy, Clone, Component, Deref, DerefMut)]
 pub struct BaseColor(pub Color);

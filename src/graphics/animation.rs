@@ -1,23 +1,7 @@
-use std::{borrow::Cow, ops::Range, time::Duration};
-
-use bevy::{
-    ecs::{
-        bundle::{BundleEffect, DynamicBundle},
-        component::{
-            ComponentId, Components, ComponentsRegistrator, HookContext, RequiredComponents,
-            StorageType,
-        },
-        system::{BoxedSystem, RunSystemError},
-        world::DeferredWorld,
-    },
-    platform::collections::HashMap,
-    prelude::*,
-    ptr::OwningPtr,
-};
-
 use crate::{
     IntoResultSystem, Sprites,
     graphics::{BaseColor, SpriteDrawer, SpriteSection, SpriteSheet},
+    prelude::*,
 };
 
 #[derive(Debug)]

@@ -1,34 +1,10 @@
 #![allow(unused)]
+use bevy::asset::weak_handle;
 
-use bevy::{
-    asset::weak_handle,
-    core_pipeline::core_2d::CORE_2D_DEPTH_FORMAT,
-    ecs::{
-        query::ROQueryItem,
-        system::{
-            RunSystemOnce, SystemParamItem,
-            lifetimeless::{Read, SRes},
-        },
-    },
+use crate::{
+    graphics::{Fbo, FboWrappedDrawer},
     prelude::*,
-    render::{
-        mesh::PrimitiveTopology,
-        render_phase::{PhaseItem, RenderCommandResult, TrackedRenderPass},
-        render_resource::{
-            BindGroupEntries, BindGroupLayout, BindGroupLayoutEntries, BlendState,
-            CachedRenderPipelineId, ColorTargetState, ColorWrites, CompareFunction, DepthBiasState,
-            DepthStencilState, FragmentState, FrontFace, MultisampleState, PipelineCache,
-            PolygonMode, PrimitiveState, RenderPipelineDescriptor, ShaderStages, ShaderType,
-            StencilFaceState, StencilState, TextureFormat, TextureSampleType, UniformBuffer,
-            VertexState,
-            binding_types::{texture_2d, uniform_buffer},
-        },
-        renderer::{RenderDevice, RenderQueue},
-        view::{ExtractedView, ViewTarget},
-    },
 };
-
-use crate::graphics::{Fbo, FboWrappedDrawer};
 
 pub const SHAPE_SHADER: Handle<Shader> = weak_handle!("3281325d-b853-4e27-a10f-d0c006454148");
 

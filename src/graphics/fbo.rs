@@ -1,31 +1,6 @@
-use std::sync::{Mutex, PoisonError};
+use bevy::render::render_phase::{Draw, DrawError};
 
-use bevy::{
-    core_pipeline::core_2d::CORE_2D_DEPTH_FORMAT,
-    ecs::{
-        query::{QueryEntityError, ROQueryItem, ReadOnlyQueryData},
-        system::{
-            ReadOnlySystemParam, SystemParamItem, SystemState,
-            lifetimeless::{Read, SQuery, SRes},
-        },
-    },
-    prelude::*,
-    render::{
-        camera::ExtractedCamera,
-        render_phase::{
-            Draw, DrawError, PhaseItem, RenderCommand, RenderCommandResult, RenderCommandState,
-            TrackedRenderPass,
-        },
-        render_resource::{
-            Extent3d, RenderPassColorAttachment, RenderPassDepthStencilAttachment,
-            RenderPassDescriptor, TextureDescriptor, TextureDimension, TextureFormat,
-            TextureUsages,
-        },
-        renderer::{RenderDevice, RenderQueue},
-        texture::{CachedTexture, TextureCache},
-        view::{ExtractedView, ViewTarget},
-    },
-};
+use crate::prelude::*;
 
 pub trait FboWrappedDrawer<P: PhaseItem>: 'static + Send + Sync {
     type Param: 'static + ReadOnlySystemParam;

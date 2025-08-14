@@ -1,24 +1,7 @@
 use async_channel::{Receiver, Sender};
-use bevy::{
-    asset::RenderAssetUsages,
-    ecs::system::SystemState,
-    image::{ImageSampler, TextureFormatPixelInfo},
-    prelude::*,
-    render::{
-        MainWorld,
-        render_asset::RenderAssets,
-        render_resource::{
-            Extent3d, Origin3d, TexelCopyBufferLayout, TexelCopyTextureInfo, TextureAspect,
-            TextureDescriptor, TextureDimension, TextureFormat, TextureUsages,
-            TextureViewDescriptor, TextureViewDimension,
-        },
-        renderer::{RenderDevice, RenderQueue},
-        texture::GpuImage,
-    },
-    tasks::ComputeTaskPool,
-};
-use derive_more::{Display, Error};
 use guillotiere::{SimpleAtlasAllocator, euclid::Size2D};
+
+use crate::prelude::*;
 
 #[derive(Debug, Resource)]
 pub struct SpriteAllocator {

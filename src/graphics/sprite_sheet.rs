@@ -1,21 +1,8 @@
-use std::{io, ops::Range, time::Duration};
-
 use async_channel::Sender;
-use bevy::{
-    asset::{
-        AssetLoader, AsyncReadExt as _, LoadContext, LoadDirectError, ParseAssetPathError,
-        io::Reader,
-    },
-    image::{CompressedImageFormats, ImageLoader, ImageLoaderError, ImageLoaderSettings},
-    platform::collections::HashMap,
-    prelude::*,
-    sprite::Anchor,
-};
+use bevy::image::{CompressedImageFormats, ImageLoader, ImageLoaderError, ImageLoaderSettings};
 use blocking::unblock;
-use derive_more::{Display, Error, From};
-use serde::Deserialize;
 
-use crate::graphics::SpriteError;
+use crate::{graphics::SpriteError, prelude::*};
 
 #[derive(Debug, Clone, Asset, TypePath)]
 pub struct SpriteSection {

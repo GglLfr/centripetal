@@ -1,18 +1,6 @@
-use std::any::TypeId;
-
-use bevy::{
-    asset::load_internal_asset,
-    core_pipeline::core_2d::Transparent2d,
-    prelude::*,
-    render::{
-        Render, RenderApp, RenderSet, render_asset::prepare_assets, render_phase::DrawFunctions,
-        texture::GpuImage,
-    },
-};
-use bevy_vector_shapes::{
-    render::{DrawShape2dCommand, ShapeData},
-    shapes::{DiscData, LineData, NgonData, RectData, TriangleData},
-};
+use crate::{logic::levels::LevelTransitionSet, prelude::*};
+use bevy::{asset::load_internal_asset, render::render_asset::prepare_assets};
+use bevy_vector_shapes::render::{DrawShape2dCommand, ShapeData};
 
 mod animation;
 mod color;
@@ -22,14 +10,13 @@ mod sprite_alloc;
 mod sprite_drawer;
 mod sprite_sheet;
 pub use animation::*;
+
 pub use color::*;
 pub use fbo::*;
 pub use shape::*;
 pub use sprite_alloc::*;
 pub use sprite_drawer::*;
 pub use sprite_sheet::*;
-
-use crate::logic::levels::LevelTransitionSet;
 
 #[derive(Debug, Copy, Clone, Default)]
 pub struct GraphicsPlugin;
