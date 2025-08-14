@@ -83,29 +83,47 @@ pub fn on_fade_insert(
     trigger: Trigger<OnInsert, Fade>,
     mut commands: Commands,
     mut parent: Query<(&mut Fade, &ChildOf)>,
-    query: Query<(
-        Entity,
-        Option<&BackgroundColor>,
-        Option<&BorderColor>,
-        Option<&BoxShadow>,
-        Option<&TextColor>,
-    )>,
+    mut query: Query<(Entity, FadeItem)>,
 ) {
     let Ok((mut fade, child_of)) = parent.get_mut(trigger.target()) else {
         return;
     };
-    let Ok((e, background, border, box_shadow, text_color)) = query.get(child_of.parent()) else {
+    let Ok((e, (background, border, box_shadow, text_color))) = query.get_mut(child_of.parent())
+    else {
         return;
     };
 
-    *fade = Fade {
-        enter: fade.enter,
-        background: background.map(|col| col.0).unwrap_or_default(),
-        border: border.map(|col| col.0).unwrap_or_default(),
-        box_shadow: box_shadow
-            .map(|box_shadow| box_shadow.iter().map(|sample| sample.color).collect())
-            .unwrap_or_default(),
-        text: text_color.map(|col| col.0).unwrap_or_default(),
+    *fade = if fade.enter {
+        Fade {
+            enter: true,
+            background: background
+                .map(|mut col| std::mem::replace(&mut col.0, Color::NONE))
+                .unwrap_or_default(),
+            border: border
+                .map(|mut col| std::mem::replace(&mut col.0, Color::NONE))
+                .unwrap_or_default(),
+            box_shadow: box_shadow
+                .map(|mut box_shadow| {
+                    box_shadow
+                        .iter_mut()
+                        .map(|sample| std::mem::replace(&mut sample.color, Color::NONE))
+                        .collect()
+                })
+                .unwrap_or_default(),
+            text: text_color
+                .map(|mut col| std::mem::replace(&mut col.0, Color::NONE))
+                .unwrap_or_default(),
+        }
+    } else {
+        Fade {
+            enter: false,
+            background: background.map(|col| col.0).unwrap_or_default(),
+            border: border.map(|col| col.0).unwrap_or_default(),
+            box_shadow: box_shadow
+                .map(|box_shadow| box_shadow.iter().map(|sample| sample.color).collect())
+                .unwrap_or_default(),
+            text: text_color.map(|col| col.0).unwrap_or_default(),
+        }
     };
 
     commands.entity(e).queue(ui_show);
