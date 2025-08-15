@@ -27,7 +27,6 @@ jobs:
           sudo apt-get install g++ pkg-config libx11-dev libasound2-dev libudev-dev libxkbcommon-x11-0 libwayland-dev libxkbcommon-dev
       - name: Compile Release build with `dev` feature
         run: |
-          cargo clean --locked --package mimalloc-redirect
           cargo build --locked --release --no-default-features --features="dev"
       - name: Copy files to a common directory (Linux)
         if: matrix.os == 'ubuntu-latest'
