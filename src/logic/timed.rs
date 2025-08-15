@@ -1,4 +1,4 @@
-use crate::{IntoResultSystem, Observed, math::FloatTransformExt, prelude::*};
+use crate::{IntoResultSystem, Observed, despawn, math::FloatTransformExt, prelude::*};
 
 #[derive(Debug, Copy, Clone, Component)]
 pub struct Timed {
@@ -48,10 +48,7 @@ impl Timed {
                     let mut world = DeferredWorld::from(world);
                     sys.queue_deferred(world.reborrow());
 
-                    if let Ok(mut e) = world.commands().get_entity(trigger.target()) {
-                        e.despawn();
-                    }
-
+                    world.commands().queue(despawn(trigger.target()));
                     Ok(())
                 },
             ),
@@ -93,9 +90,7 @@ impl Timed {
     }
 
     pub fn despawn_on_finished(trigger: Trigger<TimeFinished>, mut commands: Commands) {
-        if let Ok(mut e) = commands.get_entity(trigger.target()) {
-            e.despawn();
-        }
+        commands.queue(despawn(trigger.target()));
     }
 
     pub fn life(&self) -> Duration {
@@ -147,11 +142,19 @@ pub fn update_timed(
 
             let frac = overtime.div_duration_f64(lifetime);
             commands.command_scope(|mut commands| {
-                commands.entity(e).trigger(TimeFinished {
-                    count,
-                    overtime,
-                    overtime_frac_f64: frac,
-                    overtime_frac: frac as f32,
+                // TODO This is very cursed; the only reason I did this was because `commands.entity(e).trigger()`
+                //      sometimes fails due to the listener entity already being despawned by other time listener
+                //      on the exact same invocation.
+                commands.queue(move |world: &mut World| {
+                    world.trigger_targets(
+                        TimeFinished {
+                            count,
+                            overtime,
+                            overtime_frac_f64: frac,
+                            overtime_frac: frac as f32,
+                        },
+                        e,
+                    );
                 });
             });
         }
@@ -200,7 +203,7 @@ pub fn update_time_stun(
         scale = match kind {
             TimeStunKind::ShortInstant => {
                 if now - started >= Duration::from_millis(150) {
-                    commands.entity(e).despawn();
+                    commands.queue(despawn(e));
                     1.
                 } else {
                     0.075
@@ -208,7 +211,7 @@ pub fn update_time_stun(
             }
             TimeStunKind::LongSmooth => {
                 if now - started >= Duration::from_millis(1000) {
-                    commands.entity(e).despawn();
+                    commands.queue(despawn(e));
                     1.
                 } else {
                     let f = (now - started).div_duration_f32(Duration::from_millis(1000));

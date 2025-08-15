@@ -1,5 +1,5 @@
 use crate::{
-    I18n, IntoResultSystem, Observed,
+    I18n, IntoResultSystem, Observed, despawn,
     logic::{TimeFinished, Timed},
     prelude::*,
     ui::{
@@ -34,6 +34,7 @@ impl FromWorld for BottomDialog {
                         width: Percent(80.),
                         height: Percent(100.),
                         flex_direction: FlexDirection::Column,
+                        padding: UiRect::bottom(Px(4.)),
                         ..default()
                     },
                 ))
@@ -63,9 +64,21 @@ impl BottomDialog {
                 Node {
                     display: Display::Grid,
                     margin: UiRect::new(Px(0.), Px(0.), Auto, Px(0.)),
+                    padding: UiRect::axes(Px(6.), Px(4.)),
                     align_self: AlignSelf::Center,
+                    border: UiRect::all(Px(2.)),
                     ..default()
                 },
+                BorderColor(Srgba::hex("#ECF8FB").unwrap().into()),
+                BackgroundColor(Color::linear_rgba(0., 0., 0., 0.4)),
+                BoxShadow::new(
+                    Color::linear_rgba(0., 0., 0., 0.4),
+                    Px(0.),
+                    Px(0.),
+                    Px(5.),
+                    Px(5.),
+                ),
+                BorderRadius::all(Px(12.)),
                 children![
                     (
                         Node {
@@ -78,8 +91,7 @@ impl BottomDialog {
                             move |trigger: Trigger<ScrollTextFinished>,
                                   mut commands: Commands|
                                   -> Result {
-                                commands.entity(trigger.observer()).despawn();
-
+                                commands.queue(despawn(trigger.observer()));
                                 let mut on_done =
                                     on_done.take().ok_or("`ScrollTextFinished` fired twice")?;
 
@@ -134,7 +146,7 @@ impl BottomDialog {
                 Timed::run(
                     UI_STRETCH_TIME,
                     move |_: In<Entity>, mut commands: Commands| {
-                        commands.entity(prev).despawn();
+                        commands.queue(despawn(prev));
                     },
                 ),
             ));

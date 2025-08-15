@@ -234,7 +234,7 @@ impl Default for I18nStyle {
         Self {
             bold: false,
             italic: false,
-            size: 20,
+            size: 18,
             color: Color::WHITE,
         }
     }

@@ -1,7 +1,7 @@
 use std::f32::consts::TAU;
 
 use crate::{
-    i18n,
+    despawn, i18n,
     logic::{
         TimeStun, Timed,
         entities::penumbra::{AttractedAction, HomingTarget, LaunchAction, Launched, bullet},
@@ -80,7 +80,7 @@ pub fn init(
               mut actions: Query<&mut ActionState<LaunchAction>>|
               -> Result {
             // Default to `Special` state; see below on bullet hits.
-            commands.entity(trigger.observer()).despawn();
+            commands.queue(despawn(trigger.observer()));
             commands
                 .entity(level_entity)
                 .insert(TutorialLaunch::Special);
@@ -114,7 +114,7 @@ pub fn init(
                             .enable_action(&AttractedAction::Parry);
 
                         // 2: Queue a time stun.
-                        commands.entity(trigger.observer()).despawn();
+                        commands.queue(despawn(trigger.observer()));
                         commands.spawn((ChildOf(level_entity), TimeStun::long_smooth()));
 
                         // 3: Spawn 3 bullets that, when at least one hits Selene, will trigger a "normal" branch.
@@ -127,7 +127,7 @@ pub fn init(
                                 * Rotation::radians(TAU * i as f32 / 3.);
 
                             let bullet = commands.spawn_empty().id();
-                            commands.spawn(Timed::run(
+                            commands.spawn((ChildOf(level_entity), Timed::run(
                                 Duration::from_millis((i as u64 + 1) * 150),
                                 move |_: In<Entity>,
                                       mut commands: Commands,
@@ -146,7 +146,7 @@ pub fn init(
                                         bullet.insert(HomingTarget(selene));
                                     }
                                 },
-                            ));
+                            )));
 
                             bullet
                         });
@@ -156,7 +156,7 @@ pub fn init(
                                   mut commands: Commands,
                                   mut query: Query<&mut TutorialLaunch>|
                                   -> Result {
-                                commands.entity(trigger.observer()).despawn();
+                                commands.queue(despawn(trigger.observer()));
                                 *query.get_mut(level_entity)? = TutorialLaunch::Normal;
 
                                 for bullet in bullets {
@@ -177,7 +177,7 @@ pub fn init(
                                 if let Some(new_count) = count.checked_sub(1) {
                                     count = new_count;
                                 } else {
-                                    commands.entity(trigger.observer()).despawn();
+                                    commands.queue(despawn(trigger.observer()));
                                     commands
                                         .get_entity(level_entity)?
                                         .remove::<TutorialLaunch>();
@@ -195,7 +195,7 @@ pub fn init(
                         commands.spawn((ChildOf(level_entity), despawn_observer));
 
                         // 4: Spawn 2 rings that protect the attractor from being slashed by Selene.
-                        commands.spawn(Timed::run(
+                        commands.spawn((ChildOf(level_entity), Timed::run(
                             Duration::from_millis(750),
                             move |_: In<Entity>, mut commands: Commands| -> Result {
                                 for ring in rings {
@@ -204,7 +204,7 @@ pub fn init(
                                 }
                                 Ok(())
                             },
-                        ));
+                        )));
 
                         // 5: Hide the launching UI.
                         if let Some(ui) = ui.take()
@@ -215,42 +215,19 @@ pub fn init(
                         }
 
                         // 6: Spawn a "Ahh! Away from me!" dialog residing at the bottom.
-                        commands.queue(BottomDialog::show(i18n!("tutorial.launch.scream"), BottomDialog::hide_after(Duration::from_secs(3))));
-
-                        /*commands.spawn(Timed::run(Duration::from_millis(100), move |_: In<Entity>, mut commands: Commands| {
-                            commands.spawn((
-                                Node {
-                                    width: Percent(100.),
-                                    height: Percent(100.),
-                                    flex_direction: FlexDirection::Column,
-                                    ..default()
+                        commands.spawn((
+                            ChildOf(level_entity),
+                            Timed::run(
+                                Duration::from_millis(150),
+                                |_: In<Entity>, world: &mut World| -> Result {
+                                    BottomDialog::show(
+                                        i18n!("tutorial.launch.scream"),
+                                        BottomDialog::hide_after(Duration::from_secs(3)),
+                                    )
+                                    .apply(world)
                                 },
-                                children![(
-                                    Node {
-                                        display: Display::Grid,
-                                        margin: UiRect::new(Px(0.), Px(0.), Auto, Px(0.)),
-                                        align_self: AlignSelf::Center,
-                                        ..default()
-                                    },
-                                    children![(
-                                        Node {
-                                            grid_row: GridPlacement::start(1),
-                                            grid_column: GridPlacement::start(1),
-                                            ..default()
-                                        },
-                                        widgets::scroll_text(i18n!("tutorial.launch.scream")),
-                                    ), (
-                                        Node {
-                                            grid_row: GridPlacement::start(1),
-                                            grid_column: GridPlacement::start(1),
-                                            ..default()
-                                        },
-                                        widgets::text(i18n!("tutorial.launch.scream")),
-                                        Visibility::Hidden,
-                                    )],
-                                )],
-                            ));
-                        }));*/
+                            ),
+                        ));
                     }
 
                     Ok(())

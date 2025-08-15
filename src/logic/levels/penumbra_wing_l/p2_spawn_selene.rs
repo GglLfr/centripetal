@@ -1,5 +1,5 @@
 use crate::{
-    PIXELS_PER_UNIT, Sprites,
+    PIXELS_PER_UNIT, Sprites, despawn,
     graphics::{SpriteDrawer, SpriteSection},
     logic::{
         CameraConfines, CameraTarget, TimeFinished, Timed,
@@ -181,7 +181,7 @@ pub fn init(
     commands.entity(level_entity).observe(
         move |trigger: Trigger<OnRemove, p1_spawn_attractor::SpawningAttractor>,
               mut commands: Commands| {
-            commands.entity(trigger.observer()).despawn();
+            commands.queue(despawn(trigger.observer()));
             commands.entity(level_entity).insert(SpawningSelene);
 
             // Spawn Selene with an animation, and...

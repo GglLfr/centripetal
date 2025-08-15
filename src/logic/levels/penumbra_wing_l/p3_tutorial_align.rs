@@ -1,7 +1,7 @@
 use std::f32::consts::TAU;
 
 use crate::{
-    Sprites,
+    Sprites, despawn,
     graphics::{Animation, AnimationMode, BaseColor},
     i18n,
     logic::{
@@ -54,9 +54,7 @@ pub fn update_align_time(
             .remove::<TutorialAlign>();
 
         // TODO FX for this.
-        if let Ok(mut e) = commands.get_entity(instance.hover_target) {
-            e.despawn();
-        }
+        commands.queue(despawn(instance.hover_target));
     }
 
     let Ok((mut material, mut disc)) = target.get_mut(instance.hover_target) else {
@@ -264,7 +262,7 @@ pub fn init(
                     move |trigger: Trigger<Respawned>,
                           mut commands: Commands,
                           mut ui: ResMut<SeleneUi>| {
-                        commands.entity(trigger.observer()).despawn();
+                        commands.queue(despawn(trigger.observer()));
                         // Needs `is_none()` here to ensure we don't accidentally replace an existing UI.
                         // Such condition should be considered a bug; this is only a failsafe.
                         if ui.is_none()
@@ -290,7 +288,7 @@ pub fn init(
             &mut ActionState<LaunchAction>,
         )>|
               -> Result {
-            commands.entity(trigger.observer()).despawn();
+            commands.queue(despawn(trigger.observer()));
             commands
                 .entity(level_entity)
                 .insert(TutorialAlign::default());

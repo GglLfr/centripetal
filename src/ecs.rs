@@ -376,6 +376,12 @@ pub fn insert_recursive_if<S: RelationshipTarget, F: QueryFilter, B: Bundle>(
     }
 }
 
+pub fn despawn(e: Entity) -> impl Command {
+    move |world: &mut World| {
+        _ = world.try_despawn(e);
+    }
+}
+
 pub fn suspend(mut e: EntityWorldMut) {
     e.insert_recursive::<Children>(Disabled);
 }

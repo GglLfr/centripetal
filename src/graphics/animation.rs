@@ -1,5 +1,5 @@
 use crate::{
-    IntoResultSystem, Sprites,
+    IntoResultSystem, Sprites, despawn,
     graphics::{BaseColor, SpriteDrawer, SpriteSection, SpriteSheet},
     prelude::*,
 };
@@ -248,11 +248,8 @@ impl AnimationHooks {
         })
     }
 
-    pub fn despawn(In(entity): In<Entity>, mut commands: Commands) -> Result {
-        if let Ok(mut entity) = commands.get_entity(entity) {
-            entity.despawn();
-        }
-        Ok(())
+    pub fn despawn(In(entity): In<Entity>, mut commands: Commands) {
+        commands.queue(despawn(entity));
     }
 
     pub fn despawn_on_done(key: impl Into<String>) -> Self {
