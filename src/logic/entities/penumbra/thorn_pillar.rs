@@ -3,7 +3,7 @@ use crate::{
     logic::{
         Fields, FromLevelEntity,
         entities::{
-            TryHurt,
+            EntityLayers, TryHurt,
             penumbra::{AttractedInitial, PenumbraEntity, TryLaunch},
         },
     },
@@ -11,7 +11,7 @@ use crate::{
 };
 
 #[derive(Debug, Copy, Clone, Default, Component)]
-#[require(PenumbraEntity)]
+#[require(PenumbraEntity, CollisionLayers = EntityLayers::penumbra_hostile())]
 pub struct ThornPillar;
 impl FromLevelEntity for ThornPillar {
     type Param = ();

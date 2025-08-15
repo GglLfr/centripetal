@@ -156,6 +156,24 @@ pub fn kill_out_of_bounds(
     });
 }
 
+#[derive(Debug, Copy, Clone, Default, PhysicsLayer)]
+pub enum EntityLayers {
+    #[default]
+    None,
+    PenumbraSelene,
+    PenumbraHostile,
+}
+
+impl EntityLayers {
+    pub fn penumbra_selene() -> CollisionLayers {
+        CollisionLayers::new(Self::PenumbraSelene, Self::PenumbraHostile)
+    }
+
+    pub fn penumbra_hostile() -> CollisionLayers {
+        CollisionLayers::new(Self::PenumbraHostile, Self::PenumbraSelene)
+    }
+}
+
 #[derive(Debug, Copy, Clone, Default)]
 pub struct EntitiesPlugin;
 impl Plugin for EntitiesPlugin {

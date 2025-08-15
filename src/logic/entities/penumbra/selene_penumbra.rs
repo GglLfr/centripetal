@@ -4,7 +4,7 @@ use crate::{
     logic::{
         CameraTarget, Fields, FromLevelEntity, IsPlayer, Level, LevelUnload, TimeStun, Timed,
         entities::{
-            Health, Hurt, MaxHealth, TryHurt,
+            EntityLayers, Health, Hurt, MaxHealth, TryHurt,
             penumbra::{
                 AttractedInitial, AttractedParams, AttractedPrediction, LaunchCharging,
                 LaunchCooldown, LaunchDurations, LaunchTarget, Launched, PenumbraEntity, TryLaunch,
@@ -48,6 +48,7 @@ pub struct SlashEffect;
     Health::new(10),
     MaxHealth::new(10),
     Collider::circle(5.),
+    CollisionLayers = EntityLayers::penumbra_selene(),
     CollisionEventsEnabled,
     TransformExtrapolation,
 )]

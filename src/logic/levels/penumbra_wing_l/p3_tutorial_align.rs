@@ -8,7 +8,7 @@ use crate::{
         Timed,
         effects::Ring,
         entities::{
-            Killed,
+            EntityLayers, Killed,
             penumbra::{AttractedAction, LaunchAction},
         },
         levels::penumbra_wing_l::{
@@ -35,7 +35,7 @@ pub fn update_align_time(
     mut commands: Commands,
     time: Res<Time>,
     mut aligned: Query<(&Instance, &mut TutorialAlign)>,
-    mut target: Query<&mut DiscComponent>,
+    mut target: Query<(&mut ShapeMaterial, &mut DiscComponent)>,
 ) {
     let delta: Duration = time.delta();
     let Ok((instance, mut align)) = aligned.single_mut() else {
@@ -59,16 +59,19 @@ pub fn update_align_time(
         }
     }
 
-    let Ok(mut component) = target.get_mut(instance.hover_target) else {
+    let Ok((mut material, mut disc)) = target.get_mut(instance.hover_target) else {
         return;
     };
 
-    component.end_angle = TAU * align.time.div_duration_f32(TUTORIAL_MOVE_ALIGN_DURATION);
-    component.cap = if align.time > Duration::ZERO {
-        Cap::Round
+    let (disable_laa, cap) = if align.time > Duration::ZERO {
+        (false, Cap::Round)
     } else {
-        Cap::None
+        (true, Cap::None)
     };
+
+    disc.end_angle = TAU * align.time.div_duration_f32(TUTORIAL_MOVE_ALIGN_DURATION);
+    disc.cap = cap;
+    material.disable_laa = disable_laa;
 }
 
 pub fn init(
@@ -83,6 +86,7 @@ pub fn init(
     sprites: Res<Sprites>,
 ) -> Result {
     commands.entity(hover_target).insert((
+        EntityLayers::penumbra_hostile(),
         Collider::circle(8.),
         CollisionEventsEnabled,
         Animation::new(sprites.collectible_32.clone_weak(), "anim"),
@@ -91,7 +95,7 @@ pub fn init(
         DiscComponent::arc(shapes.config(), 16., 0., 0.),
         ShapeMaterial {
             alpha_mode: ShapeAlphaMode::Blend,
-            disable_laa: false,
+            disable_laa: true,
             pipeline: ShapePipelineType::Shape2d,
             canvas: None,
             texture: None,
@@ -319,12 +323,14 @@ pub fn init(
                     move |trigger: Trigger<OnCollisionEnd>,
                           mut commands: Commands,
                           mut shown_ui: ResMut<SeleneUi>,
-                          mut aligned: Query<&mut TutorialAlign>|
+                          mut aligned: Query<&mut TutorialAlign>,
+                          mut hinted: Local<bool>|
                           -> Result {
                         // Hint about prograding/retrograding when unaligning.
                         let mut aligned = aligned.get_mut(level_entity)?;
                         if trigger.body.is_some_and(|body| body == selene)
                             && std::mem::replace(&mut aligned.within, false)
+                            && !std::mem::replace(&mut *hinted, true)
                             && aligned.time >= TUTORIAL_MOVE_ALIGN_HELP
                             && commands
                                 .get_entity(ui_selene_accel)
@@ -336,7 +342,6 @@ pub fn init(
                             && let Ok(mut ui) = commands.get_entity(ui)
                         {
                             ui.queue(ui_fade_out);
-                            commands.entity(trigger.observer()).despawn();
                         }
 
                         Ok(())

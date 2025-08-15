@@ -385,7 +385,7 @@ pub fn resume(mut e: EntityWorldMut) {
     if let Some(Disabled) = e.take::<Disabled>() {
         e.remove_recursive::<Children, Disabled>();
         let trns = e.take::<(Transform, GlobalTransform)>();
-        let physics = e.take::<(RigidBody, Collider)>();
+        let physics = e.take::<(RigidBody, Collider, CollisionLayers)>();
 
         e.remove_with_requires::<(RigidBody, Collider, Transform)>();
         match (trns, physics) {

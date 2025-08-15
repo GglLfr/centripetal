@@ -3,7 +3,10 @@ use crate::{
     graphics::{AnimationFrom, AnimationMode, BaseColor},
     logic::{
         Timed,
-        entities::penumbra::{HomingPower, NoAttract, PenumbraEntity},
+        entities::{
+            EntityLayers, Health,
+            penumbra::{HomingPower, NoAttract, PenumbraEntity},
+        },
     },
     prelude::*,
 };
@@ -13,6 +16,7 @@ pub fn spiky(level_entity: Entity) -> impl Bundle {
         ChildOf(level_entity),
         PenumbraEntity,
         NoAttract,
+        EntityLayers::penumbra_hostile(),
         Collider::circle(6.),
         CollisionEventsEnabled,
         Timed::new(Duration::from_secs(2)),
@@ -22,8 +26,7 @@ pub fn spiky(level_entity: Entity) -> impl Bundle {
         TransformExtrapolation,
         BaseColor(Color::linear_rgba(4., 2., 1., 1.)),
         Observed::by(Timed::despawn_on_finished),
-        // TODO Replace this with collision layers so attractors don't kill it but they still despawn at the border.
-        // Health::new(1),
+        Health::new(1),
         DebugRender::none(),
     )
 }

@@ -6,7 +6,7 @@ use crate::{
     logic::{
         Fields, FromLevelEntity,
         entities::{
-            TryHurt,
+            EntityLayers, TryHurt,
             penumbra::{LaunchTarget, PenumbraEntity},
         },
     },
@@ -22,6 +22,7 @@ pub struct NoAttract;
     PenumbraEntity,
     AttractorEntities,
     SpriteDrawer,
+    CollisionLayers = EntityLayers::penumbra_hostile(),
     Collider::circle(8.),
     CollisionEventsEnabled,
     BaseColor(Color::linear_rgb(1., 1., 12.)),
