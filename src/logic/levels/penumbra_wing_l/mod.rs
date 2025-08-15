@@ -13,6 +13,7 @@ pub mod p1_spawn_attractor;
 pub mod p2_spawn_selene;
 pub mod p3_tutorial_align;
 pub mod p4_tutorial_launch;
+pub mod p5_tutorial_parry;
 
 const SELENE: Uuid = uuid!("332e5310-3740-11f0-b0d1-4b444b848a1e");
 const ATTRACTOR: Uuid = uuid!("8226eab0-3740-11f0-b0d1-31c3cf318fb2");
@@ -95,6 +96,7 @@ impl FromLevel for Instance {
             world.run_system_cached_with(p2_spawn_selene::init, &this)??;
             world.run_system_cached_with(p3_tutorial_align::init, &this)??;
             world.run_system_cached_with(p4_tutorial_launch::init, &this)??;
+            world.run_system_cached_with(p5_tutorial_parry::init, &this)??;
 
             world.get_entity_mut(level_entity)?.insert(this);
             Ok(())

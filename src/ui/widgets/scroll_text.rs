@@ -98,6 +98,7 @@ pub fn update_scroll_text_sections(
 
             if slice.is_empty() {
                 state.span_index += 1;
+                state.span_byte_index = 0;
             } else if state.time < section.time_per_char {
                 break;
             }

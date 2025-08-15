@@ -104,7 +104,7 @@ pub fn scroll_text(i18n: I18n) -> impl Bundle {
                                 font_smoothing: FontSmoothing::AntiAliased,
                             },
                             color: style.color.into(),
-                            time_per_char: Duration::from_millis(16),
+                            time_per_char: Duration::from_millis(32),
                         });
                     },
                 );

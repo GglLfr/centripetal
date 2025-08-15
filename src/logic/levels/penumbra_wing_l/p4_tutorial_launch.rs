@@ -147,7 +147,6 @@ pub fn init(
                                     }
                                 },
                             )));
-
                             bullet
                         });
 
@@ -164,35 +163,15 @@ pub fn init(
                                         bullet.remove::<HomingTarget>();
                                     }
                                 }
-
-                                Ok(())
-                            },
-                        );
-
-                        let mut count = bullets.len();
-                        let mut despawn_observer = Observer::new(
-                            move |trigger: Trigger<OnRemove, RigidBody>,
-                                  mut commands: Commands|
-                                  -> Result {
-                                if let Some(new_count) = count.checked_sub(1) {
-                                    count = new_count;
-                                } else {
-                                    commands.queue(despawn(trigger.observer()));
-                                    commands
-                                        .get_entity(level_entity)?
-                                        .remove::<TutorialLaunch>();
-                                }
                                 Ok(())
                             },
                         );
 
                         for bullet in bullets {
                             hit_observer.watch_entity(bullet);
-                            despawn_observer.watch_entity(bullet);
                         }
 
                         commands.spawn((ChildOf(level_entity), hit_observer));
-                        commands.spawn((ChildOf(level_entity), despawn_observer));
 
                         // 4: Spawn 2 rings that protect the attractor from being slashed by Selene.
                         commands.spawn((ChildOf(level_entity), Timed::run(
@@ -216,18 +195,35 @@ pub fn init(
 
                         // 6: Spawn a "Ahh! Away from me!" dialog residing at the bottom.
                         commands.spawn((
-                            ChildOf(level_entity),
-                            Timed::run(
-                                Duration::from_millis(150),
-                                |_: In<Entity>, world: &mut World| -> Result {
-                                    BottomDialog::show(
-                                        i18n!("tutorial.launch.scream"),
-                                        BottomDialog::hide_after(Duration::from_secs(3)),
-                                    )
-                                    .apply(world)
-                                },
-                            ),
-                        ));
+                        ChildOf(level_entity),
+                        Timed::run(
+                            Duration::from_millis(150),
+                            move |_: In<Entity>, world: &mut World| -> Result {
+                                BottomDialog::show(
+                                    i18n!("tutorial.launch.scream"),
+                                    BottomDialog::show_next_after(
+                                        Duration::from_secs(2),
+                                        i18n!("tutorial.launch.realize"),
+                                        move |_: In<Entity>, mut commands: Commands| {
+                                            commands.spawn((
+                                                ChildOf(level_entity),
+                                                Timed::run(
+                                                    Duration::from_secs(2),
+                                                    move |_: In<Entity>, mut commands: Commands| -> Result {
+                                                        commands
+                                                            .get_entity(level_entity)?
+                                                            .remove::<TutorialLaunch>();
+                                                        Ok(())
+                                                    },
+                                                ),
+                                            ));
+                                        },
+                                    ),
+                                )
+                                .apply(world)
+                            },
+                        ),
+                    ));
                     }
 
                     Ok(())
