@@ -48,7 +48,10 @@ impl Timed {
                     let mut world = DeferredWorld::from(world);
                     sys.queue_deferred(world.reborrow());
 
-                    world.commands().entity(trigger.target()).despawn();
+                    if let Ok(mut e) = world.commands().get_entity(trigger.target()) {
+                        e.despawn();
+                    }
+
                     Ok(())
                 },
             ),

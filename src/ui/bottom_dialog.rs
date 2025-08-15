@@ -1,5 +1,5 @@
 use crate::{
-    I18n, IntoResultSystem,
+    I18n, IntoResultSystem, Observed,
     logic::{TimeFinished, Timed},
     prelude::*,
     ui::{
@@ -58,58 +58,57 @@ impl BottomDialog {
 
             let root = this.root;
             let prev = this.current.replace(ui);
-            world
-                .entity_mut(ui)
-                .insert((
-                    ChildOf(root),
-                    Node {
-                        display: Display::Grid,
-                        margin: UiRect::new(Px(0.), Px(0.), Auto, Px(0.)),
-                        align_self: AlignSelf::Center,
-                        ..default()
-                    },
-                    children![
-                        (
-                            Node {
-                                grid_row: GridPlacement::start(1),
-                                grid_column: GridPlacement::start(1),
-                                ..default()
-                            },
-                            widgets::scroll_text(i18n.clone()),
+            world.entity_mut(ui).insert((
+                ChildOf(root),
+                Node {
+                    display: Display::Grid,
+                    margin: UiRect::new(Px(0.), Px(0.), Auto, Px(0.)),
+                    align_self: AlignSelf::Center,
+                    ..default()
+                },
+                children![
+                    (
+                        Node {
+                            grid_row: GridPlacement::start(1),
+                            grid_column: GridPlacement::start(1),
+                            ..default()
+                        },
+                        widgets::scroll_text(i18n.clone()),
+                        Observed::by(
+                            move |trigger: Trigger<ScrollTextFinished>,
+                                  mut commands: Commands|
+                                  -> Result {
+                                commands.entity(trigger.observer()).despawn();
+
+                                let mut on_done =
+                                    on_done.take().ok_or("`ScrollTextFinished` fired twice")?;
+
+                                commands.queue(move |world: &mut World| -> Result {
+                                    on_done.initialize(world);
+                                    on_done.validate_param(world).map_err(|err| {
+                                        RunSystemError::InvalidParams {
+                                            system: on_done.name(),
+                                            err,
+                                        }
+                                    })?;
+                                    on_done.run(ui, world)
+                                });
+
+                                Ok(())
+                            }
                         ),
-                        (
-                            Node {
-                                grid_row: GridPlacement::start(1),
-                                grid_column: GridPlacement::start(1),
-                                ..default()
-                            },
-                            widgets::text(i18n),
-                            Visibility::Hidden,
-                        )
-                    ],
-                ))
-                .observe(
-                    move |trigger: Trigger<ScrollTextFinished>, mut commands: Commands| -> Result {
-                        commands.entity(trigger.observer()).despawn();
-
-                        let target = trigger.target();
-                        let mut on_done =
-                            on_done.take().ok_or("`ScrollTextFinished` fired twice")?;
-
-                        commands.queue(move |world: &mut World| -> Result {
-                            on_done.initialize(world);
-                            on_done.validate_param(world).map_err(|err| {
-                                RunSystemError::InvalidParams {
-                                    system: on_done.name(),
-                                    err,
-                                }
-                            })?;
-                            on_done.run(target, world)
-                        });
-
-                        Ok(())
-                    },
-                );
+                    ),
+                    (
+                        Node {
+                            grid_row: GridPlacement::start(1),
+                            grid_column: GridPlacement::start(1),
+                            ..default()
+                        },
+                        widgets::text(i18n),
+                        Visibility::Hidden,
+                    )
+                ],
+            ));
 
             if let Some(prev) = prev {
                 world.despawn(prev);
@@ -179,15 +178,12 @@ impl BottomDialog {
     pub fn hide_after(duration: Duration) -> impl System<In = In<Entity>, Out = Result> {
         IntoSystem::into_system(move |In(e): In<Entity>, mut commands: Commands| {
             commands.entity(e).insert(Timed::new(duration)).observe(
-                move |trigger: Trigger<TimeFinished>,
+                move |_: Trigger<TimeFinished>,
                       world: &mut World,
                       state: &mut SystemState<Res<Self>>|
                       -> Result {
                     let this = state.get(world);
-                    if this
-                        .current
-                        .is_some_and(|current| current == trigger.target())
-                    {
+                    if this.current.is_some_and(|current| current == e) {
                         Self::hide(world)?;
                     }
 
