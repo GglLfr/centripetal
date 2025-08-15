@@ -202,7 +202,7 @@ pub fn update_time_stun(
     for (e, &TimeStun(kind, started)) in &stuns {
         scale = match kind {
             TimeStunKind::ShortInstant => {
-                if now - started >= Duration::from_millis(150) {
+                if now - started >= Duration::from_millis(200) {
                     commands.queue(despawn(e));
                     1.
                 } else {
