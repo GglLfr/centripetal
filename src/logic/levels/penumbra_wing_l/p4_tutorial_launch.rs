@@ -9,7 +9,7 @@ use crate::{
     },
     prelude::*,
     resume,
-    ui::{WorldspaceUi, ui_fade_in, ui_fade_out, ui_hide, widgets},
+    ui::{BottomDialog, WorldspaceUi, ui_fade_in, ui_fade_out, ui_hide, widgets},
 };
 
 #[derive(Debug, Copy, Clone, Default, Component)]
@@ -213,6 +213,44 @@ pub fn init(
                         {
                             ui.queue(ui_fade_out);
                         }
+
+                        // 6: Spawn a "Ahh! Away from me!" dialog residing at the bottom.
+                        commands.queue(BottomDialog::show(i18n!("tutorial.launch.scream"), BottomDialog::hide_after(Duration::from_secs(3))));
+
+                        /*commands.spawn(Timed::run(Duration::from_millis(100), move |_: In<Entity>, mut commands: Commands| {
+                            commands.spawn((
+                                Node {
+                                    width: Percent(100.),
+                                    height: Percent(100.),
+                                    flex_direction: FlexDirection::Column,
+                                    ..default()
+                                },
+                                children![(
+                                    Node {
+                                        display: Display::Grid,
+                                        margin: UiRect::new(Px(0.), Px(0.), Auto, Px(0.)),
+                                        align_self: AlignSelf::Center,
+                                        ..default()
+                                    },
+                                    children![(
+                                        Node {
+                                            grid_row: GridPlacement::start(1),
+                                            grid_column: GridPlacement::start(1),
+                                            ..default()
+                                        },
+                                        widgets::scroll_text(i18n!("tutorial.launch.scream")),
+                                    ), (
+                                        Node {
+                                            grid_row: GridPlacement::start(1),
+                                            grid_column: GridPlacement::start(1),
+                                            ..default()
+                                        },
+                                        widgets::text(i18n!("tutorial.launch.scream")),
+                                        Visibility::Hidden,
+                                    )],
+                                )],
+                            ));
+                        }));*/
                     }
 
                     Ok(())

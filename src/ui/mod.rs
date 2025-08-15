@@ -3,11 +3,11 @@ use bevy::ui::UiSystem;
 
 pub mod widgets;
 
-mod dialog;
-mod fade;
+mod bottom_dialog;
+mod trans;
 mod worldspace;
-pub use dialog::*;
-pub use fade::*;
+pub use bottom_dialog::*;
+pub use trans::*;
 pub use worldspace::*;
 
 use crate::{despawn_recursive_if, insert_recursive_if, ui::widgets::WidgetPlugin};
@@ -17,17 +17,23 @@ pub struct UiPlugin;
 impl Plugin for UiPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins(WidgetPlugin)
+            .init_resource::<BottomDialog>()
             .add_systems(
                 PostUpdate,
                 (
                     update_worldspace_ui
                         .after(UiSystem::Content)
                         .before(UiSystem::Layout),
+                    stretch_interpolate
+                        .after(UiSystem::Layout)
+                        .before(TransformSystem::TransformPropagate),
                     fade_interpolate,
                 ),
             )
             .add_observer(on_fade_insert)
-            .add_observer(on_fade_replace);
+            .add_observer(on_fade_replace)
+            .add_observer(on_stretch_insert)
+            .add_observer(on_stretch_replace);
     }
 }
 
@@ -67,4 +73,20 @@ pub fn ui_fade_out(e: EntityWorldMut) {
 
     despawn_recursive_if::<Children, With<Fade>>(world.entity_mut(entity));
     insert_recursive_if::<Children, (), _>(|_| Fade::exit()).apply(world.entity_mut(entity));
+}
+
+pub fn ui_stretch_vertical_in(mut e: EntityWorldMut) {
+    e.insert(Stretch::enter_vertical());
+}
+
+pub fn ui_stretch_vertical_out(mut e: EntityWorldMut) {
+    e.insert(Stretch::exit_vertical());
+}
+
+pub fn ui_stretch_horizontal_in(mut e: EntityWorldMut) {
+    e.insert(Stretch::enter_horizontal());
+}
+
+pub fn ui_stretch_horizontal_out(mut e: EntityWorldMut) {
+    e.insert(Stretch::exit_horizontal());
 }

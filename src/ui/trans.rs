@@ -1,12 +1,123 @@
 use crate::{
     Observed, WithChild,
     logic::Timed,
+    math::FloatTransformExt as _,
     prelude::*,
     ui::{ui_hide, ui_show},
 };
 
+pub const UI_STRETCH_TIME: Duration = Duration::from_millis(100);
+pub const UI_FADE_TIME: Duration = Duration::from_millis(750);
+
 #[derive(Debug, Clone, Default, Component)]
-#[require(Timed::new(Duration::from_millis(750)))]
+#[require(Timed::new(UI_STRETCH_TIME))]
+pub struct Stretch {
+    pub enter: bool,
+    pub target: Vec3,
+    pub vertical: bool,
+}
+
+impl Stretch {
+    pub fn bundle(enter: bool, vertical: bool) -> impl Bundle + Clone {
+        WithChild((
+            Self {
+                enter,
+                vertical,
+                ..default()
+            },
+            Observed::by(Timed::despawn_on_finished),
+        ))
+    }
+
+    pub fn enter_vertical() -> impl Bundle + Clone {
+        Self::bundle(true, true)
+    }
+
+    pub fn exit_vertical() -> impl Bundle + Clone {
+        Self::bundle(false, true)
+    }
+
+    pub fn enter_horizontal() -> impl Bundle + Clone {
+        Self::bundle(true, false)
+    }
+
+    pub fn exit_horizontal() -> impl Bundle + Clone {
+        Self::bundle(false, false)
+    }
+}
+
+pub fn on_stretch_insert(
+    trigger: Trigger<OnInsert, Stretch>,
+    mut commands: Commands,
+    mut parent: Query<(&mut Stretch, &ChildOf)>,
+    mut query: Query<&mut Transform>,
+) {
+    let Ok((mut stretch, child_of)) = parent.get_mut(trigger.target()) else {
+        return;
+    };
+    let Ok(mut trns) = query.get_mut(child_of.parent()) else {
+        return;
+    };
+
+    let scale = trns.scale;
+    stretch.target = if stretch.enter {
+        std::mem::replace(
+            &mut trns.scale,
+            vec3(
+                if stretch.vertical { scale.x } else { 0. },
+                if stretch.vertical { 0. } else { scale.y },
+                scale.z,
+            ),
+        )
+    } else {
+        scale
+    };
+
+    commands.entity(child_of.parent()).queue(ui_show);
+}
+
+pub fn on_stretch_replace(
+    trigger: Trigger<OnReplace, Stretch>,
+    mut commands: Commands,
+    parent: Query<(&Stretch, &ChildOf)>,
+    mut query: Query<&mut Transform>,
+) {
+    if let Ok((stretch, child_of)) = parent.get(trigger.target())
+        && let Ok(mut trns) = query.get_mut(child_of.parent())
+    {
+        trns.scale = stretch.target;
+        if !stretch.enter {
+            commands.entity(child_of.parent()).queue(ui_hide);
+        }
+    }
+}
+
+pub fn stretch_interpolate(
+    parent: Query<(&Stretch, &Timed, &ChildOf)>,
+    mut query: Query<&mut Transform>,
+) {
+    for (stretch, timed, child_of) in &parent {
+        if let Ok(mut trns) = query.get_mut(child_of.parent()) {
+            let t = stretch.target;
+            trns.scale = vec3(
+                if stretch.vertical { t.x } else { 0. },
+                if stretch.vertical { 0. } else { t.y },
+                t.z,
+            )
+            .lerp(
+                t,
+                if stretch.enter {
+                    timed.frac().pow_in(3)
+                } else {
+                    1. - timed.frac().pow_in(3)
+                },
+            );
+        }
+    }
+}
+
+#[derive(Debug, Clone, Default, Component)]
+#[require(Timed::new(UI_FADE_TIME))]
 pub struct Fade {
     pub enter: bool,
     pub background: Color,

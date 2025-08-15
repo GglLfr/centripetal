@@ -330,8 +330,8 @@ pub fn init(
                         let mut aligned = aligned.get_mut(level_entity)?;
                         if trigger.body.is_some_and(|body| body == selene)
                             && std::mem::replace(&mut aligned.within, false)
-                            && !std::mem::replace(&mut *hinted, true)
                             && aligned.time >= TUTORIAL_MOVE_ALIGN_HELP
+                            && !std::mem::replace(&mut *hinted, true)
                             && commands
                                 .get_entity(ui_selene_accel)
                                 .map(|mut e| {

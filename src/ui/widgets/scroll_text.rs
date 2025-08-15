@@ -43,7 +43,11 @@ pub struct ScrollTextState {
     pub span_index: usize,
     pub span_byte_index: usize,
     pub time: Duration,
+    pub done: bool,
 }
+
+#[derive(Debug, Copy, Clone, Default, Event)]
+pub struct ScrollTextFinished;
 
 pub fn update_scroll_text_sections(
     time: Res<Time>,
@@ -61,8 +65,14 @@ pub fn update_scroll_text_sections(
         state.time += delta;
         loop {
             let Some(section) = text.sections.get(state.span_index) else {
+                if !std::mem::replace(&mut state.done, true) {
+                    commands.entity(e).trigger(ScrollTextFinished);
+                }
+
                 break;
             };
+
+            state.done = false;
 
             let mut slice = &section.span[state.span_byte_index..];
             while state.time >= section.time_per_char
@@ -91,27 +101,6 @@ pub fn update_scroll_text_sections(
             } else if state.time < section.time_per_char {
                 break;
             }
-
-            /*let Some(span) = spans.fetch_next() else {
-                println!("HI INIT {}", &section.span[0..state.span_byte_index]);
-                commands.spawn((
-                    ChildOf(e),
-                    TextSpan(section.span[0..state.span_byte_index].into()),
-                    section.font.clone(),
-                    section.color,
-                ));
-                continue;
-            };
-
-            println!("HI SUBSEQUENT {}", &section.span[0..state.span_byte_index]);
-            span.map_unchanged(DerefMut::deref_mut)
-                .set_if_neq(section.span[0..state.span_byte_index].to_owned());
-
-            if slice.is_empty() {
-                state.span_index += 1;
-            } else if state.time < section.time_per_char {
-                break;
-            }*/
         }
 
         while let Some(span) = spans.fetch_next() {
