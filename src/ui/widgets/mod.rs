@@ -8,8 +8,8 @@ use bevy::{
 pub use scroll_text::*;
 
 use crate::{
-    Affected, Config, Fonts, I18n, I18nNotify, I18nNotifyCommand, KeyboardBindings, Observed,
-    Rebind, keycode_desc,
+    Affected, Config, Fonts, I18n, I18nNotify, I18nNotifyOne, KeyboardBindings, Observed, Rebind,
+    keycode_desc,
 };
 
 pub fn shadow_bg() -> impl Bundle {
@@ -69,7 +69,7 @@ pub fn text(i18n: I18n) -> impl Bundle {
             },
         ),
         Affected::by(|In(entity): In<Entity>, mut commands: Commands| {
-            commands.entity(entity).queue(I18nNotifyCommand);
+            commands.entity(entity).queue(I18nNotifyOne);
         }),
     )
 }
@@ -114,7 +114,7 @@ pub fn scroll_text(i18n: I18n) -> impl Bundle {
             },
         ),
         Affected::by(|In(entity): In<Entity>, mut commands: Commands| {
-            commands.entity(entity).queue(I18nNotifyCommand);
+            commands.entity(entity).queue(I18nNotifyOne);
         }),
     )
 }

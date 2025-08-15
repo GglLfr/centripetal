@@ -98,19 +98,44 @@ impl Default for I18nContext {
 }
 
 #[derive(Debug, Copy, Clone, Default)]
-pub struct I18nNotifyCommand;
-impl EntityCommand<Result> for I18nNotifyCommand {
+pub struct I18nNotifyAll;
+impl Command<Result> for I18nNotifyAll {
+    fn apply(self, world: &mut World) -> Result {
+        for e in world
+            .get_resource::<I18nContext>()
+            .ok_or("`I18nContext` missing")?
+            .listeners
+            .iter()
+            .copied()
+            .collect::<Box<[_]>>()
+        {
+            if let Ok(e) = world.get_entity_mut(e) {
+                I18nNotifyOne.apply(e)?;
+            }
+        }
+
+        Ok(())
+    }
+}
+
+#[derive(Debug, Copy, Clone, Default)]
+pub struct I18nNotifyOne;
+impl EntityCommand<Result> for I18nNotifyOne {
     fn apply(self, mut entity: EntityWorldMut) -> Result {
         let Some(I18n { key, arguments }) = entity.get::<I18n>().cloned() else {
             return Ok(());
         };
 
-        let locale = entity.resource::<I18nContext>().current_locale;
+        let locale = entity
+            .get_resource::<I18nContext>()
+            .ok_or("`I18nContext` missing")?
+            .current_locale;
         let handle = entity.resource::<Locales>()[&locale].clone_weak();
         let fmt = entity
-            .resource::<Assets<I18nEntries>>()
+            .get_resource::<Assets<I18nEntries>>()
+            .ok_or("`Assets<I18nEntries>` missing")?
             .get(&handle)
-            .unwrap()
+            .ok_or("I18n entries was unloaded")?
             .get(&*key)
             .ok_or(format!("I18n key `{key}` does not exist"))?
             .clone();
