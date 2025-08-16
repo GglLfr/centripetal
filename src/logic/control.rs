@@ -16,9 +16,7 @@ pub enum PlayerAction {
 #[component(on_insert = sync_input_map)]
 pub struct IsPlayer;
 pub fn sync_input_map(mut world: DeferredWorld, HookContext { entity, .. }: HookContext) {
-    let keybinds = world
-        .resource::<Config<KeyboardBindings>>()
-        .create_input_maps();
+    let keybinds = world.resource::<Config<KeyboardBindings>>().create_input_maps();
 
     world.commands().entity(entity).insert(keybinds);
 }

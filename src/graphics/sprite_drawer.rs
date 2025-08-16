@@ -10,9 +10,7 @@ pub struct SpriteDrawer {
 
 impl Default for SpriteDrawer {
     fn default() -> Self {
-        Self {
-            queued: VecBelt::new(1),
-        }
+        Self { queued: VecBelt::new(1) }
     }
 }
 

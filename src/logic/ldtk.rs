@@ -1,6 +1,7 @@
-use crate::prelude::*;
 use bevy::image::ImageLoaderSettings;
 use blocking::unblock;
+
+use crate::prelude::*;
 
 #[derive(Debug, Clone, Asset, TypePath)]
 pub struct Ldtk {
@@ -52,10 +53,7 @@ pub struct LdtkLayer {
 #[derive(Debug, Clone)]
 pub enum LdtkLayerData {
     Entities(Vec<LdtkEntity>),
-    IntGrid {
-        grid: Vec<LdtkIntCell>,
-        tiles: Option<LdtkTiles>,
-    },
+    IntGrid { grid: Vec<LdtkIntCell>, tiles: Option<LdtkTiles> },
 }
 
 #[derive(Debug, Clone)]
@@ -162,46 +160,29 @@ impl AssetLoader for LdtkLoader {
     type Settings = ();
     type Error = LdtkError;
 
-    async fn load(
-        &self,
-        reader: &mut dyn Reader,
-        _: &Self::Settings,
-        load_context: &mut LoadContext<'_>,
-    ) -> Result<Self::Asset, Self::Error> {
+    async fn load(&self, reader: &mut dyn Reader, _: &Self::Settings, load_context: &mut LoadContext<'_>) -> Result<Self::Asset, Self::Error> {
         let mut file = String::new();
         reader.read_to_string(&mut file).await?;
 
         let root: Root = unblock(move || serde_json::from_str(&file)).await?;
         let base_path = load_context.asset_path().clone();
 
-        let levels = root
-            .levels
-            .into_iter()
-            .try_fold(HashMap::new(), |mut levels, path| {
-                levels.insert(
-                    path.identifier,
-                    base_path.resolve_embed(&path.external_rel_path)?,
-                );
-                Ok::<_, Self::Error>(levels)
-            })?;
+        let levels = root.levels.into_iter().try_fold(HashMap::new(), |mut levels, path| {
+            levels.insert(path.identifier, base_path.resolve_embed(&path.external_rel_path)?);
+            Ok::<_, Self::Error>(levels)
+        })?;
 
         Ok(Ldtk {
             levels,
-            tilesets: root.defs.tilesets.into_iter().try_fold(
-                HashMap::new(),
-                |mut out, tileset| {
-                    out.insert(
-                        tileset.uid,
-                        LdtkTileset {
-                            tile_size: tileset.tile_grid_size,
-                            width: tileset.width,
-                            height: tileset.height,
-                        },
-                    );
+            tilesets: root.defs.tilesets.into_iter().try_fold(HashMap::new(), |mut out, tileset| {
+                out.insert(tileset.uid, LdtkTileset {
+                    tile_size: tileset.tile_grid_size,
+                    width: tileset.width,
+                    height: tileset.height,
+                });
 
-                    Ok::<_, Self::Error>(out)
-                },
-            )?,
+                Ok::<_, Self::Error>(out)
+            })?,
         })
     }
 
@@ -321,37 +302,24 @@ impl AssetLoader for LdtkLevelLoader {
     type Settings = ();
     type Error = LdtkError;
 
-    async fn load(
-        &self,
-        reader: &mut dyn Reader,
-        _: &Self::Settings,
-        load_context: &mut LoadContext<'_>,
-    ) -> Result<Self::Asset, Self::Error> {
+    async fn load(&self, reader: &mut dyn Reader, _: &Self::Settings, load_context: &mut LoadContext<'_>) -> Result<Self::Asset, Self::Error> {
         let mut file = String::new();
         reader.read_to_string(&mut file).await?;
 
         let level: Level = unblock(move || serde_json::from_str(&file)).await?;
-        let base_path = load_context
-            .asset_path()
-            .parent()
-            .ok_or(LdtkError::MissingParentDirectory)?;
+        let base_path = load_context.asset_path().parent().ok_or(LdtkError::MissingParentDirectory)?;
 
         let fields = |field_instances: Vec<FieldInstance>| {
             field_instances
                 .into_iter()
                 .filter_map(|f| {
-                    Some((
-                        f.id,
-                        match f.data {
-                            FieldInstanceData::Int { value } => LdtkEntityField::Int(value?),
-                            FieldInstanceData::Float { value } => LdtkEntityField::Float(value?),
-                            FieldInstanceData::Bool { value } => LdtkEntityField::Bool(value?),
-                            FieldInstanceData::String { value } => LdtkEntityField::String(value?),
-                            FieldInstanceData::Point { value } => {
-                                LdtkEntityField::Point(value.map(|p| uvec2(p.cx, p.cy))?)
-                            }
-                        },
-                    ))
+                    Some((f.id, match f.data {
+                        FieldInstanceData::Int { value } => LdtkEntityField::Int(value?),
+                        FieldInstanceData::Float { value } => LdtkEntityField::Float(value?),
+                        FieldInstanceData::Bool { value } => LdtkEntityField::Bool(value?),
+                        FieldInstanceData::String { value } => LdtkEntityField::String(value?),
+                        FieldInstanceData::Point { value } => LdtkEntityField::Point(value.map(|p| uvec2(p.cx, p.cy))?),
+                    }))
                 })
                 .collect()
         };
@@ -361,83 +329,72 @@ impl AssetLoader for LdtkLevelLoader {
             width_px: level.width_px,
             height_px: level.height_px,
             fields: fields(level.field_instances),
-            layers: level
-                .layer_instances
-                .into_iter()
-                .try_fold(Vec::new(), |mut out, layer| {
-                    // Convert Y+ bottom to Y+ top.
-                    let top_grid = layer.height - 1;
-                    let top_px = layer.height * layer.grid_size;
+            layers: level.layer_instances.into_iter().try_fold(Vec::new(), |mut out, layer| {
+                // Convert Y+ bottom to Y+ top.
+                let top_grid = layer.height - 1;
+                let top_px = layer.height * layer.grid_size;
 
-                    out.push(LdtkLayer {
-                        id: layer.id,
-                        width: layer.width,
-                        height: layer.height,
-                        grid_size: layer.grid_size,
-                        data: match layer.data {
-                            LayerInstanceData::Entities { entity_instances } => {
-                                LdtkLayerData::Entities(
-                                    entity_instances
-                                        .into_iter()
-                                        .map(|e| LdtkEntity {
-                                            id: e.id,
-                                            iid: e.iid,
-                                            grid_position_px: uvec2(e.px[0], top_px - e.px[1]),
-                                            fields: fields(e.field_instances),
-                                        })
-                                        .collect(),
-                                )
-                            }
-                            LayerInstanceData::IntGrid {
-                                int_grid_csv,
-                                auto_layer_tiles,
-                                tileset,
-                                tileset_image,
-                            } => LdtkLayerData::IntGrid {
-                                grid: int_grid_csv
-                                    .into_iter()
-                                    .enumerate()
-                                    .map(|(i, value)| LdtkIntCell {
-                                        x: i as u32 % layer.width,
-                                        y: top_grid - i as u32 / layer.width,
-                                        value,
+                out.push(LdtkLayer {
+                    id: layer.id,
+                    width: layer.width,
+                    height: layer.height,
+                    grid_size: layer.grid_size,
+                    data: match layer.data {
+                        LayerInstanceData::Entities { entity_instances } => LdtkLayerData::Entities(
+                            entity_instances
+                                .into_iter()
+                                .map(|e| LdtkEntity {
+                                    id: e.id,
+                                    iid: e.iid,
+                                    grid_position_px: uvec2(e.px[0], top_px - e.px[1]),
+                                    fields: fields(e.field_instances),
+                                })
+                                .collect(),
+                        ),
+                        LayerInstanceData::IntGrid {
+                            int_grid_csv,
+                            auto_layer_tiles,
+                            tileset,
+                            tileset_image,
+                        } => LdtkLayerData::IntGrid {
+                            grid: int_grid_csv
+                                .into_iter()
+                                .enumerate()
+                                .map(|(i, value)| LdtkIntCell {
+                                    x: i as u32 % layer.width,
+                                    y: top_grid - i as u32 / layer.width,
+                                    value,
+                                })
+                                .collect(),
+                            tiles: auto_layer_tiles
+                                .zip(tileset)
+                                .map(|(tiles, tileset)| {
+                                    Ok::<_, LdtkError>(LdtkTiles {
+                                        tileset,
+                                        tileset_image: load_context
+                                            .loader()
+                                            .with_settings(|settings: &mut ImageLoaderSettings| {
+                                                settings.asset_usage = RenderAssetUsages::RENDER_WORLD;
+                                            })
+                                            .load(base_path.resolve_embed(&tileset_image)?),
+                                        tiles: tiles
+                                            .into_iter()
+                                            .map(|tile| LdtkTile {
+                                                id: tile.t,
+                                                grid_position_px: uvec2(tile.px[0], top_px - tile.px[1]),
+                                                tileset_position_px: tile.src.into(),
+                                                alpha: tile.a,
+                                            })
+                                            .collect(),
                                     })
-                                    .collect(),
-                                tiles: auto_layer_tiles
-                                    .zip(tileset)
-                                    .map(|(tiles, tileset)| {
-                                        Ok::<_, LdtkError>(LdtkTiles {
-                                            tileset,
-                                            tileset_image: load_context
-                                                .loader()
-                                                .with_settings(
-                                                    |settings: &mut ImageLoaderSettings| {
-                                                        settings.asset_usage =
-                                                            RenderAssetUsages::RENDER_WORLD;
-                                                    },
-                                                )
-                                                .load(base_path.resolve_embed(&tileset_image)?),
-                                            tiles: tiles
-                                                .into_iter()
-                                                .map(|tile| LdtkTile {
-                                                    id: tile.t,
-                                                    grid_position_px: uvec2(
-                                                        tile.px[0],
-                                                        top_px - tile.px[1],
-                                                    ),
-                                                    tileset_position_px: tile.src.into(),
-                                                    alpha: tile.a,
-                                                })
-                                                .collect(),
-                                        })
-                                    })
-                                    .transpose()?,
-                            },
+                                })
+                                .transpose()?,
                         },
-                    });
+                    },
+                });
 
-                    Ok::<_, LdtkError>(out)
-                })?,
+                Ok::<_, LdtkError>(out)
+            })?,
         })
     }
 

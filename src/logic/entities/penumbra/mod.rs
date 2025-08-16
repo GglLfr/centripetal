@@ -45,9 +45,7 @@ pub fn apply_homing_velocity(
         } = body.into_inner();
 
         let target_angle = {
-            let Some(Vec2 { x: cos, y: sin }) =
-                (*other_pos + other_body.delta_position - (*pos + *delta_position)).try_normalize()
-            else {
+            let Some(Vec2 { x: cos, y: sin }) = (*other_pos + other_body.delta_position - (*pos + *delta_position)).try_normalize() else {
                 continue;
             };
             Rotation { cos, sin }

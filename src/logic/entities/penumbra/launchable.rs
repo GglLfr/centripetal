@@ -121,13 +121,7 @@ pub struct Launched {
 pub fn update_launch_idle(
     mut commands: Commands,
     time: Res<Time>,
-    idle: Query<(
-        Entity,
-        &ActionState<LaunchAction>,
-        &LaunchTarget,
-        &LaunchIdle,
-        Option<&LaunchCooldown>,
-    )>,
+    idle: Query<(Entity, &ActionState<LaunchAction>, &LaunchTarget, &LaunchIdle, Option<&LaunchCooldown>)>,
 ) {
     let now = time.elapsed();
     for (e, state, &target, &idle, cooldown) in &idle {
@@ -137,10 +131,7 @@ pub fn update_launch_idle(
 
         let cooldown = *cooldown.copied().unwrap_or_default();
         if target.is_some() && now - idle.last_attempted >= cooldown {
-            commands
-                .entity(e)
-                .remove::<LaunchIdle>()
-                .insert(LaunchCharging::default());
+            commands.entity(e).remove::<LaunchIdle>().insert(LaunchCharging::default());
         }
     }
 }
@@ -148,12 +139,7 @@ pub fn update_launch_idle(
 pub fn update_launch_charging(
     mut commands: Commands,
     time: Res<Time>,
-    mut charging: Query<(
-        Entity,
-        &ActionState<LaunchAction>,
-        &LaunchDurations,
-        &mut LaunchCharging,
-    )>,
+    mut charging: Query<(Entity, &ActionState<LaunchAction>, &LaunchDurations, &mut LaunchCharging)>,
 ) {
     let now = time.elapsed();
     let delta = time.delta();
@@ -168,16 +154,12 @@ pub fn update_launch_charging(
                 commands
                     .entity(e)
                     .remove::<LaunchCharging>()
-                    .insert(LaunchFinished {
-                        index: charging.index - 1,
-                    });
+                    .insert(LaunchFinished { index: charging.index - 1 });
             } else {
                 commands
                     .entity(e)
                     .remove::<LaunchCharging>()
-                    .insert(LaunchIdle {
-                        last_attempted: now,
-                    })
+                    .insert(LaunchIdle { last_attempted: now })
                     .trigger(LaunchCancelled);
             }
 
@@ -193,9 +175,7 @@ pub fn update_launch_charging(
                 commands
                     .entity(e)
                     .remove::<LaunchCharging>()
-                    .insert(LaunchFinished {
-                        index: charging.index,
-                    });
+                    .insert(LaunchFinished { index: charging.index });
             }
         }
     }
@@ -214,21 +194,12 @@ pub fn trigger_launch_charging(
             && let Ok(&target_pos) = targets.get(target)
             && let Ok((dir, len)) = Dir2::new_and_length(*target_pos - *pos)
         {
-            let mut hits = pipeline.ray_hits(
-                *pos,
-                dir,
-                len,
-                u32::MAX,
-                true,
-                &SpatialQueryFilter::from_excluded_entities([e]),
-            );
+            let mut hits = pipeline.ray_hits(*pos, dir, len, u32::MAX, true, &SpatialQueryFilter::from_excluded_entities([e]));
 
             hits.sort_unstable_by_key(|data| FloatOrd(data.distance));
             commands
                 .entity(e)
-                .insert(LaunchIdle {
-                    last_attempted: now,
-                })
+                .insert(LaunchIdle { last_attempted: now })
                 .remove::<LaunchFinished>()
                 .queue(TryLaunch {
                     by: e,

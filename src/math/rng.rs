@@ -18,10 +18,7 @@ impl Iterator for RandLenVectors<'_> {
     fn next(&mut self) -> Option<Self::Item> {
         self.count = self.count.checked_sub(1)?;
 
-        let (sin, cos) = self
-            .angle_from
-            .lerp(self.angle_to, self.rng.f32())
-            .sin_cos();
+        let (sin, cos) = self.angle_from.lerp(self.angle_to, self.rng.f32()).sin_cos();
         let len = self.len_from.lerp(self.len_to, self.rng.f32());
 
         Some((Rot2 { sin, cos }, vec2(cos * len, sin * len)))
@@ -51,14 +48,7 @@ pub trait RngExt {
         min + self.as_rng().f64() * (max - min)
     }
 
-    fn len_vectors(
-        &mut self,
-        count: usize,
-        angle_from: f32,
-        angle_to: f32,
-        len_from: f32,
-        len_to: f32,
-    ) -> RandLenVectors<'_> {
+    fn len_vectors(&mut self, count: usize, angle_from: f32, angle_to: f32, len_from: f32, len_to: f32) -> RandLenVectors<'_> {
         RandLenVectors {
             rng: self.as_rng(),
             count,

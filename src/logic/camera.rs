@@ -41,14 +41,7 @@ unsafe impl<D: 'static + QueryData> SystemParam for CameraQuery<'_, D> {
         world: UnsafeWorldCell<'world>,
         change_tick: Tick,
     ) -> Self::Item<'world, 'state> {
-        let query = unsafe {
-            Query::get_param(
-                state.get_mut().unwrap_or_else(PoisonError::into_inner),
-                system_meta,
-                world,
-                change_tick,
-            )
-        };
+        let query = unsafe { Query::get_param(state.get_mut().unwrap_or_else(PoisonError::into_inner), system_meta, world, change_tick) };
 
         CameraQuery {
             inner: query
@@ -57,50 +50,25 @@ unsafe impl<D: 'static + QueryData> SystemParam for CameraQuery<'_, D> {
         }
     }
 
-    unsafe fn new_archetype(
-        state: &mut Self::State,
-        archetype: &Archetype,
-        system_meta: &mut SystemMeta,
-    ) {
-        unsafe {
-            Query::new_archetype(
-                state.get_mut().unwrap_or_else(PoisonError::into_inner),
-                archetype,
-                system_meta,
-            )
-        };
+    unsafe fn new_archetype(state: &mut Self::State, archetype: &Archetype, system_meta: &mut SystemMeta) {
+        unsafe { Query::new_archetype(state.get_mut().unwrap_or_else(PoisonError::into_inner), archetype, system_meta) };
     }
 
     fn apply(state: &mut Self::State, system_meta: &SystemMeta, world: &mut World) {
-        Query::apply(
-            state.get_mut().unwrap_or_else(PoisonError::into_inner),
-            system_meta,
-            world,
-        );
+        Query::apply(state.get_mut().unwrap_or_else(PoisonError::into_inner), system_meta, world);
     }
 
     fn queue(state: &mut Self::State, system_meta: &SystemMeta, world: DeferredWorld) {
-        Query::queue(
-            state.get_mut().unwrap_or_else(PoisonError::into_inner),
-            system_meta,
-            world,
-        );
+        Query::queue(state.get_mut().unwrap_or_else(PoisonError::into_inner), system_meta, world);
     }
 
-    unsafe fn validate_param(
-        state: &Self::State,
-        system_meta: &SystemMeta,
-        world: UnsafeWorldCell,
-    ) -> Result<(), SystemParamValidationError> {
+    unsafe fn validate_param(state: &Self::State, system_meta: &SystemMeta, world: UnsafeWorldCell) -> Result<(), SystemParamValidationError> {
         let mut lock = state.lock().unwrap_or_else(PoisonError::into_inner);
-        let query =
-            unsafe { Query::get_param(&mut *lock, system_meta, world, world.change_tick()) };
+        let query = unsafe { Query::get_param(&mut *lock, system_meta, world, world.change_tick()) };
 
         match query.single_inner() {
             Ok(..) => Ok(()),
-            Err(QuerySingleError::NoEntities(e)) | Err(QuerySingleError::MultipleEntities(e)) => {
-                Err(SystemParamValidationError::invalid::<Self>(e))
-            }
+            Err(QuerySingleError::NoEntities(e)) | Err(QuerySingleError::MultipleEntities(e)) => Err(SystemParamValidationError::invalid::<Self>(e)),
         }
     }
 }
@@ -135,17 +103,12 @@ pub fn startup_camera(mut commands: Commands) {
 
 pub fn move_camera(
     camera: CameraQuery<(&mut Transform, &Projection)>,
-    target: Single<
-        (&Transform, &CameraConfines, Option<&ChildOf>),
-        (With<CameraTarget>, Without<MainCamera>),
-    >,
+    target: Single<(&Transform, &CameraConfines, Option<&ChildOf>), (With<CameraTarget>, Without<MainCamera>)>,
     level_bounds: Single<&LevelBounds>,
     child_of_query: Query<(&Transform, Option<&ChildOf>), Without<MainCamera>>,
 ) -> Result {
     let (mut camera_trns, camera_proj) = camera.into_inner();
-    let Projection::Orthographic(ortho) = camera_proj else {
-        Err("Camera projection must be orthographic")?
-    };
+    let Projection::Orthographic(ortho) = camera_proj else { Err("Camera projection must be orthographic")? };
 
     let (target_trns, &target_confines, target_child_of) = target.into_inner();
     let mut trns = *target_trns;
@@ -168,19 +131,9 @@ pub fn move_camera(
             let bounds = ***level_bounds;
             let size_diff = bounds - cam_bounds;
 
-            let x = if size_diff.x < 0. {
-                bounds.x / 2.
-            } else {
-                trns.x
-                    .clamp(cam_bounds.x / 2., bounds.x - cam_bounds.x / 2.)
-            };
+            let x = if size_diff.x < 0. { bounds.x / 2. } else { trns.x.clamp(cam_bounds.x / 2., bounds.x - cam_bounds.x / 2.) };
 
-            let y = if size_diff.y < 0. {
-                bounds.y / 2.
-            } else {
-                trns.y
-                    .clamp(cam_bounds.y / 2., bounds.y - cam_bounds.y / 2.)
-            };
+            let y = if size_diff.y < 0. { bounds.y / 2. } else { trns.y.clamp(cam_bounds.y / 2., bounds.y - cam_bounds.y / 2.) };
 
             vec2(x, y)
         }

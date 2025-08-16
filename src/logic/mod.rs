@@ -28,9 +28,7 @@ pub struct LdtkWorld<'w> {
 
 impl LdtkWorld<'_> {
     pub fn get(&self) -> &Ldtk {
-        self.worlds
-            .get(self.handle.id())
-            .expect("The LDtk world is unloaded")
+        self.worlds.get(self.handle.id()).expect("The LDtk world is unloaded")
     }
 }
 
@@ -76,15 +74,10 @@ impl Plugin for LogicPlugin {
             .init_resource::<RegisteredLevelIntCells>()
             .add_plugins((LdtkPlugin, EffectsPlugin, EntitiesPlugin, LevelsPlugin))
             .add_systems(First, update_time_stun.before(TimeSystem))
-            .add_systems(
-                PreUpdate,
-                (handle_load_level_begin, update_timed).run_if(in_state(InGameState::Resumed)),
-            )
+            .add_systems(PreUpdate, (handle_load_level_begin, update_timed).run_if(in_state(InGameState::Resumed)))
             .add_systems(
                 PostUpdate,
-                handle_load_level_progress
-                    .run_if(in_state(InGameState::Loading))
-                    .before(CheckProgressSet),
+                handle_load_level_progress.run_if(in_state(InGameState::Loading)).before(CheckProgressSet),
             )
             .add_systems(OnExit(InGameState::Loading), handle_load_level_end)
             .add_systems(Startup, startup_camera)

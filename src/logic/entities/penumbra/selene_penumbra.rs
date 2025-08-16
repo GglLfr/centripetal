@@ -1,3 +1,5 @@
+use std::f32::consts::TAU;
+
 use crate::{
     Sprites,
     graphics::{Animation, AnimationHooks, AnimationMode, BaseColor, SpriteDrawer, SpriteSection},
@@ -6,15 +8,14 @@ use crate::{
         entities::{
             EntityLayers, Health, Hurt, MaxHealth, TryHurt,
             penumbra::{
-                AttractedInitial, AttractedParams, AttractedPrediction, LaunchCharging,
-                LaunchCooldown, LaunchDurations, LaunchTarget, Launched, PenumbraEntity, TryLaunch,
+                AttractedInitial, AttractedParams, AttractedPrediction, LaunchCharging, LaunchCooldown, LaunchDurations, LaunchTarget, Launched,
+                PenumbraEntity, TryLaunch,
             },
         },
     },
     math::FloatTransformExt as _,
     prelude::*,
 };
-use std::f32::consts::TAU;
 
 #[derive(Debug, Copy, Clone, Default, Component)]
 pub struct LaunchDisc;
@@ -113,39 +114,30 @@ impl FromLevelEntity for SelenePenumbra {
                 ));
             },
         )
-        .observe(
-            |trigger: Trigger<TryLaunch>, mut commands: Commands, sprites: Res<Sprites>| {
-                commands.entity(trigger.target()).with_children(|children| {
-                    children.spawn((
-                        Transform::from_xyz(0., 0., 0f32.next_up()),
-                        Animation::new(sprites.selene_try_launch_front.clone_weak(), "anim"),
-                        AnimationHooks::despawn_on_done("anim"),
-                        BaseColor(Color::linear_rgb(1., 2., 6.)),
-                    ));
+        .observe(|trigger: Trigger<TryLaunch>, mut commands: Commands, sprites: Res<Sprites>| {
+            commands.entity(trigger.target()).with_children(|children| {
+                children.spawn((
+                    Transform::from_xyz(0., 0., 0f32.next_up()),
+                    Animation::new(sprites.selene_try_launch_front.clone_weak(), "anim"),
+                    AnimationHooks::despawn_on_done("anim"),
+                    BaseColor(Color::linear_rgb(1., 2., 6.)),
+                ));
 
-                    children.spawn((
-                        Transform::from_xyz(0., 0., 0f32.next_down()),
-                        Animation::new(sprites.selene_try_launch_back.clone_weak(), "anim"),
-                        AnimationHooks::despawn_on_done("anim"),
-                        BaseColor(Color::linear_rgb(1., 2., 6.)),
-                    ));
-                });
-            },
-        )
+                children.spawn((
+                    Transform::from_xyz(0., 0., 0f32.next_down()),
+                    Animation::new(sprites.selene_try_launch_back.clone_weak(), "anim"),
+                    AnimationHooks::despawn_on_done("anim"),
+                    BaseColor(Color::linear_rgb(1., 2., 6.)),
+                ));
+            });
+        })
         .observe(
-            |trigger: Trigger<Launched>,
-             mut commands: Commands,
-             positions: Query<&Position>,
-             sprites: Res<Sprites>|
-             -> Result {
+            |trigger: Trigger<Launched>, mut commands: Commands, positions: Query<&Position>, sprites: Res<Sprites>| -> Result {
                 if let Some(&hurt) = [1, 4, 8].get(trigger.index) {
-                    commands
-                        .entity(trigger.at)
-                        .queue(TryHurt::by(trigger.target(), hurt));
+                    commands.entity(trigger.at).queue(TryHurt::by(trigger.target(), hurt));
                 }
 
-                let [&selene_pos, &attractor_pos] =
-                    positions.get_many([trigger.target(), trigger.at])?;
+                let [&selene_pos, &attractor_pos] = positions.get_many([trigger.target(), trigger.at])?;
 
                 commands
                     .spawn((
@@ -156,10 +148,7 @@ impl FromLevelEntity for SelenePenumbra {
                         BaseColor(Color::linear_rgb(50., 100., 600.)),
                         Transform {
                             translation: attractor_pos.extend(0.),
-                            rotation: Quat::from_axis_angle(
-                                Vec3::Z,
-                                (*attractor_pos - *selene_pos).to_angle(),
-                            ),
+                            rotation: Quat::from_axis_angle(Vec3::Z, (*attractor_pos - *selene_pos).to_angle()),
                             scale: Vec3::ONE,
                         },
                     ))
@@ -183,24 +172,12 @@ pub fn color_selene_hurt(mut hurts: Query<(&Timed, &mut BaseColor), With<HurtEff
 
 pub fn color_selene_slash(mut slashes: Query<(&Timed, &mut BaseColor), With<SlashEffect>>) {
     for (timed, mut color) in &mut slashes {
-        **color = Color::linear_rgba(50., 100., 600., 1.).mix(
-            &Color::linear_rgba(1., 2., 24., 0.25),
-            timed.frac().pow_out(6),
-        );
+        **color = Color::linear_rgba(50., 100., 600., 1.).mix(&Color::linear_rgba(1., 2., 24., 0.25), timed.frac().pow_out(6));
     }
 }
 
 pub fn draw_selene_launch_disc(
-    mut selene: Query<
-        (
-            &Rotation,
-            &mut DiscComponent,
-            &mut ShapeFill,
-            &LaunchDurations,
-            Option<&LaunchCharging>,
-        ),
-        With<SelenePenumbra>,
-    >,
+    mut selene: Query<(&Rotation, &mut DiscComponent, &mut ShapeFill, &LaunchDurations, Option<&LaunchCharging>), With<SelenePenumbra>>,
 ) {
     for (&rot, mut disc, mut fill, durations, charging) in &mut selene {
         let rot = rot.as_radians();
@@ -270,9 +247,7 @@ pub fn draw_selene_prediction_trajectory(
                 let count = count_frac as u32;
                 for i in 0..count {
                     let rel = GlobalTransform::from(Transform {
-                        translation: begin
-                            .lerp(b, i as f32 / count_frac)
-                            .extend(trns.translation().z),
+                        translation: begin.lerp(b, i as f32 / count_frac).extend(trns.translation().z),
                         ..default()
                     });
 
@@ -280,11 +255,7 @@ pub fn draw_selene_prediction_trajectory(
                     drawer.draw_at(
                         rel.translation,
                         Rot2::IDENTITY,
-                        ring.sprite_with(
-                            Color::linear_rgba(1., 2., 4., (1. - accum / max) * 0.75),
-                            None,
-                            default(),
-                        ),
+                        ring.sprite_with(Color::linear_rgba(1., 2., 4., (1. - accum / max) * 0.75), None, default()),
                     );
                 }
 

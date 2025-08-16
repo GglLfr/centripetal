@@ -11,12 +11,8 @@ pub struct SpriteAllocator {
 
 impl FromWorld for SpriteAllocator {
     fn from_world(world: &mut World) -> Self {
-        let (device, mut images, mut layouts) = SystemState::<(
-            Res<RenderDevice>,
-            ResMut<Assets<Image>>,
-            ResMut<Assets<TextureAtlasLayout>>,
-        )>::new(world)
-        .get_mut(world);
+        let (device, mut images, mut layouts) =
+            SystemState::<(Res<RenderDevice>, ResMut<Assets<Image>>, ResMut<Assets<TextureAtlasLayout>>)>::new(world).get_mut(world);
 
         Self {
             pages: vec![Page::new(
@@ -33,14 +29,9 @@ impl FromWorld for SpriteAllocator {
 pub enum SpriteError {
     #[error(ignore)]
     #[display("Requested sprite's size is too big ({requested_size} > {max_size})")]
-    SpriteTooLarge {
-        requested_size: UVec2,
-        max_size: UVec2,
-    },
+    SpriteTooLarge { requested_size: UVec2, max_size: UVec2 },
     #[error(ignore)]
-    #[display(
-        "The associated texture atlas layout in a page has been erroneously removed somewhere else"
-    )]
+    #[display("The associated texture atlas layout in a page has been erroneously removed somewhere else")]
     NonexistentLayout { page: AssetId<Image> },
 }
 
@@ -54,14 +45,9 @@ impl SpriteAllocator {
         for page in &mut self.pages {
             let layout = layouts
                 .get_mut(&page.layout)
-                .ok_or(SpriteError::NonexistentLayout {
-                    page: page.image.id(),
-                })?;
+                .ok_or(SpriteError::NonexistentLayout { page: page.image.id() })?;
 
-            if let Some(rect) = page
-                .alloc
-                .allocate(Size2D::new(image.width() + 2, image.height() + 2).cast())
-            {
+            if let Some(rect) = page.alloc.allocate(Size2D::new(image.width() + 2, image.height() + 2).cast()) {
                 let rect = URect {
                     min: IVec2::new(rect.min.x + 1, rect.min.y + 1).as_uvec2(),
                     max: IVec2::new(rect.max.x - 1, rect.max.y - 1).as_uvec2(),
@@ -70,13 +56,10 @@ impl SpriteAllocator {
                 let index = layout.add_texture(rect);
                 self.pending.push((image, page.image.clone_weak(), rect));
 
-                return Ok((
-                    page.image.clone_weak(),
-                    TextureAtlas {
-                        layout: page.layout.clone_weak(),
-                        index,
-                    },
-                ));
+                return Ok((page.image.clone_weak(), TextureAtlas {
+                    layout: page.layout.clone_weak(),
+                    index,
+                }));
             }
         }
 
@@ -85,14 +68,9 @@ impl SpriteAllocator {
 
         let layout = layouts
             .get_mut(&page.layout)
-            .ok_or(SpriteError::NonexistentLayout {
-                page: page.image.id(),
-            })?;
+            .ok_or(SpriteError::NonexistentLayout { page: page.image.id() })?;
 
-        match page
-            .alloc
-            .allocate(Size2D::new(image.width() + 2, image.height() + 2).cast())
-        {
+        match page.alloc.allocate(Size2D::new(image.width() + 2, image.height() + 2).cast()) {
             Some(rect) => {
                 let rect = URect {
                     min: IVec2::new(rect.min.x + 1, rect.min.y + 1).as_uvec2(),
@@ -102,13 +80,10 @@ impl SpriteAllocator {
                 let index = layout.add_texture(rect);
                 self.pending.push((image, page.image.clone_weak(), rect));
 
-                let result = (
-                    page.image.clone_weak(),
-                    TextureAtlas {
-                        layout: page.layout.clone_weak(),
-                        index,
-                    },
-                );
+                let result = (page.image.clone_weak(), TextureAtlas {
+                    layout: page.layout.clone_weak(),
+                    index,
+                });
 
                 self.pages.push(page);
                 Ok(result)
@@ -128,19 +103,10 @@ pub struct Page {
 }
 
 impl Page {
-    fn new(
-        size: UVec2,
-        images: &mut Assets<Image>,
-        layouts: &mut Assets<TextureAtlasLayout>,
-    ) -> Self {
+    fn new(size: UVec2, images: &mut Assets<Image>, layouts: &mut Assets<TextureAtlasLayout>) -> Self {
         let alloc = SimpleAtlasAllocator::new(Size2D::new(size.x, size.y).cast());
         let image = images.add(Image {
-            data: Some(vec![
-                0;
-                size.x as usize
-                    * size.y as usize
-                    * TextureFormat::Rgba8UnormSrgb.pixel_size()
-            ]),
+            data: Some(vec![0; size.x as usize * size.y as usize * TextureFormat::Rgba8UnormSrgb.pixel_size()]),
             texture_descriptor: TextureDescriptor {
                 label: Some("centripetal_sprite_page"),
                 size: Extent3d {
@@ -169,37 +135,23 @@ impl Page {
             }),
             asset_usage: RenderAssetUsages::RENDER_WORLD,
         });
-        let layout = layouts.add(TextureAtlasLayout {
-            size,
-            textures: vec![],
-        });
+        let layout = layouts.add(TextureAtlasLayout { size, textures: vec![] });
 
-        Self {
-            alloc,
-            image,
-            layout,
-        }
+        Self { alloc, image, layout }
     }
 }
 
 impl std::fmt::Debug for Page {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Page")
-            .field("layout", &self.layout)
-            .finish()
+        f.debug_struct("Page").field("layout", &self.layout).finish()
     }
 }
 
 pub fn pack_incoming_sprites(
-    receiver: Receiver<(
-        Image,
-        Sender<Result<(Handle<Image>, TextureAtlas), SpriteError>>,
-    )>,
+    receiver: Receiver<(Image, Sender<Result<(Handle<Image>, TextureAtlas), SpriteError>>)>,
 ) -> impl System<In = (), Out = ()> {
     IntoSystem::into_system(
-        move |mut sprites: ResMut<SpriteAllocator>,
-              mut images: ResMut<Assets<Image>>,
-              mut layouts: ResMut<Assets<TextureAtlasLayout>>| {
+        move |mut sprites: ResMut<SpriteAllocator>, mut images: ResMut<Assets<Image>>, mut layouts: ResMut<Assets<TextureAtlasLayout>>| {
             ComputeTaskPool::get().scope(|scope| {
                 while let Ok((image, sender)) = receiver.try_recv() {
                     let result = sprites.pack(image, &mut images, &mut layouts);
@@ -216,16 +168,10 @@ pub fn pack_incoming_sprites(
 pub struct PendingSprites(Vec<(Image, Handle<Image>, URect)>);
 
 pub fn extract_pending_sprites(mut world: ResMut<MainWorld>, mut pending: ResMut<PendingSprites>) {
-    pending
-        .0
-        .append(&mut world.resource_mut::<SpriteAllocator>().pending);
+    pending.0.append(&mut world.resource_mut::<SpriteAllocator>().pending);
 }
 
-pub fn prepare_pending_sprites(
-    mut pending: ResMut<PendingSprites>,
-    gpu_images: Res<RenderAssets<GpuImage>>,
-    queue: Res<RenderQueue>,
-) {
+pub fn prepare_pending_sprites(mut pending: ResMut<PendingSprites>, gpu_images: Res<RenderAssets<GpuImage>>, queue: Res<RenderQueue>) {
     pending.0.retain(|(image, page, rect)| {
         let Some(gpu_page) = gpu_images.get(page.id()) else {
             return true;
@@ -248,9 +194,7 @@ pub fn prepare_pending_sprites(
             data,
             TexelCopyBufferLayout {
                 offset: 0,
-                bytes_per_row: Some(
-                    rect.size().x * TextureFormat::Rgba8UnormSrgb.pixel_size() as u32,
-                ),
+                bytes_per_row: Some(rect.size().x * TextureFormat::Rgba8UnormSrgb.pixel_size() as u32),
                 rows_per_image: None,
             },
             Extent3d {

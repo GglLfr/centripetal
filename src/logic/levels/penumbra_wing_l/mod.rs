@@ -23,9 +23,7 @@ const RINGS: [Uuid; 2] = [
 ];
 const HOVER_TARGET: Uuid = uuid!("ddc89020-3740-11f0-bea9-17dccf039850");
 
-#[derive(
-    Debug, Copy, Clone, Default, Resource, TypePath, Serialize, Deserialize, Deref, DerefMut,
-)]
+#[derive(Debug, Copy, Clone, Default, Resource, TypePath, Serialize, Deserialize, Deref, DerefMut)]
 pub struct IntroShown(pub bool);
 
 #[derive(Debug, Copy, Clone, Default, Deref, DerefMut, Resource)]
@@ -66,13 +64,12 @@ impl FromLevel for Instance {
 
         let level_entity = e.id();
         let mut commands = e.commands();
-        let [selene, attractor, ring_0, ring_1, hover_target] =
-            [SELENE, ATTRACTOR, RINGS[0], RINGS[1], HOVER_TARGET].map(|iid| {
-                let e = entities.get(iid).unwrap();
-                commands.entity(e).queue(suspend);
+        let [selene, attractor, ring_0, ring_1, hover_target] = [SELENE, ATTRACTOR, RINGS[0], RINGS[1], HOVER_TARGET].map(|iid| {
+            let e = entities.get(iid).unwrap();
+            commands.entity(e).queue(suspend);
 
-                e
-            });
+            e
+        });
 
         let selene_initial = initials.get(selene).copied().unwrap_or_default();
         let attractor_radius = attractors.get(attractor)?.radius;
@@ -110,10 +107,7 @@ pub(super) fn plugin(app: &mut App) {
     app.register_level::<Instance>("penumbra_wing_l")
         .add_systems(
             PostUpdate,
-            (
-                p2_spawn_selene::draw_spawn_effect,
-                p3_tutorial_align::update_align_time,
-            )
+            (p2_spawn_selene::draw_spawn_effect, p3_tutorial_align::update_align_time)
                 .in_set(LevelTransitionSet)
                 .run_if(in_level("penumbra_wing_l")),
         )

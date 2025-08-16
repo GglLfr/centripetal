@@ -1,4 +1,4 @@
-use crate::{IntoResultSystem, Observed, despawn, math::FloatTransformExt, prelude::*};
+use crate::{IntoResultSystem, Observed, despawn, logic::entities::TryHurt, math::FloatTransformExt, prelude::*};
 
 #[derive(Debug, Copy, Clone, Component)]
 pub struct Timed {
@@ -36,36 +36,28 @@ impl Timed {
         let mut sys = IntoResultSystem::into_system(sys);
         (
             Self::new(lifetime),
-            Observed::by(
-                move |trigger: Trigger<TimeFinished>, world: &mut World| -> Result {
-                    sys.initialize(world);
-                    sys.validate_param(world)?;
-                    sys.run_without_applying_deferred((), world)?;
+            Observed::by(move |trigger: Trigger<TimeFinished>, world: &mut World| -> Result {
+                sys.initialize(world);
+                sys.validate_param(world)?;
+                sys.run_without_applying_deferred((), world)?;
 
-                    let mut world = DeferredWorld::from(world);
-                    sys.queue_deferred(world.reborrow());
+                let mut world = DeferredWorld::from(world);
+                sys.queue_deferred(world.reborrow());
 
-                    world.commands().queue(despawn(trigger.target()));
-                    Ok(())
-                },
-            ),
+                world.commands().queue(despawn(trigger.target()));
+                Ok(())
+            }),
         )
     }
 
-    pub fn repeat<M>(
-        lifetime: Duration,
-        sys: impl IntoResultSystem<In<Entity>, (), M>,
-    ) -> impl Bundle {
+    pub fn repeat<M>(lifetime: Duration, sys: impl IntoResultSystem<In<Entity>, (), M>) -> impl Bundle {
         let mut sys = IntoResultSystem::into_system(sys);
         let mut initialized = false;
 
         (
             Self::new(lifetime),
             Observed::by(
-                move |trigger: Trigger<TimeFinished>,
-                      world: &mut World,
-                      query: &mut QueryState<&mut Self>|
-                      -> Result {
+                move |trigger: Trigger<TimeFinished>, world: &mut World, query: &mut QueryState<&mut Self>| -> Result {
                     if !std::mem::replace(&mut initialized, true) {
                         sys.initialize(world);
                     }
@@ -84,6 +76,10 @@ impl Timed {
                 },
             ),
         )
+    }
+
+    pub fn kill_on_finished(trigger: Trigger<TimeFinished>, world: &mut World) {
+        world.trigger_targets(TryHurt::by(trigger.target(), i32::MAX as u32), trigger.target());
     }
 
     pub fn despawn_on_finished(trigger: Trigger<TimeFinished>, mut commands: Commands) {
@@ -111,11 +107,7 @@ pub struct TimeFinished {
     pub overtime_frac: f32,
 }
 
-pub fn update_timed(
-    commands: ParallelCommands,
-    time: Res<Time>,
-    mut timed_query: Query<(Entity, &mut Timed)>,
-) {
+pub fn update_timed(commands: ParallelCommands, time: Res<Time>, mut timed_query: Query<(Entity, &mut Timed)>) {
     let delta = time.delta();
     timed_query.par_iter_mut().for_each(|(e, mut timed)| {
         let lifetime = timed.lifetime;
@@ -187,12 +179,7 @@ fn on_time_stun_insert(mut world: DeferredWorld, HookContext { entity, .. }: Hoo
     world.entity_mut(entity).get_mut::<TimeStun>().unwrap().1 = elapsed;
 }
 
-pub fn update_time_stun(
-    time: Res<Time<Real>>,
-    mut virtual_time: ResMut<Time<Virtual>>,
-    mut commands: Commands,
-    stuns: Query<(Entity, &TimeStun)>,
-) {
+pub fn update_time_stun(time: Res<Time<Real>>, mut virtual_time: ResMut<Time<Virtual>>, mut commands: Commands, stuns: Query<(Entity, &TimeStun)>) {
     let now = time.elapsed();
     let mut scale = 1.;
 
@@ -212,11 +199,7 @@ pub fn update_time_stun(
                     1.
                 } else {
                     let f = (now - started).div_duration_f32(Duration::from_millis(1000));
-                    if f < 0.15 {
-                        0.075
-                    } else {
-                        0.2 + f.threshold(0.2, 1.) * 0.8
-                    }
+                    if f < 0.15 { 0.075 } else { 0.2 + f.threshold(0.2, 1.) * 0.8 }
                 }
             }
         }

@@ -52,9 +52,7 @@ pub struct Config<T: 'static + Send + Clone + Default + Serialize + for<'de> Des
 }
 
 impl<T: 'static + Send + Clone + Default + Serialize + for<'de> Deserialize<'de>> Config<T> {
-    pub fn new<P: Into<PathBuf>>(
-        path: P,
-    ) -> impl ConditionalSendFuture<Output = io::Result<Self>> + use<T, P> {
+    pub fn new<P: Into<PathBuf>>(path: P) -> impl ConditionalSendFuture<Output = io::Result<Self>> + use<T, P> {
         let path = path.into();
 
         #[cfg(not(feature = "dev"))]
@@ -83,10 +81,7 @@ impl<T: 'static + Send + Clone + Default + Serialize + for<'de> Deserialize<'de>
                         match unblock(move || ron::de::from_bytes(&bytes)).await {
                             Ok(inner) => Ok(Self { inner, path }),
                             Err(e) => {
-                                error!(
-                                    "Invalid config file {}: falling back to defaults!\n{e}",
-                                    path.display()
-                                );
+                                error!("Invalid config file {}: falling back to defaults!\n{e}", path.display());
                                 create_default(path).await
                             }
                         }
@@ -99,12 +94,7 @@ impl<T: 'static + Send + Clone + Default + Serialize + for<'de> Deserialize<'de>
 
         #[cfg(feature = "dev")]
         {
-            async move {
-                Ok(Self {
-                    inner: T::default(),
-                    path,
-                })
-            }
+            async move { Ok(Self { inner: T::default(), path }) }
         }
     }
 
@@ -187,35 +177,18 @@ impl Default for KeyboardBindings {
 }
 
 impl KeyboardBindings {
-    pub fn create_input_maps(
-        &self,
-    ) -> (
-        InputMap<PlayerAction>,
-        InputMap<AttractedAction>,
-        InputMap<LaunchAction>,
-    ) {
+    pub fn create_input_maps(&self) -> (InputMap<PlayerAction>, InputMap<AttractedAction>, InputMap<LaunchAction>) {
         (
             InputMap::new([(PlayerAction::Attack, self.player_attack)]).with_dual_axis(
                 PlayerAction::Move,
-                VirtualDPad::new(
-                    self.player_move[0],
-                    self.player_move[1],
-                    self.player_move[2],
-                    self.player_move[3],
-                ),
+                VirtualDPad::new(self.player_move[0], self.player_move[1], self.player_move[2], self.player_move[3]),
             ),
             InputMap::new([
                 (AttractedAction::Precise, self.attracted_precise),
                 (AttractedAction::Parry, self.attracted_parry),
             ])
-            .with_axis(
-                AttractedAction::Accel,
-                VirtualAxis::new(self.attracted_accel[0], self.attracted_accel[1]),
-            )
-            .with_axis(
-                AttractedAction::Hover,
-                VirtualAxis::new(self.attracted_hover[0], self.attracted_hover[1]),
-            ),
+            .with_axis(AttractedAction::Accel, VirtualAxis::new(self.attracted_accel[0], self.attracted_accel[1]))
+            .with_axis(AttractedAction::Hover, VirtualAxis::new(self.attracted_hover[0], self.attracted_hover[1])),
             InputMap::new([(LaunchAction, self.launch)]),
         )
     }
@@ -449,9 +422,7 @@ impl Plugin for ConfigPlugin {
         let window = Config::new(dirs.settings.join("window.conf"));
         let keybinds = Config::new(dirs.settings.join("keybinds.conf"));
 
-        app.insert_resource(ConfigTask(
-            IoTaskPool::get().spawn(async move { Ok((window.await?, keybinds.await?)) }),
-        ));
+        app.insert_resource(ConfigTask(IoTaskPool::get().spawn(async move { Ok((window.await?, keybinds.await?)) })));
     }
 
     fn ready(&self, app: &App) -> bool {
@@ -484,10 +455,7 @@ impl Plugin for ConfigPlugin {
                 let id = world
                     .spawn((PrimaryWindow, window))
                     .observe(
-                        |trigger: Trigger<OnRemove, Window>,
-                         query: Query<&Window>,
-                         mut config: ResMut<Config<WindowConfig>>|
-                         -> Result {
+                        |trigger: Trigger<OnRemove, Window>, query: Query<&Window>, mut config: ResMut<Config<WindowConfig>>| -> Result {
                             let window = query.get(trigger.target())?;
                             config.update_from(window);
 
@@ -502,31 +470,26 @@ impl Plugin for ConfigPlugin {
                 world.insert_resource(keybind_conf);
                 world.flush();
 
-                app.add_systems(
-                    Startup,
-                    move |mut query: Query<&mut Window>,
-                          windows: NonSend<WinitWindows>|
-                          -> Result {
-                        let window = &mut *query.get_mut(id)?;
-                        window.mode = mode;
-                        window.visible = true;
+                app.add_systems(Startup, move |mut query: Query<&mut Window>, windows: NonSend<WinitWindows>| -> Result {
+                    let window = &mut *query.get_mut(id)?;
+                    window.mode = mode;
+                    window.visible = true;
 
-                        if let WindowMode::Windowed = window.mode {
-                            let window = windows
-                                .entity_to_winit
-                                .get(&id)
-                                .and_then(|id| windows.windows.get(id))
-                                .ok_or("No associated `winit` window found")?;
+                    if let WindowMode::Windowed = window.mode {
+                        let window = windows
+                            .entity_to_winit
+                            .get(&id)
+                            .and_then(|id| windows.windows.get(id))
+                            .ok_or("No associated `winit` window found")?;
 
-                            // Workaround for the split-second eye-blinding white screen on creation.
-                            window.set_decorations(false);
-                            window.set_visible(true);
-                            window.set_decorations(true);
-                        }
+                        // Workaround for the split-second eye-blinding white screen on creation.
+                        window.set_decorations(false);
+                        window.set_visible(true);
+                        window.set_decorations(true);
+                    }
 
-                        Ok(())
-                    },
-                );
+                    Ok(())
+                });
             }
             Err(e) => panic!("Couldn't load config file(s): {e}"),
         }

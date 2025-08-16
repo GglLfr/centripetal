@@ -51,22 +51,16 @@ pub fn init(
                         justify_content: JustifyContent::End,
                         ..default()
                     },
-                    children![(
-                        widgets::icon(),
-                        children![(
-                            widgets::keyboard_binding(|binds| binds.launch),
-                            TextColor(Color::BLACK),
-                        )],
-                    )],
+                    children![(widgets::icon(), children![(
+                        widgets::keyboard_binding(|binds| binds.launch),
+                        TextColor(Color::BLACK),
+                    )],)],
                 ),
-                (
-                    Node::default(),
-                    children![(
-                        widgets::shadow_bg(),
-                        widgets::text(i18n!("tutorial.hover.launch")),
-                        TextLayout::new(JustifyText::Left, LineBreak::NoWrap),
-                    )],
-                ),
+                (Node::default(), children![(
+                    widgets::shadow_bg(),
+                    widgets::text(i18n!("tutorial.hover.launch")),
+                    TextLayout::new(JustifyText::Left, LineBreak::NoWrap),
+                )],),
             ],
         ))
         .queue(ui_hide)
@@ -81,9 +75,7 @@ pub fn init(
               -> Result {
             // Default to `Special` state; see below on bullet hits.
             commands.queue(despawn(trigger.observer()));
-            commands
-                .entity(level_entity)
-                .insert(TutorialLaunch::Special);
+            commands.entity(level_entity).insert(TutorialLaunch::Special);
 
             // `Launch` is enabled now.
             actions.get_mut(selene)?.enable_action(&LaunchAction);
@@ -105,13 +97,10 @@ pub fn init(
                       mut actions: Query<&mut ActionState<AttractedAction>>|
                       -> Result {
                     if trigger.at == attractor {
-                        let [&pos, &attractor_pos] =
-                            positions.get_many([trigger.target(), trigger.at])?;
+                        let [&pos, &attractor_pos] = positions.get_many([trigger.target(), trigger.at])?;
 
                         // 1: Secretly enable parrying.
-                        actions
-                            .get_mut(trigger.target())?
-                            .enable_action(&AttractedAction::Parry);
+                        actions.get_mut(trigger.target())?.enable_action(&AttractedAction::Parry);
 
                         // 2: Queue a time stun.
                         commands.queue(despawn(trigger.observer()));
@@ -141,9 +130,7 @@ pub fn init(
                                         ));
 
                                         // Don't home in if one of the bullets already hit.
-                                        if query.get(level_entity).is_ok_and(|tutorial| {
-                                            matches!(tutorial, TutorialLaunch::Special)
-                                        }) {
+                                        if query.get(level_entity).is_ok_and(|tutorial| matches!(tutorial, TutorialLaunch::Special)) {
                                             bullet.insert(HomingTarget(selene));
                                         }
                                     },
@@ -153,10 +140,7 @@ pub fn init(
                         });
 
                         let mut hit_observer = Observer::new(
-                            move |trigger: Trigger<OnCollisionStart>,
-                                  mut commands: Commands,
-                                  mut query: Query<&mut TutorialLaunch>|
-                                  -> Result {
+                            move |trigger: Trigger<OnCollisionStart>, mut commands: Commands, mut query: Query<&mut TutorialLaunch>| -> Result {
                                 commands.queue(despawn(trigger.observer()));
                                 *query.get_mut(level_entity)? = TutorialLaunch::Normal;
 
@@ -178,16 +162,13 @@ pub fn init(
                         // 4: Spawn 2 rings that protect the attractor from being slashed by Selene.
                         commands.spawn((
                             ChildOf(level_entity),
-                            Timed::run(
-                                Duration::from_millis(750),
-                                move |mut commands: Commands| -> Result {
-                                    for ring in rings {
-                                        // TODO FX for this.
-                                        commands.get_entity(ring)?.queue(resume);
-                                    }
-                                    Ok(())
-                                },
-                            ),
+                            Timed::run(Duration::from_millis(750), move |mut commands: Commands| -> Result {
+                                for ring in rings {
+                                    // TODO FX for this.
+                                    commands.get_entity(ring)?.queue(resume);
+                                }
+                                Ok(())
+                            }),
                         ));
 
                         // 5: Hide the launching UI.
@@ -201,33 +182,26 @@ pub fn init(
                         // 6: Spawn a "Ahh! Away from me!" dialog residing at the bottom.
                         commands.spawn((
                             ChildOf(level_entity),
-                            Timed::run(
-                                Duration::from_millis(150),
-                                move |world: &mut World| -> Result {
-                                    BottomDialog::show(
-                                        i18n!("tutorial.launch.scream"),
-                                        BottomDialog::show_next_after(
-                                            Duration::from_secs(2),
-                                            i18n!("tutorial.launch.realize"),
-                                            move |_: In<Entity>, mut commands: Commands| {
-                                                commands.spawn((
-                                                    ChildOf(level_entity),
-                                                    Timed::run(
-                                                        Duration::from_secs(2),
-                                                        move |mut commands: Commands| -> Result {
-                                                            commands
-                                                                .get_entity(level_entity)?
-                                                                .remove::<TutorialLaunch>();
-                                                            Ok(())
-                                                        },
-                                                    ),
-                                                ));
-                                            },
-                                        ),
-                                    )
-                                    .apply(world)
-                                },
-                            ),
+                            Timed::run(Duration::from_millis(150), move |world: &mut World| -> Result {
+                                BottomDialog::show(
+                                    None,
+                                    i18n!("tutorial.launch.scream"),
+                                    BottomDialog::show_next_after(
+                                        Duration::from_secs(2),
+                                        i18n!("tutorial.launch.realize"),
+                                        move |_: In<Entity>, mut commands: Commands| {
+                                            commands.spawn((
+                                                ChildOf(level_entity),
+                                                Timed::run(Duration::from_secs(2), move |mut commands: Commands| -> Result {
+                                                    commands.get_entity(level_entity)?.remove::<TutorialLaunch>();
+                                                    Ok(())
+                                                }),
+                                            ));
+                                        },
+                                    ),
+                                )
+                                .apply(world)
+                            }),
                         ));
                     }
 

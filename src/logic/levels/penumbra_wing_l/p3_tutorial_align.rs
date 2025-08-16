@@ -42,16 +42,10 @@ pub fn update_align_time(
         return;
     };
 
-    align.time = if align.within {
-        (align.time + delta).min(TUTORIAL_MOVE_ALIGN_DURATION)
-    } else {
-        align.time.saturating_sub(delta)
-    };
+    align.time = if align.within { (align.time + delta).min(TUTORIAL_MOVE_ALIGN_DURATION) } else { align.time.saturating_sub(delta) };
 
     if align.time == TUTORIAL_MOVE_ALIGN_DURATION {
-        commands
-            .entity(instance.level_entity)
-            .remove::<TutorialAlign>();
+        commands.entity(instance.level_entity).remove::<TutorialAlign>();
 
         // TODO FX for this.
         commands.queue(despawn(instance.hover_target));
@@ -61,11 +55,7 @@ pub fn update_align_time(
         return;
     };
 
-    let (disable_laa, cap) = if align.time > Duration::ZERO {
-        (false, Cap::Round)
-    } else {
-        (true, Cap::None)
-    };
+    let (disable_laa, cap) = if align.time > Duration::ZERO { (false, Cap::Round) } else { (true, Cap::None) };
 
     disc.end_angle = TAU * align.time.div_duration_f32(TUTORIAL_MOVE_ALIGN_DURATION);
     disc.cap = cap;
@@ -102,22 +92,19 @@ pub fn init(
             color: Color::linear_rgb(4., 2., 1.),
             ty: FillType::Stroke(1.5, ThicknessType::World),
         },
-        Timed::repeat(
-            Duration::from_secs(1),
-            |In(e): In<Entity>, mut commands: Commands| {
-                commands.spawn((
-                    ChildOf(e),
-                    Transform::from_xyz(0., 0., -1.),
-                    Ring {
-                        radius_to: 16.,
-                        thickness_from: 3.,
-                        colors: smallvec![Color::linear_rgb(4., 2., 1.)],
-                        ..default()
-                    },
-                    Timed::new(Duration::from_millis(750)),
-                ));
-            },
-        ),
+        Timed::repeat(Duration::from_secs(1), |In(e): In<Entity>, mut commands: Commands| {
+            commands.spawn((
+                ChildOf(e),
+                Transform::from_xyz(0., 0., -1.),
+                Ring {
+                    radius_to: 16.,
+                    thickness_from: 3.,
+                    colors: smallvec![Color::linear_rgb(4., 2., 1.)],
+                    ..default()
+                },
+                Timed::new(Duration::from_millis(750)),
+            ));
+        }),
         DebugRender::none(),
     ));
 
@@ -142,44 +129,32 @@ pub fn init(
                         justify_content: JustifyContent::End,
                         ..default()
                     },
-                    children![(
-                        widgets::icon(),
-                        children![(
-                            widgets::keyboard_binding(|binds| binds.attracted_hover[0]),
-                            TextColor(Color::BLACK),
-                        )],
-                    )],
+                    children![(widgets::icon(), children![(
+                        widgets::keyboard_binding(|binds| binds.attracted_hover[0]),
+                        TextColor(Color::BLACK),
+                    )],)],
                 ),
-                (
-                    Node::default(),
-                    children![(
-                        widgets::shadow_bg(),
-                        widgets::text(i18n!("tutorial.hover.descend")),
-                        TextLayout::new(JustifyText::Left, LineBreak::NoWrap),
-                    )],
-                ),
+                (Node::default(), children![(
+                    widgets::shadow_bg(),
+                    widgets::text(i18n!("tutorial.hover.descend")),
+                    TextLayout::new(JustifyText::Left, LineBreak::NoWrap),
+                )],),
                 (
                     Node {
                         align_items: AlignItems::Center,
                         justify_content: JustifyContent::End,
                         ..default()
                     },
-                    children![(
-                        widgets::icon(),
-                        children![(
-                            widgets::keyboard_binding(|binds| binds.attracted_hover[1]),
-                            TextColor(Color::BLACK),
-                        )],
-                    )],
+                    children![(widgets::icon(), children![(
+                        widgets::keyboard_binding(|binds| binds.attracted_hover[1]),
+                        TextColor(Color::BLACK),
+                    )],)],
                 ),
-                (
-                    Node::default(),
-                    children![(
-                        widgets::shadow_bg(),
-                        widgets::text(i18n!("tutorial.hover.ascend")),
-                        TextLayout::new(JustifyText::Left, LineBreak::NoWrap),
-                    )],
-                ),
+                (Node::default(), children![(
+                    widgets::shadow_bg(),
+                    widgets::text(i18n!("tutorial.hover.ascend")),
+                    TextLayout::new(JustifyText::Left, LineBreak::NoWrap),
+                )],),
             ],
         ))
         .queue(ui_hide)
@@ -206,62 +181,50 @@ pub fn init(
                         justify_content: JustifyContent::End,
                         ..default()
                     },
-                    children![(
-                        widgets::icon(),
-                        children![(
-                            widgets::keyboard_binding(|binds| binds.attracted_accel[0]),
-                            TextColor(Color::BLACK),
-                        )],
-                    )],
+                    children![(widgets::icon(), children![(
+                        widgets::keyboard_binding(|binds| binds.attracted_accel[0]),
+                        TextColor(Color::BLACK),
+                    )],)],
                 ),
-                (
-                    Node::default(),
-                    children![(
-                        widgets::shadow_bg(),
-                        widgets::text(i18n!("tutorial.hover.retrograde")),
-                        TextLayout::new(JustifyText::Left, LineBreak::NoWrap),
-                    )],
-                ),
+                (Node::default(), children![(
+                    widgets::shadow_bg(),
+                    widgets::text(i18n!("tutorial.hover.retrograde")),
+                    TextLayout::new(JustifyText::Left, LineBreak::NoWrap),
+                )],),
                 (
                     Node {
                         align_items: AlignItems::Center,
                         justify_content: JustifyContent::End,
                         ..default()
                     },
-                    children![(
-                        widgets::icon(),
-                        children![(
-                            widgets::keyboard_binding(|binds| binds.attracted_accel[1]),
-                            TextColor(Color::BLACK),
-                        )],
-                    )],
+                    children![(widgets::icon(), children![(
+                        widgets::keyboard_binding(|binds| binds.attracted_accel[1]),
+                        TextColor(Color::BLACK),
+                    )],)],
                 ),
-                (
-                    Node::default(),
-                    children![(
-                        widgets::shadow_bg(),
-                        widgets::text(i18n!("tutorial.hover.prograde")),
-                        TextLayout::new(JustifyText::Left, LineBreak::NoWrap),
-                    )],
-                ),
+                (Node::default(), children![(
+                    widgets::shadow_bg(),
+                    widgets::text(i18n!("tutorial.hover.prograde")),
+                    TextLayout::new(JustifyText::Left, LineBreak::NoWrap),
+                )],),
             ],
         ))
         .queue(ui_hide)
         .id();
 
     // Fade out UI during death and fade it back in on respawn.
-    commands.entity(selene).observe(
-        move |_: Trigger<Killed>, mut commands: Commands, mut ui: ResMut<SeleneUi>| {
+    commands
+        .entity(selene)
+        .observe(move |_: Trigger<Killed>, mut commands: Commands, mut ui: ResMut<SeleneUi>| {
             if let Some(e) = ui.take()
                 && let Ok(mut e) = commands.get_entity(e)
             {
                 e.queue(ui_fade_out);
 
                 let ui_entity = e.id();
-                commands.entity(selene).observe(
-                    move |trigger: Trigger<Respawned>,
-                          mut commands: Commands,
-                          mut ui: ResMut<SeleneUi>| {
+                commands
+                    .entity(selene)
+                    .observe(move |trigger: Trigger<Respawned>, mut commands: Commands, mut ui: ResMut<SeleneUi>| {
                         commands.queue(despawn(trigger.observer()));
                         // Needs `is_none()` here to ensure we don't accidentally replace an existing UI.
                         // Such condition should be considered a bug; this is only a failsafe.
@@ -271,11 +234,9 @@ pub fn init(
                             e.queue(ui_fade_in);
                             **ui = Some(e.id());
                         }
-                    },
-                );
+                    });
             }
-        },
-    );
+        });
 
     // Entry point.
     // Refer to `update_align_time` for when this phase is finished.
@@ -283,15 +244,10 @@ pub fn init(
         move |trigger: Trigger<OnRemove, p2_spawn_selene::SpawningSelene>,
               mut commands: Commands,
               mut ui: ResMut<SeleneUi>,
-              mut actions: Query<(
-            &mut ActionState<AttractedAction>,
-            &mut ActionState<LaunchAction>,
-        )>|
+              mut actions: Query<(&mut ActionState<AttractedAction>, &mut ActionState<LaunchAction>)>|
               -> Result {
             commands.queue(despawn(trigger.observer()));
-            commands
-                .entity(level_entity)
-                .insert(TutorialAlign::default());
+            commands.entity(level_entity).insert(TutorialAlign::default());
 
             **ui = Some(ui_selene_hover);
             commands.get_entity(ui_selene_hover)?.queue(ui_fade_in);
@@ -306,9 +262,7 @@ pub fn init(
                 .queue(resume)
                 // Set `within = true` when Selene overlaps to increment the counter.
                 .observe(
-                    move |trigger: Trigger<OnCollisionStart>,
-                          mut aligned: Query<&mut TutorialAlign>|
-                          -> Result {
+                    move |trigger: Trigger<OnCollisionStart>, mut aligned: Query<&mut TutorialAlign>| -> Result {
                         if trigger.body.is_some_and(|body| body == selene) {
                             aligned.get_mut(level_entity)?.within = true;
                         }

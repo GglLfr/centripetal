@@ -4,11 +4,11 @@
 use bevy::log::DEFAULT_FILTER;
 use bevy::log::LogPlugin;
 use bevy_framepace::FramepacePlugin;
-use prelude::*;
 
 use crate::{
     graphics::GraphicsPlugin,
     logic::{GameState, LoadLevel, LogicPlugin},
+    prelude::*,
     ui::UiPlugin,
 };
 
@@ -29,13 +29,23 @@ pub use i18n::*;
 pub use save::*;
 
 pub mod prelude {
+    pub use std::{
+        any::{Any, TypeId},
+        borrow::Cow,
+        fmt, fs, io,
+        marker::PhantomData,
+        ops::{Deref, DerefMut, Range},
+        path::{Path, PathBuf},
+        str::FromStr,
+        time::Duration,
+    };
+
     pub use async_fs::File;
     pub use avian2d::{dynamics::solver::solver_body::SolverBody, prelude::*};
     pub use bevy::{
         asset::{
-            AssetLoader, AssetPath, AsyncReadExt as _, AsyncWriteExt as _, LoadContext,
-            LoadDirectError, LoadState, ParseAssetPathError, RecursiveDependencyLoadState,
-            RenderAssetUsages, UntypedAssetId, VisitAssetDependencies,
+            AssetLoader, AssetPath, AsyncReadExt as _, AsyncWriteExt as _, LoadContext, LoadDirectError, LoadState, ParseAssetPathError,
+            RecursiveDependencyLoadState, RenderAssetUsages, UntypedAssetId, VisitAssetDependencies,
             io::Reader,
             ron,
             uuid::{Uuid, uuid},
@@ -44,21 +54,14 @@ pub mod prelude {
         ecs::{
             archetype::{Archetype, ArchetypeComponentId},
             bundle::{BundleEffect, DynamicBundle},
-            component::{
-                ComponentId, Components, ComponentsRegistrator, HookContext, RequiredComponents,
-                StorageType, Tick,
-            },
+            component::{ComponentId, Components, ComponentsRegistrator, HookContext, RequiredComponents, StorageType, Tick},
             entity::{EntityHashMap, EntityHashSet},
             entity_disabling::Disabled,
             never::Never,
-            query::{
-                Access, QueryData, QueryEntityError, QueryFilter, QueryItem, QuerySingleError,
-                ROQueryItem, ReadOnlyQueryData,
-            },
+            query::{Access, QueryData, QueryEntityError, QueryFilter, QueryItem, QuerySingleError, ROQueryItem, ReadOnlyQueryData},
             system::{
-                BoxedSystem, IntoObserverSystem, ReadOnlySystemParam, RunSystemError,
-                RunSystemOnce as _, StaticSystemParam, SystemId, SystemMeta, SystemParam,
-                SystemParamItem, SystemParamValidationError, SystemState, lifetimeless::*,
+                BoxedSystem, IntoObserverSystem, ReadOnlySystemParam, RunSystemError, RunSystemOnce as _, StaticSystemParam, SystemId, SystemMeta,
+                SystemParam, SystemParamItem, SystemParamValidationError, SystemState, lifetimeless::*,
             },
             world::{DeferredWorld, unsafe_world_cell::UnsafeWorldCell},
         },
@@ -66,9 +69,7 @@ pub mod prelude {
         math::FloatOrd,
         platform::{
             collections::{HashMap, HashSet},
-            sync::{
-                LazyLock, Mutex, MutexGuard, PoisonError, RwLock, RwLockReadGuard, RwLockWriteGuard,
-            },
+            sync::{LazyLock, Mutex, MutexGuard, PoisonError, RwLock, RwLockReadGuard, RwLockWriteGuard},
         },
         prelude::*,
         ptr::{OwningPtr, Ptr, PtrMut},
@@ -77,10 +78,7 @@ pub mod prelude {
             MainWorld, Render, RenderApp, RenderSet,
             camera::ExtractedCamera,
             render_asset::RenderAssets,
-            render_phase::{
-                DrawFunctions, PhaseItem, RenderCommand, RenderCommandResult, RenderCommandState,
-                TrackedRenderPass,
-            },
+            render_phase::{DrawFunctions, PhaseItem, RenderCommand, RenderCommandResult, RenderCommandState, TrackedRenderPass},
             render_resource::{binding_types::*, *},
             renderer::{RenderDevice, RenderQueue},
             sync_world::SyncToRenderWorld,
@@ -101,17 +99,6 @@ pub mod prelude {
     pub use serde::{Deserialize, Deserializer, Serialize, Serializer, de, ser};
     pub use smallvec::{SmallVec, smallvec};
     pub use vec_belt::VecBelt;
-
-    pub use std::{
-        any::{Any, TypeId},
-        borrow::Cow,
-        fmt, fs, io,
-        marker::PhantomData,
-        ops::{Deref, DerefMut, Range},
-        path::{Path, PathBuf},
-        str::FromStr,
-        time::Duration,
-    };
 }
 
 #[cfg(all(feature = "mimalloc", not(feature = "bevy_dynamic"),))]
@@ -160,10 +147,7 @@ fn main() -> AppExit {
                 .load_collection::<Fonts>()
                 .load_collection::<Locales>(),
         )
-        .add_plugins(
-            ProgressPlugin::<GameState>::new()
-                .with_state_transition(GameState::Loading, GameState::Menu),
-        )
+        .add_plugins(ProgressPlugin::<GameState>::new().with_state_transition(GameState::Loading, GameState::Menu))
         .add_systems(OnEnter(GameState::Menu), dev_init)
         .run()
 }

@@ -146,9 +146,7 @@ impl<T: Float> FloatTransformer<T> for Interp<T> {
             Self::PowIn { exponent } => PowIn { exponent }.apply_within(value, min, max),
             Self::PowOut { exponent } => PowOut { exponent }.apply_within(value, min, max),
             Self::Pow { exponent } => Pow { exponent }.apply_within(value, min, max),
-            Self::Chain(ref chain) => chain
-                .iter()
-                .fold(value, |value, interp| interp.apply_within(value, min, max)),
+            Self::Chain(ref chain) => chain.iter().fold(value, |value, interp| interp.apply_within(value, min, max)),
         }
     }
 }

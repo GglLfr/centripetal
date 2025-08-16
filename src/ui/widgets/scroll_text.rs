@@ -23,12 +23,7 @@ pub struct ScrollTextSection {
 }
 
 impl ScrollTextSection {
-    pub fn new(
-        span: impl Into<String>,
-        font: TextFont,
-        color: impl Into<TextColor>,
-        time_per_char: Duration,
-    ) -> Self {
+    pub fn new(span: impl Into<String>, font: TextFont, color: impl Into<TextColor>, time_per_char: Duration) -> Self {
         Self {
             span: span.into(),
             font,
@@ -105,8 +100,7 @@ pub fn update_scroll_text_sections(
         }
 
         while let Some(span) = spans.fetch_next() {
-            span.map_unchanged(DerefMut::deref_mut)
-                .set_if_neq(String::new());
+            span.map_unchanged(DerefMut::deref_mut).set_if_neq(String::new());
         }
     }
 }

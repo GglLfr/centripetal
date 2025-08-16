@@ -1,3 +1,5 @@
+use std::f32::consts::TAU;
+
 use crate::{
     PIXELS_PER_UNIT, Sprites, despawn,
     graphics::{SpriteDrawer, SpriteSection},
@@ -11,7 +13,6 @@ use crate::{
     prelude::*,
     resume, suspend,
 };
-use std::f32::consts::TAU;
 
 #[derive(Debug, Clone, Component, Default)]
 #[require(SpriteDrawer, Timed::new(Duration::from_millis(2500)))]
@@ -39,13 +40,10 @@ pub fn draw_spawn_effect(
         let f = timed.frac();
 
         let mut layer = -1f32;
-        for (angle, vec) in rng.fork().len_vectors(
-            40,
-            0.,
-            TAU,
-            5. * PIXELS_PER_UNIT as f32,
-            10. * PIXELS_PER_UNIT as f32,
-        ) {
+        for (angle, vec) in rng
+            .fork()
+            .len_vectors(40, 0., TAU, 5. * PIXELS_PER_UNIT as f32, 10. * PIXELS_PER_UNIT as f32)
+        {
             let ring = rings[rng.usize(0..rings.len())];
             let f_scl = f.threshold(0., rng.f32_within(0.75, 1.));
 
@@ -58,9 +56,7 @@ pub fn draw_spawn_effect(
             let width = ring.size.x + (1. - f_scl.slope(0.5)).pow_in(6) * ring.size.x * 1.5;
 
             drawer.draw_at(
-                (vec * f.pow_out(5))
-                    .lerp(effect.target_pos, proceed.pow_in(6))
-                    .extend(layer),
+                (vec * f.pow_out(5)).lerp(effect.target_pos, proceed.pow_in(6)).extend(layer),
                 angle.slerp(Rot2::radians((effect.target_pos - vec).to_angle()), rotate),
                 ring.sprite_with(
                     Color::linear_rgba(1., green, blue, alpha * (1. - proceed.pow_in(7))),
@@ -108,21 +104,12 @@ pub fn spawn_selene(
 
         accept(
             world
-                .spawn((
-                    ChildOf(level_entity),
-                    SpawnEffect { target_pos },
-                    effect_trns,
-                ))
+                .spawn((ChildOf(level_entity), SpawnEffect { target_pos }, effect_trns))
                 .observe(Timed::despawn_on_finished)
-                .observe(
-                    move |_: Trigger<TimeFinished>, mut commands: Commands| -> Result {
-                        commands
-                            .get_entity(selene)?
-                            .queue(resume)
-                            .trigger(Respawned);
-                        Ok(())
-                    },
-                ),
+                .observe(move |_: Trigger<TimeFinished>, mut commands: Commands| -> Result {
+                    commands.get_entity(selene)?.queue(resume).trigger(Respawned);
+                    Ok(())
+                }),
         )
     }
 }
@@ -145,33 +132,18 @@ pub fn init(
 ) -> Result {
     // Make Selene "unkillable"; replace the default behavior with suspending and resuming instead.
     commands.entity(selene).insert(NoKillDespawn).observe(
-        move |trigger: Trigger<Killed>,
-              mut commands: Commands,
-              mut query: Query<(&Transform, &mut AttractedPrediction)>|
-              -> Result {
+        move |trigger: Trigger<Killed>, mut commands: Commands, mut query: Query<(&Transform, &mut AttractedPrediction)>| -> Result {
             let (&trns, mut prediction) = query.get_mut(trigger.target())?;
             prediction.points.clear();
 
             // Reset some states on death...
             commands
                 .get_entity(selene)?
-                .insert((
-                    selene_trns,
-                    selene_initial,
-                    LinearVelocity::ZERO,
-                    AngularVelocity::ZERO,
-                    Health::new(10),
-                ))
+                .insert((selene_trns, selene_initial, LinearVelocity::ZERO, AngularVelocity::ZERO, Health::new(10)))
                 .queue(suspend);
 
             // ...and respawn her with an animation.
-            commands.queue(spawn_selene(
-                level_entity,
-                selene,
-                trns,
-                selene_trns,
-                |_| Ok(()),
-            ));
+            commands.queue(spawn_selene(level_entity, selene, trns, selene_trns, |_| Ok(())));
 
             Ok(())
         },
@@ -179,34 +151,21 @@ pub fn init(
 
     // Entry point.
     commands.entity(level_entity).observe(
-        move |trigger: Trigger<OnRemove, p1_spawn_attractor::SpawningAttractor>,
-              mut commands: Commands| {
+        move |trigger: Trigger<OnRemove, p1_spawn_attractor::SpawningAttractor>, mut commands: Commands| {
             commands.queue(despawn(trigger.observer()));
             commands.entity(level_entity).insert(SpawningSelene);
 
             // Spawn Selene with an animation, and...
-            commands.queue(spawn_selene(
-                level_entity,
-                selene,
-                attractor_trns,
-                selene_trns,
-                move |e| {
-                    e.observe(
-                        move |_: Trigger<TimeFinished>, mut commands: Commands| -> Result {
-                            // ...proceed to the next phase after she's spawned.
-                            commands
-                                .get_entity(attractor)?
-                                .remove::<(CameraTarget, CameraConfines)>();
-                            commands
-                                .get_entity(level_entity)?
-                                .remove::<SpawningSelene>();
+            commands.queue(spawn_selene(level_entity, selene, attractor_trns, selene_trns, move |e| {
+                e.observe(move |_: Trigger<TimeFinished>, mut commands: Commands| -> Result {
+                    // ...proceed to the next phase after she's spawned.
+                    commands.get_entity(attractor)?.remove::<(CameraTarget, CameraConfines)>();
+                    commands.get_entity(level_entity)?.remove::<SpawningSelene>();
 
-                            Ok(())
-                        },
-                    );
                     Ok(())
-                },
-            ));
+                });
+                Ok(())
+            }));
         },
     );
 

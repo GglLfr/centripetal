@@ -1,5 +1,6 @@
-use crate::prelude::*;
 use bevy::ui::UiSystem;
+
+use crate::prelude::*;
 
 pub mod widgets;
 
@@ -21,12 +22,8 @@ impl Plugin for UiPlugin {
             .add_systems(
                 PostUpdate,
                 (
-                    update_worldspace_ui
-                        .after(UiSystem::Content)
-                        .before(UiSystem::Layout),
-                    stretch_interpolate
-                        .after(UiSystem::Layout)
-                        .before(TransformSystem::TransformPropagate),
+                    update_worldspace_ui.after(UiSystem::Content).before(UiSystem::Layout),
+                    stretch_interpolate.after(UiSystem::Layout).before(TransformSystem::TransformPropagate),
                     fade_interpolate,
                 ),
             )
@@ -42,9 +39,7 @@ impl Plugin for UiPlugin {
 struct PreviousDisplay(Display);
 
 pub fn ui_hide(mut e: EntityWorldMut) {
-    let prev = e
-        .get_mut::<Node>()
-        .map(|mut node| std::mem::replace(&mut node.display, Display::None));
+    let prev = e.get_mut::<Node>().map(|mut node| std::mem::replace(&mut node.display, Display::None));
 
     if let Some(prev) = prev {
         e.insert(PreviousDisplay(prev));

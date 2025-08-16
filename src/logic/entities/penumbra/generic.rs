@@ -13,12 +13,7 @@ impl FromLevelEntity for GenericPenumbra {
     type Param = ();
     type Data = Write<Transform>;
 
-    fn from_level_entity(
-        mut e: EntityCommands,
-        fields: &Fields,
-        _: &mut SystemParamItem<Self::Param>,
-        mut trns: QueryItem<Self::Data>,
-    ) -> Result {
+    fn from_level_entity(mut e: EntityCommands, fields: &Fields, _: &mut SystemParamItem<Self::Param>, mut trns: QueryItem<Self::Data>) -> Result {
         let facing = fields.point_px("facing")?.as_vec2();
         let ccw = fields.bool("ccw")?;
 

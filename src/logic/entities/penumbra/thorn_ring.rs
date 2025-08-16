@@ -18,12 +18,7 @@ impl FromLevelEntity for ThornRing {
     type Param = ();
     type Data = Write<Transform>;
 
-    fn from_level_entity(
-        mut e: EntityCommands,
-        fields: &Fields,
-        _: &mut SystemParamItem<Self::Param>,
-        mut trns: QueryItem<Self::Data>,
-    ) -> Result {
+    fn from_level_entity(mut e: EntityCommands, fields: &Fields, _: &mut SystemParamItem<Self::Param>, mut trns: QueryItem<Self::Data>) -> Result {
         let ccw = fields.bool("ccw")?;
         let facing = fields.point_px("facing")?.as_vec2();
         let opening = fields.float("opening")?.to_radians();
@@ -40,19 +35,14 @@ impl FromLevelEntity for ThornRing {
         }
 
         trns.rotation = Quat::from_axis_angle(Vec3::Z, (facing - trns.translation.xy()).to_angle());
-        e.insert((
-            Self,
-            AttractedInitial { ccw },
-            Collider::polyline(vertices, None),
-        ))
-        .observe(|mut trigger: Trigger<TryLaunch>, mut commands: Commands| {
-            if trigger.by() != trigger.target() {
-                trigger.event_mut().stop();
-                commands
-                    .entity(trigger.by())
-                    .queue(TryHurt::by(trigger.target(), 1));
-            }
-        });
+        e.insert((Self, AttractedInitial { ccw }, Collider::polyline(vertices, None))).observe(
+            |mut trigger: Trigger<TryLaunch>, mut commands: Commands| {
+                if trigger.by() != trigger.target() {
+                    trigger.event_mut().stop();
+                    commands.entity(trigger.by()).queue(TryHurt::by(trigger.target(), 1));
+                }
+            },
+        );
 
         Ok(())
     }

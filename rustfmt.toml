@@ -1,4 +1,4 @@
-max_width = 125
+max_width = 150
 single_line_let_else_max_width = 125
 single_line_if_else_max_width = 125
 overflow_delimited_expr = true

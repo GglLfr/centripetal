@@ -54,11 +54,7 @@ pub fn prepare_blit_pixelized_shape_buffers(
     mut commands: Commands,
     device: Res<RenderDevice>,
     queue: Res<RenderQueue>,
-    mut cameras: Query<(
-        Entity,
-        &ExtractedView,
-        Option<&mut BlitPixelizedShapesBuffer>,
-    )>,
+    mut cameras: Query<(Entity, &ExtractedView, Option<&mut BlitPixelizedShapesBuffer>)>,
 ) {
     for (e, view, buffer) in &mut cameras {
         let ndc_to_world = view.world_from_view.compute_matrix() * view.clip_from_view.inverse();
@@ -82,12 +78,7 @@ pub fn prepare_blit_pixelized_shape_pipelines(
     mut commands: Commands,
     shapes: Res<BlitPixelizedShapes>,
     cache: Res<PipelineCache>,
-    mut cameras: Query<(
-        Entity,
-        &ViewTarget,
-        &Msaa,
-        Option<&mut BlitPixelizedShapesPipeline>,
-    )>,
+    mut cameras: Query<(Entity, &ViewTarget, &Msaa, Option<&mut BlitPixelizedShapesPipeline>)>,
 ) {
     for (e, target, &msaa, mut pipeline) in &mut cameras {
         let create_pipeline = || BlitPixelizedShapesPipeline {
@@ -160,10 +151,7 @@ pub fn prepare_blit_pixelized_shape_pipelines(
 
 impl<P: PhaseItem> FboWrappedDrawer<P> for BlitPixelizedShapes {
     type Param = (SRes<Self>, SRes<RenderDevice>, SRes<PipelineCache>);
-    type ViewQuery = (
-        Read<BlitPixelizedShapesBuffer>,
-        Read<BlitPixelizedShapesPipeline>,
-    );
+    type ViewQuery = (Read<BlitPixelizedShapesBuffer>, Read<BlitPixelizedShapesPipeline>);
     type ItemQuery = ();
 
     fn render<'w>(
@@ -187,10 +175,7 @@ impl<P: PhaseItem> FboWrappedDrawer<P> for BlitPixelizedShapes {
             &device.create_bind_group(
                 Some("centripetal_pixelized_shapes"),
                 &shapes.fbo_layout,
-                &BindGroupEntries::sequential((
-                    &fbo.texture.default_view,
-                    buffer.as_entire_buffer_binding(),
-                )),
+                &BindGroupEntries::sequential((&fbo.texture.default_view, buffer.as_entire_buffer_binding())),
             ),
             &[],
         );

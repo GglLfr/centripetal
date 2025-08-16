@@ -92,26 +92,12 @@ pub fn on_stretch_replace(
     }
 }
 
-pub fn stretch_interpolate(
-    parent: Query<(&Stretch, &Timed, &ChildOf)>,
-    mut query: Query<&mut Transform>,
-) {
+pub fn stretch_interpolate(parent: Query<(&Stretch, &Timed, &ChildOf)>, mut query: Query<&mut Transform>) {
     for (stretch, timed, child_of) in &parent {
         if let Ok(mut trns) = query.get_mut(child_of.parent()) {
             let t = stretch.target;
-            trns.scale = vec3(
-                if stretch.vertical { t.x } else { 0. },
-                if stretch.vertical { 0. } else { t.y },
-                t.z,
-            )
-            .lerp(
-                t,
-                if stretch.enter {
-                    timed.frac().pow_in(3)
-                } else {
-                    1. - timed.frac().pow_in(3)
-                },
-            );
+            trns.scale = vec3(if stretch.vertical { t.x } else { 0. }, if stretch.vertical { 0. } else { t.y }, t.z)
+                .lerp(t, if stretch.enter { timed.frac().pow_in(3) } else { 1. - timed.frac().pow_in(3) });
         }
     }
 }
@@ -128,23 +114,11 @@ pub struct Fade {
 
 impl Fade {
     pub fn enter() -> impl Bundle + Clone {
-        WithChild((
-            Self {
-                enter: true,
-                ..default()
-            },
-            Observed::by(Timed::despawn_on_finished),
-        ))
+        WithChild((Self { enter: true, ..default() }, Observed::by(Timed::despawn_on_finished)))
     }
 
     pub fn exit() -> impl Bundle + Clone {
-        WithChild((
-            Self {
-                enter: false,
-                ..default()
-            },
-            Observed::by(Timed::despawn_on_finished),
-        ))
+        WithChild((Self { enter: false, ..default() }, Observed::by(Timed::despawn_on_finished)))
     }
 }
 
@@ -157,15 +131,8 @@ pub type FadeItem<'a> = (
     Option<&'a mut TextColor>,
 );
 
-fn do_fade(
-    (fade, timed): QueryItem<FadeSource>,
-    (background_color, border_color, box_shadow, text_color): QueryItem<FadeItem>,
-) {
-    let f = if fade.enter {
-        timed.frac()
-    } else {
-        1. - timed.frac()
-    };
+fn do_fade((fade, timed): QueryItem<FadeSource>, (background_color, border_color, box_shadow, text_color): QueryItem<FadeItem>) {
+    let f = if fade.enter { timed.frac() } else { 1. - timed.frac() };
 
     if let Some(mut background_color) = background_color {
         background_color.0 = Color::NONE.mix(&fade.background, f);
@@ -176,11 +143,7 @@ fn do_fade(
     }
 
     if let Some(mut box_shadow) = box_shadow {
-        for (dst, src) in box_shadow
-            .iter_mut()
-            .map(|sample| &mut sample.color)
-            .zip(&fade.box_shadow)
-        {
+        for (dst, src) in box_shadow.iter_mut().map(|sample| &mut sample.color).zip(&fade.box_shadow) {
             *dst = Color::NONE.mix(src, f);
         }
     }
@@ -199,20 +162,15 @@ pub fn on_fade_insert(
     let Ok((mut fade, child_of)) = parent.get_mut(trigger.target()) else {
         return;
     };
-    let Ok((e, (background, border, box_shadow, text_color))) = query.get_mut(child_of.parent())
-    else {
+    let Ok((e, (background, border, box_shadow, text_color))) = query.get_mut(child_of.parent()) else {
         return;
     };
 
     *fade = if fade.enter {
         Fade {
             enter: true,
-            background: background
-                .map(|mut col| std::mem::replace(&mut col.0, Color::NONE))
-                .unwrap_or_default(),
-            border: border
-                .map(|mut col| std::mem::replace(&mut col.0, Color::NONE))
-                .unwrap_or_default(),
+            background: background.map(|mut col| std::mem::replace(&mut col.0, Color::NONE)).unwrap_or_default(),
+            border: border.map(|mut col| std::mem::replace(&mut col.0, Color::NONE)).unwrap_or_default(),
             box_shadow: box_shadow
                 .map(|mut box_shadow| {
                     box_shadow
@@ -221,9 +179,7 @@ pub fn on_fade_insert(
                         .collect()
                 })
                 .unwrap_or_default(),
-            text: text_color
-                .map(|mut col| std::mem::replace(&mut col.0, Color::NONE))
-                .unwrap_or_default(),
+            text: text_color.map(|mut col| std::mem::replace(&mut col.0, Color::NONE)).unwrap_or_default(),
         }
     } else {
         Fade {

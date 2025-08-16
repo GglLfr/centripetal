@@ -1,6 +1,7 @@
-use crate::{logic::levels::LevelTransitionSet, prelude::*};
 use bevy::{asset::load_internal_asset, render::render_asset::prepare_assets};
 use bevy_vector_shapes::render::{DrawShape2dCommand, ShapeData};
+
+use crate::{logic::levels::LevelTransitionSet, prelude::*};
 
 mod animation;
 mod color;
@@ -10,7 +11,6 @@ mod sprite_alloc;
 mod sprite_drawer;
 mod sprite_sheet;
 pub use animation::*;
-
 pub use color::*;
 pub use fbo::*;
 pub use shape::*;
@@ -22,27 +22,18 @@ pub use sprite_sheet::*;
 pub struct GraphicsPlugin;
 impl Plugin for GraphicsPlugin {
     fn build(&self, app: &mut App) {
-        app.init_asset::<SpriteSection>()
-            .init_asset::<SpriteSheet>()
-            .add_systems(
-                PostUpdate,
-                (
-                    update_animations.after(LevelTransitionSet),
-                    draw_animations,
-                    flush_drawer_to_children,
-                )
-                    .chain()
-                    .before(TransformSystem::TransformPropagate),
-            );
+        app.init_asset::<SpriteSection>().init_asset::<SpriteSheet>().add_systems(
+            PostUpdate,
+            (update_animations.after(LevelTransitionSet), draw_animations, flush_drawer_to_children)
+                .chain()
+                .before(TransformSystem::TransformPropagate),
+        );
 
         if let Some(render_app) = app.get_sub_app_mut(RenderApp) {
             render_app
                 .init_resource::<PendingSprites>()
                 .add_systems(ExtractSchedule, extract_pending_sprites)
-                .add_systems(
-                    Render,
-                    prepare_pending_sprites.after(prepare_assets::<GpuImage>),
-                );
+                .add_systems(Render, prepare_pending_sprites.after(prepare_assets::<GpuImage>));
         }
     }
 
@@ -57,22 +48,13 @@ impl Plugin for GraphicsPlugin {
 
         if let Some(render_app) = app.get_sub_app_mut(RenderApp) {
             fn setup<T: ShapeData>(world: &mut World) {
-                let function = FboWrappedDraw::<
-                    Transparent2d,
-                    DrawShape2dCommand<T>,
-                    BlitPixelizedShapes,
-                >::new(world);
+                let function = FboWrappedDraw::<Transparent2d, DrawShape2dCommand<T>, BlitPixelizedShapes>::new(world);
 
                 let mut functions = world.resource::<DrawFunctions<Transparent2d>>().write();
-                if let Some(&index) = functions
-                    .indices
-                    .get(&TypeId::of::<DrawShape2dCommand<T>>())
-                {
+                if let Some(&index) = functions.indices.get(&TypeId::of::<DrawShape2dCommand<T>>()) {
                     let actual = functions
                         .get_mut(index)
-                        .map(|draw| {
-                            &*draw as *const dyn bevy::render::render_phase::Draw<Transparent2d>
-                        })
+                        .map(|draw| &*draw as *const dyn bevy::render::render_phase::Draw<Transparent2d>)
                         .unwrap();
 
                     let mut found = false;
@@ -85,10 +67,7 @@ impl Plugin for GraphicsPlugin {
                     }
 
                     if !found {
-                        panic!(
-                            "DrawShape2dCommand<{}> not found",
-                            std::any::type_name::<T>()
-                        )
+                        panic!("DrawShape2dCommand<{}> not found", std::any::type_name::<T>())
                     }
                 } else {
                     functions.add_with::<DrawShape2dCommand<T>, _>(function);
@@ -101,11 +80,7 @@ impl Plugin for GraphicsPlugin {
                 .add_systems(
                     Render,
                     (
-                        (
-                            prepare_blit_pixelized_shape_buffers,
-                            prepare_blit_pixelized_shape_pipelines,
-                        )
-                            .in_set(RenderSet::Prepare),
+                        (prepare_blit_pixelized_shape_buffers, prepare_blit_pixelized_shape_pipelines).in_set(RenderSet::Prepare),
                         update_locked_texture_cache.in_set(RenderSet::Cleanup),
                     ),
                 )

@@ -39,12 +39,7 @@ impl AssetLoader for I18nEntriesLoader {
     type Settings = ();
     type Error = I18nEntriesError;
 
-    async fn load(
-        &self,
-        reader: &mut dyn Reader,
-        _: &Self::Settings,
-        _: &mut LoadContext<'_>,
-    ) -> Result<Self::Asset, Self::Error> {
+    async fn load(&self, reader: &mut dyn Reader, _: &Self::Settings, _: &mut LoadContext<'_>) -> Result<Self::Asset, Self::Error> {
         let mut input = String::new();
         reader.read_to_string(&mut input).await?;
 
@@ -89,9 +84,7 @@ pub struct I18nContext {
 impl Default for I18nContext {
     fn default() -> Self {
         Self {
-            current_locale: get_locale()
-                .and_then(Locale::from_bcp47)
-                .unwrap_or(Locale::EnUS),
+            current_locale: get_locale().and_then(Locale::from_bcp47).unwrap_or(Locale::EnUS),
             listeners: default(),
         }
     }
@@ -126,10 +119,7 @@ impl EntityCommand<Result> for I18nNotifyOne {
             return Ok(());
         };
 
-        let locale = entity
-            .get_resource::<I18nContext>()
-            .ok_or("`I18nContext` missing")?
-            .current_locale;
+        let locale = entity.get_resource::<I18nContext>().ok_or("`I18nContext` missing")?.current_locale;
         let handle = entity.resource::<Locales>()[&locale].clone_weak();
         let fmt = entity
             .get_resource::<Assets<I18nEntries>>()
@@ -140,11 +130,7 @@ impl EntityCommand<Result> for I18nNotifyOne {
             .ok_or(format!("I18n key `{key}` does not exist"))?
             .clone();
 
-        entity.trigger(I18nNotify {
-            locale,
-            fmt,
-            arguments,
-        });
+        entity.trigger(I18nNotify { locale, fmt, arguments });
         Ok(())
     }
 }
@@ -170,11 +156,7 @@ pub struct I18nEntry {
 }
 
 impl I18nEntry {
-    pub fn format<'a>(
-        &'a self,
-        mut argument: impl FnMut(&'a str) -> Option<&'a str>,
-        mut accept: impl FnMut(&'a str, I18nStyle),
-    ) {
+    pub fn format<'a>(&'a self, mut argument: impl FnMut(&'a str) -> Option<&'a str>, mut accept: impl FnMut(&'a str, I18nStyle)) {
         let mut style = I18nStyle::default();
         let mut string = self.format.as_str();
         for &(offset, ref ctx) in &self.contexts {
@@ -242,17 +224,13 @@ impl Default for I18nStyle {
 
 impl<'de> Deserialize<'de> for I18nEntry {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
+    where D: Deserializer<'de> {
         struct Visit;
         impl<'de> de::Visitor<'de> for Visit {
             type Value = I18nEntry;
 
             fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
-            where
-                E: de::Error,
-            {
+            where E: de::Error {
                 I18nEntry::from_str(v).map_err(E::custom)
             }
 
@@ -268,11 +246,7 @@ impl<'de> Deserialize<'de> for I18nEntry {
 type I18nResult<'a, T> = IResult<&'a str, T, VerboseError<&'a str>>;
 
 fn parse_i18n_plain<'a>(input: &'a str) -> I18nResult<'a, &'a str> {
-    context(
-        "I18n plain",
-        verify(is_not("[]{}"), |s: &str| !s.is_empty()),
-    )
-    .parse(input)
+    context("I18n plain", verify(is_not("[]{}"), |s: &str| !s.is_empty())).parse(input)
 }
 
 fn parse_i18n_style_inner<'a>(input: &'a str) -> I18nResult<'a, I18nStyle> {
@@ -293,10 +267,7 @@ fn parse_i18n_style_inner<'a>(input: &'a str) -> I18nResult<'a, I18nStyle> {
                     value(Style::Bold, tag("b")),
                     value(Style::Italic, tag("i")),
                     map(
-                        preceded(
-                            preceded(tag("s"), cut(delimited(space0, tag(":"), space0))),
-                            cut(u32),
-                        ),
+                        preceded(preceded(tag("s"), cut(delimited(space0, tag(":"), space0))), cut(u32)),
                         Style::Size,
                     ),
                     map_res(
@@ -329,11 +300,7 @@ fn parse_i18n_style_inner<'a>(input: &'a str) -> I18nResult<'a, I18nStyle> {
 }
 
 fn parse_i18n_style_outer<'a>(input: &'a str) -> I18nResult<'a, I18nStyle> {
-    context(
-        "I18n style braces",
-        delimited(tag("["), cut(parse_i18n_style_inner), cut(tag("]"))),
-    )
-    .parse(input)
+    context("I18n style braces", delimited(tag("["), cut(parse_i18n_style_inner), cut(tag("]")))).parse(input)
 }
 
 fn parse_i18n_argument<'a>(input: &'a str) -> I18nResult<'a, String> {
@@ -342,10 +309,7 @@ fn parse_i18n_argument<'a>(input: &'a str) -> I18nResult<'a, String> {
         map(
             delimited(
                 tag("{"),
-                cut(recognize(pair(
-                    alt((alpha1, tag("_"))),
-                    many0_count(alt((alphanumeric1, tag("_")))),
-                ))),
+                cut(recognize(pair(alt((alpha1, tag("_"))), many0_count(alt((alphanumeric1, tag("_"))))))),
                 cut(tag("}")),
             ),
             String::from,
@@ -371,11 +335,7 @@ fn parse_i18n_escaped<'a>(input: &'a str) -> I18nResult<'a, char> {
 
 fn parse_i18n_end<'a, T>(input: &'a str) -> I18nResult<'a, T> {
     let e = VerboseError::from_error_kind(input, ErrorKind::Eof);
-    if input.is_empty() {
-        Err(nom::Err::Error(e))
-    } else {
-        Err(nom::Err::Failure(e))
-    }
+    if input.is_empty() { Err(nom::Err::Error(e)) } else { Err(nom::Err::Failure(e)) }
 }
 
 fn parse_i18n_fmt<'a>(input: &'a str) -> I18nResult<'a, I18nEntry> {
@@ -391,12 +351,8 @@ fn parse_i18n_fmt<'a>(input: &'a str) -> I18nResult<'a, I18nEntry> {
             cut(fold_many0(
                 alt((
                     map(parse_i18n_escaped, Fmt::Char),
-                    map(parse_i18n_argument, |arg| {
-                        Fmt::Segment(I18nFormatCtx::Argument(arg))
-                    }),
-                    map(parse_i18n_style_outer, |style| {
-                        Fmt::Segment(I18nFormatCtx::Style(style))
-                    }),
+                    map(parse_i18n_argument, |arg| Fmt::Segment(I18nFormatCtx::Argument(arg))),
+                    map(parse_i18n_style_outer, |style| Fmt::Segment(I18nFormatCtx::Style(style))),
                     map(parse_i18n_plain, Fmt::Slice),
                     parse_i18n_end,
                 )),
@@ -411,9 +367,7 @@ fn parse_i18n_fmt<'a>(input: &'a str) -> I18nResult<'a, I18nEntry> {
                             fmt_len += c.len_utf8();
                             fmt.format.push(c);
                         }
-                        Fmt::Segment(segment) => fmt
-                            .contexts
-                            .push((std::mem::replace(&mut fmt_len, 0), segment)),
+                        Fmt::Segment(segment) => fmt.contexts.push((std::mem::replace(&mut fmt_len, 0), segment)),
                     }
 
                     (fmt_len, fmt)
@@ -427,9 +381,10 @@ fn parse_i18n_fmt<'a>(input: &'a str) -> I18nResult<'a, I18nEntry> {
 
 #[cfg(test)]
 mod tests {
+    use std::str::FromStr;
+
     use bevy::prelude::*;
     use smallvec::smallvec;
-    use std::str::FromStr;
 
     use crate::{I18nEntry, I18nFormatCtx, I18nStyle};
 
@@ -442,24 +397,21 @@ mod tests {
             }
         }
 
-        expect(
-            I18nEntry::from_str("Hello [b, i, s: 128, c: #ABCDEF]{name}[]!"),
-            I18nEntry {
-                format: "Hello !".into(),
-                contexts: smallvec![
-                    (
-                        6,
-                        I18nFormatCtx::Style(I18nStyle {
-                            bold: true,
-                            italic: true,
-                            size: 128,
-                            color: Srgba::hex("#ABCDEF").unwrap().into(),
-                        }),
-                    ),
-                    (0, I18nFormatCtx::Argument("name".into())),
-                    (0, I18nFormatCtx::Style(default())),
-                ],
-            },
-        );
+        expect(I18nEntry::from_str("Hello [b, i, s: 128, c: #ABCDEF]{name}[]!"), I18nEntry {
+            format: "Hello !".into(),
+            contexts: smallvec![
+                (
+                    6,
+                    I18nFormatCtx::Style(I18nStyle {
+                        bold: true,
+                        italic: true,
+                        size: 128,
+                        color: Srgba::hex("#ABCDEF").unwrap().into(),
+                    }),
+                ),
+                (0, I18nFormatCtx::Argument("name".into())),
+                (0, I18nFormatCtx::Style(default())),
+            ],
+        });
     }
 }

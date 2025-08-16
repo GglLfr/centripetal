@@ -6,12 +6,10 @@ use crate::{
     logic::{
         GameState, LevelApp, LevelBounds, LevelUnload,
         entities::penumbra::{
-            AttractedAction, Attractor, GenericPenumbra, LaunchAction, SelenePenumbra, ThornPillar,
-            ThornRing, apply_attractor_accels, apply_homing_velocity, color_selene_hurt,
-            color_selene_slash, detect_attracted_entities, draw_selene_launch_disc,
-            draw_selene_prediction_trajectory, predict_attract_trajectory,
-            remove_attracted_initials, trigger_launch_charging, update_launch_charging,
-            update_launch_idle,
+            AttractedAction, Attractor, GenericPenumbra, LaunchAction, SelenePenumbra, ThornPillar, ThornRing, apply_attractor_accels,
+            apply_homing_velocity, color_selene_hurt, color_selene_slash, detect_attracted_entities, draw_selene_launch_disc,
+            draw_selene_prediction_trajectory, predict_attract_trajectory, remove_attracted_initials, trigger_launch_charging,
+            update_launch_charging, update_launch_idle,
         },
     },
     prelude::*,
@@ -36,9 +34,7 @@ impl Health {
 
     pub fn change(&mut self, delta: i32, max: Option<MaxHealth>) -> bool {
         if self.0 > 0 {
-            self.0 = self
-                .saturating_add_signed(delta)
-                .min(max.as_deref().copied().unwrap_or(u32::MAX));
+            self.0 = self.saturating_add_signed(delta).min(max.as_deref().copied().unwrap_or(u32::MAX));
             self.0 == 0
         } else {
             false
@@ -62,7 +58,7 @@ impl MaxHealth {
 pub struct TryHurt {
     pub by: Entity,
     pub amount: u32,
-    pub stopped: bool,
+    stopped: bool,
 }
 
 impl TryHurt {
@@ -71,11 +67,11 @@ impl TryHurt {
     }
 
     pub fn by(by: Entity, amount: u32) -> Self {
-        Self {
-            by,
-            amount,
-            stopped: false,
-        }
+        Self { by, amount, stopped: false }
+    }
+
+    pub fn stop(&mut self) {
+        self.stopped = true;
     }
 }
 
@@ -85,9 +81,7 @@ impl EntityCommand<Result> for TryHurt {
         entity.world_scope(|world| world.trigger_targets_ref(&mut self, id));
 
         if !self.stopped {
-            let Some(should_kill) =
-                entity.modify_component(|health: &mut Health| health.hurt(self.amount))
-            else {
+            let Some(should_kill) = entity.modify_component(|health: &mut Health| health.hurt(self.amount)) else {
                 return Ok(());
             };
 
@@ -138,11 +132,7 @@ impl Killed {
 #[derive(Debug, Copy, Clone, Default, Component)]
 pub struct NoKillDespawn;
 
-pub fn kill_out_of_bounds(
-    commands: ParallelCommands,
-    level_bounds: Query<&LevelBounds, Without<LevelUnload>>,
-    entities: Query<(Entity, &Position)>,
-) {
+pub fn kill_out_of_bounds(commands: ParallelCommands, level_bounds: Query<&LevelBounds, Without<LevelUnload>>, entities: Query<(Entity, &Position)>) {
     let Ok(&level_bounds) = level_bounds.single() else {
         return;
     };
@@ -214,11 +204,7 @@ impl Plugin for EntitiesPlugin {
         .add_systems(
             FixedPostUpdate,
             (
-                (
-                    detect_attracted_entities,
-                    remove_attracted_initials,
-                    predict_attract_trajectory,
-                )
+                (detect_attracted_entities, remove_attracted_initials, predict_attract_trajectory)
                     .chain()
                     .after(PhysicsSet::StepSimulation),
                 (trigger_launch_charging, kill_out_of_bounds).after(PhysicsSet::Writeback),

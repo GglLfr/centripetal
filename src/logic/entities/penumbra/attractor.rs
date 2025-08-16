@@ -41,12 +41,7 @@ impl FromLevelEntity for Attractor {
     type Param = SRes<Sprites>;
     type Data = ();
 
-    fn from_level_entity(
-        mut e: EntityCommands,
-        fields: &Fields,
-        sprites: &mut SystemParamItem<Self::Param>,
-        _: QueryItem<Self::Data>,
-    ) -> Result {
+    fn from_level_entity(mut e: EntityCommands, fields: &Fields, sprites: &mut SystemParamItem<Self::Param>, _: QueryItem<Self::Data>) -> Result {
         let radius = fields.float("radius")?;
         let strength = fields.float("strength")?;
         let _level_target = fields.string("level_target").ok().to_owned();
@@ -60,13 +55,11 @@ impl FromLevelEntity for Attractor {
             Animation::new(sprites.attractor_regular.clone_weak(), "anim"),
             AnimationMode::Repeat,
         ))
-        .observe(
-            |trigger: Trigger<OnCollisionStart>, mut commands: Commands| {
-                if let Some(mut e) = trigger.body.and_then(|e| commands.get_entity(e).ok()) {
-                    e.queue(TryHurt::by(trigger.target(), i32::MAX as u32));
-                }
-            },
-        );
+        .observe(|trigger: Trigger<OnCollisionStart>, mut commands: Commands| {
+            if let Some(mut e) = trigger.body.and_then(|e| commands.get_entity(e).ok()) {
+                e.queue(TryHurt::by(trigger.target(), i32::MAX as u32));
+            }
+        });
 
         Ok(())
     }
@@ -134,12 +127,7 @@ pub fn detect_attracted_entities(
 
                     if let Some(&initial) = initial {
                         let initial_speed = (attractor.gravity / r).sqrt();
-                        let initial_velocity = if initial.ccw {
-                            -r_vec.perp()
-                        } else {
-                            r_vec.perp()
-                        } / r
-                            * initial_speed;
+                        let initial_velocity = if initial.ccw { -r_vec.perp() } else { r_vec.perp() } / r * initial_speed;
                         **linvel += initial_velocity;
                     }
 
@@ -158,10 +146,7 @@ pub fn detect_attracted_entities(
     }
 }
 
-pub fn remove_attracted_initials(
-    mut commands: Commands,
-    query: Query<Entity, With<AttractedInitial>>,
-) {
+pub fn remove_attracted_initials(mut commands: Commands, query: Query<Entity, With<AttractedInitial>>) {
     for e in &query {
         commands.entity(e).remove::<AttractedInitial>();
     }
@@ -170,11 +155,7 @@ pub fn remove_attracted_initials(
 pub fn apply_attractor_accels(
     time: Res<Time<Substeps>>,
     attractors: Query<(&Position, &Attractor, &AttractorEntities)>,
-    mut attracted: Query<(
-        &Position,
-        &mut SolverBody,
-        Option<(&AttractedParams, &ActionState<AttractedAction>)>,
-    )>,
+    mut attracted: Query<(&Position, &mut SolverBody, Option<(&AttractedParams, &ActionState<AttractedAction>)>)>,
 ) {
     let dt = time.delta_secs();
     for (&attractor_pos, attractor, attracted_entities) in &attractors {
@@ -187,34 +168,23 @@ pub fn apply_attractor_accels(
                 ..
             } = body.into_inner();
 
-            let (added_linvel, r_vec, r) = gravity_linvel(
-                dt,
-                *pos + *delta_position,
-                *attractor_pos,
-                attractor.gravity,
-            );
+            let (added_linvel, r_vec, r) = gravity_linvel(dt, *pos + *delta_position, *attractor_pos, attractor.gravity);
             *linear_velocity += added_linvel;
 
             let crs = r_vec.x * linear_velocity.y - r_vec.y * linear_velocity.x;
             *angular_velocity = -(crs / (r * r));
 
             if let Some((param, state)) = hover {
-                let precise_scale = if state.pressed(&AttractedAction::Precise) {
-                    param.precise_scale
-                } else {
-                    1.
-                };
+                let precise_scale = if state.pressed(&AttractedAction::Precise) { param.precise_scale } else { 1. };
 
                 {
                     let prograde_value = state.clamped_value(&AttractedAction::Accel);
 
                     let r_vec = *linear_velocity;
                     let r = r_vec.length();
-                    let prograde = if prograde_value > 0. {
-                        param.prograde * prograde_value.min(1.)
-                    } else {
-                        param.retrograde * prograde_value.max(-1.)
-                    } * precise_scale;
+                    let prograde =
+                        if prograde_value > 0. { param.prograde * prograde_value.min(1.) } else { param.retrograde * prograde_value.max(-1.) }
+                            * precise_scale;
 
                     *linear_velocity += prograde / r * r_vec * dt;
                 }
@@ -224,11 +194,8 @@ pub fn apply_attractor_accels(
 
                     let r_vec = *attractor_pos - *pos;
                     let r = r_vec.length();
-                    let hover = if hover_value > 0. {
-                        param.ascend * (-hover_value).max(-1.)
-                    } else {
-                        param.descend * (-hover_value).min(1.)
-                    } * precise_scale;
+                    let hover = if hover_value > 0. { param.ascend * (-hover_value).max(-1.) } else { param.descend * (-hover_value).min(1.) }
+                        * precise_scale;
 
                     *linear_velocity += hover / r * r_vec * dt;
                 }
@@ -262,9 +229,7 @@ pub fn predict_attract_trajectory(
                 accum += (new_pos - pos).length();
                 pos = new_pos;
 
-                if attractor_collision.contains_point(attractor_pos, 0., pos)
-                    || !attractor.caster.contains_point(attractor_pos, 0., pos)
-                {
+                if attractor_collision.contains_point(attractor_pos, 0., pos) || !attractor.caster.contains_point(attractor_pos, 0., pos) {
                     continue 'outer;
                 }
 
@@ -302,17 +267,14 @@ pub fn draw_attractor_radius(
         let total_lifetime = (count - bleed) * offset + lifetime;
 
         for i in 0..count {
-            let elapsed = (elapsed + i * offset)
-                .rem(total_lifetime)
-                .min(lifetime)
-                .div_duration_f32(lifetime);
+            let elapsed = (elapsed + i * offset).rem(total_lifetime).min(lifetime).div_duration_f32(lifetime);
 
             let ring = match elapsed {
-                1. => ring_1,
-                e if e >= 0.8 => ring_2,
-                e if e >= 0.6 => ring_3,
-                e if e >= 0.4 => ring_4,
-                e if e >= 0.2 => ring_3,
+                1.0.. => ring_1,
+                0.8.. => ring_2,
+                0.6.. => ring_3,
+                0.4.. => ring_4,
+                0.2.. => ring_3,
                 _ => ring_2,
             };
             let alpha = elapsed.slope(0.5).pow(2).re_map(0.4, 0.8);

@@ -1,9 +1,6 @@
 use crate::prelude::*;
 
-pub struct Affected<M: 'static, T: IntoResultSystem<In<Entity>, (), M>>(
-    pub T::System,
-    PhantomData<fn(M)>,
-);
+pub struct Affected<M: 'static, T: IntoResultSystem<In<Entity>, (), M>>(pub T::System, PhantomData<fn(M)>);
 
 impl<M: 'static, T: IntoResultSystem<In<Entity>, (), M>> Affected<M, T> {
     pub fn by(effect: T) -> Self {
@@ -38,32 +35,21 @@ impl<M: 'static, T: IntoResultSystem<In<Entity>, (), M>> BundleEffect for Affect
 }
 
 #[derive(Debug)]
-pub struct Observed<
-    E: Event,
-    B: Bundle,
-    M: 'static,
-    T: IntoObserverSystem<E, B, M> + 'static + Send + Sync,
->(pub T, PhantomData<fn(E, B, M)>);
+pub struct Observed<E: Event, B: Bundle, M: 'static, T: IntoObserverSystem<E, B, M> + 'static + Send + Sync>(pub T, PhantomData<fn(E, B, M)>);
 
-impl<E: Event, B: Bundle, M, T: IntoObserverSystem<E, B, M> + Clone + 'static + Send + Sync> Clone
-    for Observed<E, B, M, T>
-{
+impl<E: Event, B: Bundle, M, T: IntoObserverSystem<E, B, M> + Clone + 'static + Send + Sync> Clone for Observed<E, B, M, T> {
     fn clone(&self) -> Self {
         Self(self.0.clone(), PhantomData)
     }
 }
 
-impl<E: Event, B: Bundle, M, T: IntoObserverSystem<E, B, M> + 'static + Send + Sync>
-    Observed<E, B, M, T>
-{
+impl<E: Event, B: Bundle, M, T: IntoObserverSystem<E, B, M> + 'static + Send + Sync> Observed<E, B, M, T> {
     pub fn by(observer: T) -> Self {
         Self(observer, PhantomData)
     }
 }
 
-impl<E: Event, B: Bundle, M: 'static, T: IntoObserverSystem<E, B, M> + 'static + Send + Sync>
-    DynamicBundle for Observed<E, B, M, T>
-{
+impl<E: Event, B: Bundle, M: 'static, T: IntoObserverSystem<E, B, M> + 'static + Send + Sync> DynamicBundle for Observed<E, B, M, T> {
     type Effect = Self;
 
     fn get_components(self, _: &mut impl FnMut(StorageType, OwningPtr<'_>)) -> Self::Effect {
@@ -71,9 +57,7 @@ impl<E: Event, B: Bundle, M: 'static, T: IntoObserverSystem<E, B, M> + 'static +
     }
 }
 
-unsafe impl<E: Event, B: Bundle, M: 'static, T: IntoObserverSystem<E, B, M> + 'static + Send + Sync>
-    Bundle for Observed<E, B, M, T>
-{
+unsafe impl<E: Event, B: Bundle, M: 'static, T: IntoObserverSystem<E, B, M> + 'static + Send + Sync> Bundle for Observed<E, B, M, T> {
     fn component_ids(_: &mut ComponentsRegistrator, _: &mut impl FnMut(ComponentId)) {}
 
     fn get_component_ids(_: &Components, _: &mut impl FnMut(Option<ComponentId>)) {}
@@ -81,9 +65,7 @@ unsafe impl<E: Event, B: Bundle, M: 'static, T: IntoObserverSystem<E, B, M> + 's
     fn register_required_components(_: &mut ComponentsRegistrator, _: &mut RequiredComponents) {}
 }
 
-impl<E: Event, B: Bundle, M: 'static, T: IntoObserverSystem<E, B, M> + 'static + Send + Sync>
-    BundleEffect for Observed<E, B, M, T>
-{
+impl<E: Event, B: Bundle, M: 'static, T: IntoObserverSystem<E, B, M> + 'static + Send + Sync> BundleEffect for Observed<E, B, M, T> {
     fn apply(self, entity: &mut EntityWorldMut) {
         entity.observe(self.0);
     }
@@ -122,9 +104,7 @@ pub trait IntoResultSystem<In: SystemInput, Out: 'static, Marker>: 'static {
     fn into_system(this: Self) -> Self::System;
 }
 
-impl<In: SystemInput, Out: 'static, Marker, S: 'static + IntoSystem<In, Out, Marker>>
-    IntoResultSystem<In, Out, (Direct, Marker)> for S
-{
+impl<In: SystemInput, Out: 'static, Marker, S: 'static + IntoSystem<In, Out, Marker>> IntoResultSystem<In, Out, (Direct, Marker)> for S {
     type System = ResultSystem<S::System>;
 
     fn into_system(this: Self) -> Self::System {
@@ -132,9 +112,7 @@ impl<In: SystemInput, Out: 'static, Marker, S: 'static + IntoSystem<In, Out, Mar
     }
 }
 
-impl<In: SystemInput, Out: 'static, Marker, S: 'static + IntoSystem<In, Result<Out>, Marker>>
-    IntoResultSystem<In, Out, (Resulted, Marker)> for S
-{
+impl<In: SystemInput, Out: 'static, Marker, S: 'static + IntoSystem<In, Result<Out>, Marker>> IntoResultSystem<In, Out, (Resulted, Marker)> for S {
     type System = S::System;
 
     fn into_system(this: Self) -> Self::System {
@@ -142,9 +120,7 @@ impl<In: SystemInput, Out: 'static, Marker, S: 'static + IntoSystem<In, Result<O
     }
 }
 
-impl<In: SystemInput, Out: 'static, Marker, S: 'static + IntoSystem<In, Never, Marker>>
-    IntoResultSystem<In, Out, (fn() -> Never, Marker)> for S
-{
+impl<In: SystemInput, Out: 'static, Marker, S: 'static + IntoSystem<In, Never, Marker>> IntoResultSystem<In, Out, (fn() -> Never, Marker)> for S {
     type System = NeverSystem<S::System, Result<Out>>;
 
     fn into_system(this: Self) -> Self::System {
@@ -181,11 +157,7 @@ impl<S: System> System for ResultSystem<S> {
         self.0.has_deferred()
     }
 
-    unsafe fn run_unsafe(
-        &mut self,
-        input: SystemIn<'_, Self>,
-        world: UnsafeWorldCell,
-    ) -> Self::Out {
+    unsafe fn run_unsafe(&mut self, input: SystemIn<'_, Self>, world: UnsafeWorldCell) -> Self::Out {
         Ok(unsafe { self.0.run_unsafe(input, world) })
     }
 
@@ -197,10 +169,7 @@ impl<S: System> System for ResultSystem<S> {
         self.0.queue_deferred(world);
     }
 
-    unsafe fn validate_param_unsafe(
-        &mut self,
-        world: UnsafeWorldCell,
-    ) -> Result<(), SystemParamValidationError> {
+    unsafe fn validate_param_unsafe(&mut self, world: UnsafeWorldCell) -> Result<(), SystemParamValidationError> {
         unsafe { self.0.validate_param_unsafe(world) }
     }
 
@@ -254,11 +223,7 @@ impl<S: System<Out = Never>, Out: 'static> System for NeverSystem<S, Out> {
         self.0.has_deferred()
     }
 
-    unsafe fn run_unsafe(
-        &mut self,
-        input: SystemIn<'_, Self>,
-        world: UnsafeWorldCell,
-    ) -> Self::Out {
+    unsafe fn run_unsafe(&mut self, input: SystemIn<'_, Self>, world: UnsafeWorldCell) -> Self::Out {
         unsafe { self.0.run_unsafe(input, world) }
     }
 
@@ -270,10 +235,7 @@ impl<S: System<Out = Never>, Out: 'static> System for NeverSystem<S, Out> {
         self.0.queue_deferred(world);
     }
 
-    unsafe fn validate_param_unsafe(
-        &mut self,
-        world: UnsafeWorldCell,
-    ) -> Result<(), SystemParamValidationError> {
+    unsafe fn validate_param_unsafe(&mut self, world: UnsafeWorldCell) -> Result<(), SystemParamValidationError> {
         unsafe { self.0.validate_param_unsafe(world) }
     }
 
@@ -298,9 +260,7 @@ impl<S: System<Out = Never>, Out: 'static> System for NeverSystem<S, Out> {
     }
 }
 
-pub fn wait(
-    duration: Duration,
-) -> impl Fn(Res<Time>, Local<Option<Duration>>) -> bool + 'static + Send + Sync {
+pub fn wait(duration: Duration) -> impl Fn(Res<Time>, Local<Option<Duration>>) -> bool + 'static + Send + Sync {
     wait_on::<()>(duration)
 }
 
@@ -315,16 +275,8 @@ pub fn wait_on<Ctx: 'static + Send + Sync + Default>(
 }
 
 pub fn despawn_recursive_if<S: RelationshipTarget, F: QueryFilter>(e: EntityWorldMut) {
-    fn inner<S: RelationshipTarget, F: QueryFilter>(
-        world: &mut World,
-        entity: Entity,
-        query: &QueryState<(), F>,
-    ) {
-        let related = world
-            .get::<S>(entity)
-            .into_iter()
-            .flat_map(S::iter)
-            .collect::<Box<[_]>>();
+    fn inner<S: RelationshipTarget, F: QueryFilter>(world: &mut World, entity: Entity, query: &QueryState<(), F>) {
+        let related = world.get::<S>(entity).into_iter().flat_map(S::iter).collect::<Box<[_]>>();
 
         for child in related {
             inner::<S, F>(world, child, query);
@@ -352,11 +304,7 @@ pub fn insert_recursive_if<S: RelationshipTarget, F: QueryFilter, B: Bundle>(
         entity: Entity,
         query: &QueryState<(), F>,
     ) {
-        let related = world
-            .get::<S>(entity)
-            .into_iter()
-            .flat_map(S::iter)
-            .collect::<Box<[_]>>();
+        let related = world.get::<S>(entity).into_iter().flat_map(S::iter).collect::<Box<[_]>>();
 
         if query.get_manual(world, entity).is_ok() {
             world.entity_mut(entity).insert(bundle(entity));

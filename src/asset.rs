@@ -1,10 +1,11 @@
+use sys_locale::get_locales;
+
 use crate::{
     I18nEntries, Locale,
     graphics::{SpriteSection, SpriteSheet},
     logic::Ldtk,
     prelude::*,
 };
-use sys_locale::get_locales;
 
 #[derive(Debug, Clone, Resource, AssetCollection, Deref)]
 pub struct WorldHandle {
@@ -76,17 +77,11 @@ impl AssetCollection for Locales {
     fn load(world: &mut World) -> Vec<UntypedHandle> {
         let server = world.resource::<AssetServer>();
         get_locales()
-            .filter_map(|s| {
-                if Locale::from_bcp47(&s).is_some() {
-                    Some(
-                        server
-                            .load::<I18nEntries>(format!("i18n/{s}.ron"))
-                            .untyped(),
-                    )
-                } else {
-                    None
-                }
-            })
+            .filter_map(
+                |s| {
+                    if Locale::from_bcp47(&s).is_some() { Some(server.load::<I18nEntries>(format!("i18n/{s}.ron")).untyped()) } else { None }
+                },
+            )
             .collect()
     }
 
@@ -95,9 +90,7 @@ impl AssetCollection for Locales {
         Self(
             get_locales()
                 .filter_map(|s| match Locale::from_bcp47(&s) {
-                    Some(locale) => {
-                        Some((locale, server.load::<I18nEntries>(format!("i18n/{s}.ron"))))
-                    }
+                    Some(locale) => Some((locale, server.load::<I18nEntries>(format!("i18n/{s}.ron")))),
                     None => None,
                 })
                 .collect(),
