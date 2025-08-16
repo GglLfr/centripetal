@@ -35,7 +35,7 @@ pub fn init(
         ChildOf(level_entity),
         Timed::run(
             Duration::from_secs(1),
-            move |_: In<Entity>, mut commands: Commands, sprites: Res<Sprites>| -> Result {
+            move |mut commands: Commands, sprites: Res<Sprites>| -> Result {
                 // ...and then finally create the attractor spawn effectz
                 commands
                     .get_entity(level_entity)?

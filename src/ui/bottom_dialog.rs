@@ -143,12 +143,9 @@ impl BottomDialog {
             ui_stretch_horizontal_out(world.entity_mut(prev));
             world.spawn((
                 ChildOf(prev),
-                Timed::run(
-                    UI_STRETCH_TIME,
-                    move |_: In<Entity>, mut commands: Commands| {
-                        commands.queue(despawn(prev));
-                    },
-                ),
+                Timed::run(UI_STRETCH_TIME, move |mut commands: Commands| {
+                    commands.queue(despawn(prev));
+                }),
             ));
         }
 

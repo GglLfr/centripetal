@@ -32,10 +32,7 @@ impl Timed {
         }
     }
 
-    pub fn run<M>(
-        lifetime: Duration,
-        sys: impl IntoResultSystem<In<Entity>, (), M>,
-    ) -> impl Bundle {
+    pub fn run<M>(lifetime: Duration, sys: impl IntoResultSystem<(), (), M>) -> impl Bundle {
         let mut sys = IntoResultSystem::into_system(sys);
         (
             Self::new(lifetime),
@@ -43,7 +40,7 @@ impl Timed {
                 move |trigger: Trigger<TimeFinished>, world: &mut World| -> Result {
                     sys.initialize(world);
                     sys.validate_param(world)?;
-                    sys.run_without_applying_deferred(trigger.target(), world)?;
+                    sys.run_without_applying_deferred((), world)?;
 
                     let mut world = DeferredWorld::from(world);
                     sys.queue_deferred(world.reborrow());

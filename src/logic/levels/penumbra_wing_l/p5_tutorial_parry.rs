@@ -22,18 +22,20 @@ pub fn init(
             commands.queue(despawn(trigger.observer()));
             commands.entity(level_entity).insert(TutorialParry);
 
+            // If we got the "special" outcome (obtained by not getting hit, which is by parrying), skip the
+            // parrying tutorial section completely.
             let &launch = launches.get(level_entity)?;
             let (initial, _skip) = if let p4_tutorial_launch::TutorialLaunch::Normal = launch {
-                (i18n!("tutorial.launch.enter.normal"), false)
+                (i18n!("tutorial.parry.enter.normal"), false)
             } else {
-                (i18n!("tutorial.launch.enter.special"), true)
+                (i18n!("tutorial.parry.enter.special"), true)
             };
 
             commands.queue(BottomDialog::show(
                 initial,
                 BottomDialog::show_next_after(
                     Duration::from_secs(2),
-                    i18n!("tutorial.launch.recognition"),
+                    i18n!("tutorial.parry.recognition"),
                     |_: In<Entity>| {},
                 ),
             ));
