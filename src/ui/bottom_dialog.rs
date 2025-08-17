@@ -52,7 +52,7 @@ impl BottomDialog {
             let mut this = world.get_resource_mut::<Self>().ok_or("`BottomDialog` missing")?;
 
             if this.current.zip(previous).is_some_and(|(current, previous)| current != previous) {
-                return Ok(());
+                return Ok(())
             }
 
             let root = this.root;
@@ -120,9 +120,8 @@ impl BottomDialog {
         let previous = previous.into();
         move |world: &mut World| {
             let mut this = world.get_resource_mut::<Self>().ok_or("`BottomDialog` missing")?;
-
             if this.current.zip(previous).is_some_and(|(current, previous)| current != previous) {
-                return Ok(());
+                return Ok(())
             }
 
             if let Some(prev) = this.current.take()

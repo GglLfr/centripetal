@@ -81,10 +81,7 @@ impl EntityCommand<Result> for TryHurt {
         entity.world_scope(|world| world.trigger_targets_ref(&mut self, id));
 
         if !self.stopped {
-            let Some(should_kill) = entity.modify_component(|health: &mut Health| health.hurt(self.amount)) else {
-                return Ok(());
-            };
-
+            let Some(should_kill) = entity.modify_component(|health: &mut Health| health.hurt(self.amount)) else { return Ok(()) };
             entity.trigger(Hurt::by(self.by, self.amount));
             if should_kill {
                 entity.trigger(Killed::by(self.by));
@@ -133,9 +130,7 @@ impl Killed {
 pub struct NoKillDespawn;
 
 pub fn kill_out_of_bounds(commands: ParallelCommands, level_bounds: Query<&LevelBounds, Without<LevelUnload>>, entities: Query<(Entity, &Position)>) {
-    let Ok(&level_bounds) = level_bounds.single() else {
-        return;
-    };
+    let Ok(&level_bounds) = level_bounds.single() else { return };
 
     entities.par_iter().for_each(|(e, &pos)| {
         if pos.x < 0. || pos.x > level_bounds.x || pos.y < 0. || pos.y > level_bounds.x {

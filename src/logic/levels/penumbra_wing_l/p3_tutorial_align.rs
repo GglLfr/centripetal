@@ -38,9 +38,7 @@ pub fn update_align_time(
     mut target: Query<(&mut ShapeMaterial, &mut DiscComponent)>,
 ) {
     let delta: Duration = time.delta();
-    let Ok((instance, mut align)) = aligned.single_mut() else {
-        return;
-    };
+    let Ok((instance, mut align)) = aligned.single_mut() else { return };
 
     align.time = if align.within { (align.time + delta).min(TUTORIAL_MOVE_ALIGN_DURATION) } else { align.time.saturating_sub(delta) };
 
@@ -51,10 +49,7 @@ pub fn update_align_time(
         commands.queue(despawn(instance.hover_target));
     }
 
-    let Ok((mut material, mut disc)) = target.get_mut(instance.hover_target) else {
-        return;
-    };
-
+    let Ok((mut material, mut disc)) = target.get_mut(instance.hover_target) else { return };
     let (disable_laa, cap) = if align.time > Duration::ZERO { (false, Cap::Round) } else { (true, Cap::None) };
 
     disc.end_angle = TAU * align.time.div_duration_f32(TUTORIAL_MOVE_ALIGN_DURATION);

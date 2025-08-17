@@ -17,9 +17,7 @@ pub fn update_worldspace_ui(
     let camera_trns = GlobalTransform::from(camera_trns);
 
     nodes.par_iter_mut().for_each(|(&ui, mut node, computed, &target)| {
-        let Ok((trns, mut child_of)) = transforms.get(ui.target) else {
-            return;
-        };
+        let Ok((trns, mut child_of)) = transforms.get(ui.target) else { return };
 
         let mut trns = *trns;
         while let Some(has_child_of) = child_of
@@ -29,10 +27,7 @@ pub fn update_worldspace_ui(
             child_of = parent_child_of;
         }
 
-        let Some(ndc) = camera.world_to_ndc(&camera_trns, trns.translation + ui.offset.extend(0.)) else {
-            return;
-        };
-
+        let Some(ndc) = camera.world_to_ndc(&camera_trns, trns.translation + ui.offset.extend(0.)) else { return };
         let res = target.logical_size();
         let factor = target.scale_factor();
 

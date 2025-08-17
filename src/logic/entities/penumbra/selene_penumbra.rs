@@ -93,12 +93,8 @@ impl FromLevelEntity for SelenePenumbra {
              sprites: Res<Sprites>,
              transforms: Query<&GlobalTransform>,
              level: Query<Entity, (With<Level>, Without<LevelUnload>)>| {
-                let Ok(level_entity) = level.single() else {
-                    return;
-                };
-                let Ok(&trns) = transforms.get(trigger.target()) else {
-                    return;
-                };
+                let Ok(level_entity) = level.single() else { return };
+                let Ok(&trns) = transforms.get(trigger.target()) else { return };
 
                 commands.spawn((ChildOf(level_entity), TimeStun::short_instant()));
                 commands.spawn((
@@ -108,8 +104,8 @@ impl FromLevelEntity for SelenePenumbra {
                     AnimationSmoothing(Interp::Identity),
                     AnimationHooks::despawn_on_done("anim"),
                     BaseColor(Color::linear_rgb(25., 50., 300.)),
-                    // TODO Maybe create a nicer way to get timer from total animation time instead of hardcoding.
-                    Timed::new(Duration::from_millis(6 * 50)),
+                    Timed::from_anim("anim"),
+                    // TODO Timed::new(Duration::from_millis(6 * 50)),
                     Transform::from(trns),
                     trns,
                 ));
@@ -139,13 +135,12 @@ impl FromLevelEntity for SelenePenumbra {
                 }
 
                 let [&selene_pos, &attractor_pos] = positions.get_many([trigger.target(), trigger.at])?;
-
                 commands
                     .spawn((
                         SlashEffect,
                         Animation::new(sprites.attractor_slash.clone_weak(), "anim"),
-                        // TODO Maybe create a nicer way to get timer from total animation time instead of hardcoding.
-                        Timed::new(Duration::from_millis(14 * 24)),
+                        Timed::from_anim("anim"),
+                        // TODO Timed::new(Duration::from_millis(14 * 24)),
                         BaseColor(Color::linear_rgb(50., 100., 600.)),
                         Transform {
                             translation: attractor_pos.extend(0.),
@@ -223,9 +218,7 @@ pub fn draw_selene_prediction_trajectory(
     sprite_sections: Res<Assets<SpriteSection>>,
     selene: Query<(&GlobalTransform, &AttractedPrediction, &SpriteDrawer), With<SelenePenumbra>>,
 ) {
-    let Some(ring) = sprite_sections.get(&sprites.ring_1) else {
-        return;
-    };
+    let Some(ring) = sprite_sections.get(&sprites.ring_1) else { return };
 
     const SKIP: f32 = 8.;
     for (&trns, prediction, drawer) in &selene {
@@ -233,9 +226,7 @@ pub fn draw_selene_prediction_trajectory(
         let mut accum = 0.;
         let mut skip = 0.;
 
-        let Some(mut begin) = prediction.points.first().copied() else {
-            continue;
-        };
+        let Some(mut begin) = prediction.points.first().copied() else { continue };
 
         for points in prediction.points.windows(2) {
             let [a, b] = *points else { continue };

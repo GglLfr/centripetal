@@ -230,7 +230,7 @@ pub fn predict_attract_trajectory(
                 pos = new_pos;
 
                 if attractor_collision.contains_point(attractor_pos, 0., pos) || !attractor.caster.contains_point(attractor_pos, 0., pos) {
-                    continue 'outer;
+                    continue 'outer
                 }
 
                 prediction.points.push(pos);
@@ -251,7 +251,7 @@ pub fn draw_attractor_radius(
         sprite_sections.get(&sprites.ring_3),
         sprite_sections.get(&sprites.ring_4),
     ] else {
-        return;
+        return
     };
 
     let elapsed = time.elapsed();

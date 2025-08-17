@@ -126,7 +126,7 @@ pub fn update_launch_idle(
     let now = time.elapsed();
     for (e, state, &target, &idle, cooldown) in &idle {
         if !state.just_pressed(&LaunchAction) {
-            continue;
+            continue
         }
 
         let cooldown = *cooldown.copied().unwrap_or_default();
@@ -145,10 +145,7 @@ pub fn update_launch_charging(
     let delta = time.delta();
 
     for (e, action, durations, mut charging) in &mut charging {
-        let Some(&duration) = durations.get(charging.index) else {
-            continue;
-        };
-
+        let Some(&duration) = durations.get(charging.index) else { continue };
         if !action.pressed(&LaunchAction) {
             if charging.index > 0 {
                 commands
@@ -163,7 +160,7 @@ pub fn update_launch_charging(
                     .trigger(LaunchCancelled);
             }
 
-            continue;
+            continue
         }
 
         charging.time += delta;

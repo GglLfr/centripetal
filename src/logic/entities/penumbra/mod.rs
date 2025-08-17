@@ -33,10 +33,7 @@ pub fn apply_homing_velocity(
 ) {
     let delta = time.delta_secs();
     for (e, &target, &power) in &mut homings {
-        let Ok([(body, &pos), (other_body, &other_pos)]) = bodies.get_many_mut([e, *target]) else {
-            continue;
-        };
-
+        let Ok([(body, &pos), (other_body, &other_pos)]) = bodies.get_many_mut([e, *target]) else { continue };
         let SolverBody {
             linear_velocity,
             delta_position,
@@ -46,15 +43,13 @@ pub fn apply_homing_velocity(
 
         let target_angle = {
             let Some(Vec2 { x: cos, y: sin }) = (*other_pos + other_body.delta_position - (*pos + *delta_position)).try_normalize() else {
-                continue;
+                continue
             };
             Rotation { cos, sin }
         };
 
         let current_angle = {
-            let Some(Vec2 { x: cos, y: sin }) = linear_velocity.try_normalize() else {
-                continue;
-            };
+            let Some(Vec2 { x: cos, y: sin }) = linear_velocity.try_normalize() else { continue };
             Rotation { cos, sin }
         };
 

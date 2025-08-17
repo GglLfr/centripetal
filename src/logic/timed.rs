@@ -1,4 +1,10 @@
-use crate::{IntoResultSystem, Observed, despawn, logic::entities::TryHurt, math::FloatTransformExt, prelude::*};
+use crate::{
+    Affected, IntoResultSystem, Observed, despawn,
+    graphics::{Animation, SpriteSheet},
+    logic::entities::TryHurt,
+    math::FloatTransformExt,
+    prelude::*,
+};
 
 #[derive(Debug, Copy, Clone, Component)]
 pub struct Timed {
@@ -30,6 +36,29 @@ impl Timed {
             frac: frac as f32,
             finished: false,
         }
+    }
+
+    pub fn from_anim(key: impl Into<Cow<'static, str>>) -> impl Bundle {
+        let key = key.into();
+        (
+            // Avoid division by zero here.
+            Timed::new(Duration::from_nanos(1)),
+            Affected::by(
+                move |In(e): In<Entity>, mut query: Query<(&mut Self, &Animation)>, sheets: Res<Assets<SpriteSheet>>| {
+                    let Ok((mut this, anim)) = query.get_mut(e) else { return };
+                    let Some(sheet) = sheets.get(&anim.sprite) else { return };
+                    let Some(range) = sheet.tags.get(&*key).cloned() else { return };
+
+                    let mut lifetime = Duration::ZERO;
+                    for i in range {
+                        let Some(&duration) = sheet.durations.get(i) else { continue };
+                        lifetime += duration;
+                    }
+
+                    this.lifetime = lifetime;
+                },
+            ),
+        )
     }
 
     pub fn run<M>(lifetime: Duration, sys: impl IntoResultSystem<(), (), M>) -> impl Bundle {
@@ -131,20 +160,15 @@ pub fn update_timed(commands: ParallelCommands, time: Res<Time>, mut timed_query
 
             let frac = overtime.div_duration_f64(lifetime);
             commands.command_scope(|mut commands| {
-                // TODO This is very cursed; the only reason I did this was because `commands.entity(e).trigger()`
-                //      sometimes fails due to the listener entity already being despawned by other time listener
-                //      on the exact same invocation.
-                commands.queue(move |world: &mut World| {
-                    world.trigger_targets(
-                        TimeFinished {
-                            count,
-                            overtime,
-                            overtime_frac_f64: frac,
-                            overtime_frac: frac as f32,
-                        },
-                        e,
-                    );
-                });
+                commands.trigger_targets(
+                    TimeFinished {
+                        count,
+                        overtime,
+                        overtime_frac_f64: frac,
+                        overtime_frac: frac as f32,
+                    },
+                    e,
+                );
             });
         }
     });

@@ -59,7 +59,7 @@ impl FromLevel for Instance {
     ) -> Result {
         if **cutscene_shown {
             // TODO Can this level be revisited without the cutscene?
-            return Ok(());
+            return Ok(())
         }
 
         let level_entity = e.id();

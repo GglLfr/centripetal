@@ -115,9 +115,7 @@ impl Command<Result> for I18nNotifyAll {
 pub struct I18nNotifyOne;
 impl EntityCommand<Result> for I18nNotifyOne {
     fn apply(self, mut entity: EntityWorldMut) -> Result {
-        let Some(I18n { key, arguments }) = entity.get::<I18n>().cloned() else {
-            return Ok(());
-        };
+        let Some(I18n { key, arguments }) = entity.get::<I18n>().cloned() else { return Ok(()) };
 
         let locale = entity.get_resource::<I18nContext>().ok_or("`I18nContext` missing")?.current_locale;
         let handle = entity.resource::<Locales>()[&locale].clone_weak();

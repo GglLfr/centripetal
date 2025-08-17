@@ -59,7 +59,7 @@ impl SpriteAllocator {
                 return Ok((page.image.clone_weak(), TextureAtlas {
                     layout: page.layout.clone_weak(),
                     index,
-                }));
+                }))
             }
         }
 

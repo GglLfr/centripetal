@@ -52,12 +52,8 @@ pub fn on_stretch_insert(
     mut parent: Query<(&mut Stretch, &ChildOf)>,
     mut query: Query<&mut Transform>,
 ) {
-    let Ok((mut stretch, child_of)) = parent.get_mut(trigger.target()) else {
-        return;
-    };
-    let Ok(mut trns) = query.get_mut(child_of.parent()) else {
-        return;
-    };
+    let Ok((mut stretch, child_of)) = parent.get_mut(trigger.target()) else { return };
+    let Ok(mut trns) = query.get_mut(child_of.parent()) else { return };
 
     let scale = trns.scale;
     stretch.target = if stretch.enter {
@@ -159,12 +155,8 @@ pub fn on_fade_insert(
     mut parent: Query<(&mut Fade, &ChildOf)>,
     mut query: Query<(Entity, FadeItem)>,
 ) {
-    let Ok((mut fade, child_of)) = parent.get_mut(trigger.target()) else {
-        return;
-    };
-    let Ok((e, (background, border, box_shadow, text_color))) = query.get_mut(child_of.parent()) else {
-        return;
-    };
+    let Ok((mut fade, child_of)) = parent.get_mut(trigger.target()) else { return };
+    let Ok((e, (background, border, box_shadow, text_color))) = query.get_mut(child_of.parent()) else { return };
 
     *fade = if fade.enter {
         Fade {

@@ -62,7 +62,7 @@ impl Plugin for GraphicsPlugin {
                         if std::ptr::addr_eq(&**draw, actual) {
                             *draw = Box::new(function);
                             found = true;
-                            break;
+                            break
                         }
                     }
 

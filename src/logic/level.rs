@@ -245,10 +245,7 @@ pub fn handle_load_level_begin(
     mut state: ResMut<NextState<InGameState>>,
     to_be_unloaded: Query<(Entity, &Level), Without<LevelUnload>>,
 ) -> Result {
-    let Some(next) = next.as_ref().and_then(|next| next.is_changed().then_some(next.as_str())) else {
-        return Ok(());
-    };
-
+    let Some(next) = next.as_ref().and_then(|next| next.is_changed().then_some(next.as_str())) else { return Ok(()) };
     let mut identity = false;
     for (e, level) in &to_be_unloaded {
         if level.id == next {

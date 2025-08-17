@@ -32,8 +32,9 @@ pub fn draw_spawn_effect(
         sprite_sections.get(&sprites.ring_6),
         sprite_sections.get(&sprites.ring_8),
     ] else {
-        return;
+        return
     };
+
     let rings = rings.map(Option::unwrap);
     for (e, effect, drawer, &timed) in &effects {
         let mut rng = Rng::with_seed(e.to_bits());

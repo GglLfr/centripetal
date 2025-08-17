@@ -63,8 +63,7 @@ pub fn update_scroll_text_sections(
                 if !std::mem::replace(&mut state.done, true) {
                     commands.entity(e).trigger(ScrollTextFinished);
                 }
-
-                break;
+                break
             };
 
             state.done = false;
@@ -95,7 +94,7 @@ pub fn update_scroll_text_sections(
                 state.span_index += 1;
                 state.span_byte_index = 0;
             } else if state.time < section.time_per_char {
-                break;
+                break
             }
         }
 

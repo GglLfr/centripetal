@@ -329,9 +329,7 @@ pub fn update_animations(
 ) {
     let delta = time.delta();
     animations.par_iter_mut().for_each(|(e, animation, &mode, mut data)| {
-        let Some(sprite) = sprite_sheets.get(&animation.sprite) else {
-            return;
-        };
+        let Some(sprite) = sprite_sheets.get(&animation.sprite) else { return };
 
         data.time += delta;
         if let Some(Range { start, end }) = sprite.tags.get(&animation.key).cloned() {
@@ -347,10 +345,10 @@ pub fn update_animations(
                         data.frame = start;
                         data.time -= duration;
                     } else {
-                        break;
+                        break
                     }
                 } else {
-                    break;
+                    break
                 }
             }
 
@@ -362,7 +360,7 @@ pub fn update_animations(
             {
                 data.time -= duration;
                 commands.command_scope(|mut commands| {
-                    commands.entity(e).trigger(OnAnimateDone(animation.key.clone()));
+                    commands.trigger_targets(OnAnimateDone(animation.key.clone()), e);
                 });
             }
         }
@@ -382,9 +380,7 @@ pub fn draw_animations(
     )>,
 ) {
     animations.par_iter().for_each(|(animation, smoothing, data, &mode, drawer, color)| {
-        let Some(sprite) = sprite_sheets.get(&animation.sprite) else {
-            return;
-        };
+        let Some(sprite) = sprite_sheets.get(&animation.sprite) else { return };
 
         let Some(Range { start, end }) = sprite.tags.get(&animation.key).cloned() else { return };
         let Some((frame, next_frame, duration)) = sprite_sheets.get(&animation.sprite).and_then(|sheet| {

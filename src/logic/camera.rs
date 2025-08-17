@@ -119,7 +119,7 @@ pub fn move_camera(
             if let Some(parent) = child_of.map(ChildOf::parent) {
                 e = parent;
             } else {
-                break;
+                break
             }
         }
     }
@@ -131,11 +131,10 @@ pub fn move_camera(
             let bounds = ***level_bounds;
             let size_diff = bounds - cam_bounds;
 
-            let x = if size_diff.x < 0. { bounds.x / 2. } else { trns.x.clamp(cam_bounds.x / 2., bounds.x - cam_bounds.x / 2.) };
-
-            let y = if size_diff.y < 0. { bounds.y / 2. } else { trns.y.clamp(cam_bounds.y / 2., bounds.y - cam_bounds.y / 2.) };
-
-            vec2(x, y)
+            vec2(
+                if size_diff.x < 0. { bounds.x / 2. } else { trns.x.clamp(cam_bounds.x / 2., bounds.x - cam_bounds.x / 2.) },
+                if size_diff.y < 0. { bounds.y / 2. } else { trns.y.clamp(cam_bounds.y / 2., bounds.y - cam_bounds.y / 2.) },
+            )
         }
         CameraConfines::Fixed(rel) => trns + rel,
     }
