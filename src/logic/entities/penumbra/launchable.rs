@@ -186,6 +186,7 @@ pub fn trigger_launch_charging(
     mut commands: Commands,
     pipeline: Res<SpatialQueryPipeline>,
     charging: Query<(Entity, &Position, &LaunchTarget, &LaunchFinished)>,
+    layers: Query<&CollisionLayers>,
     targets: Query<&Position>,
 ) {
     let now = time.elapsed();
@@ -194,7 +195,16 @@ pub fn trigger_launch_charging(
             && let Ok(&target_pos) = targets.get(target)
             && let Ok((dir, len)) = Dir2::new_and_length(*target_pos - *pos)
         {
-            let mut hits = pipeline.ray_hits(*pos, dir, len, u32::MAX, true, &SpatialQueryFilter::from_excluded_entities([e]));
+            let layer = layers.get(e).copied().unwrap_or_default();
+            let mut hits = Vec::new();
+            pipeline.ray_hits_callback(*pos, dir, len, true, &SpatialQueryFilter::from_mask(layer.filters), |hit| {
+                let other_layer = layers.get(hit.entity).copied().unwrap_or_default();
+                if (other_layer.filters & layer.memberships) != 0 {
+                    hits.push(hit);
+                }
+
+                true
+            });
 
             hits.sort_unstable_by_key(|data| FloatOrd(data.distance));
             commands
