@@ -41,7 +41,7 @@ impl Timed {
     pub fn from_anim(key: impl Into<Cow<'static, str>>) -> impl Bundle {
         let key = key.into();
         (
-            // Avoid division by zero here.
+            // Avoid division by zero.
             Timed::new(Duration::from_nanos(1)),
             Affected::by(
                 move |In(e): In<Entity>, mut query: Query<(&mut Self, &Animation)>, sheets: Res<Assets<SpriteSheet>>| {
@@ -55,7 +55,7 @@ impl Timed {
                         lifetime += duration;
                     }
 
-                    this.lifetime = lifetime;
+                    this.lifetime = lifetime.max(Duration::from_nanos(1));
                 },
             ),
         )
