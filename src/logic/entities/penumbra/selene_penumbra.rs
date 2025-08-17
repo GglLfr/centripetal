@@ -2,7 +2,7 @@ use std::f32::consts::TAU;
 
 use crate::{
     Sprites,
-    graphics::{Animation, AnimationHooks, AnimationMode, BaseColor, SpriteDrawer, SpriteSection},
+    graphics::{Animation, AnimationHooks, AnimationMode, AnimationSmoothing, BaseColor, SpriteDrawer, SpriteSection},
     logic::{
         CameraTarget, Fields, FromLevelEntity, IsPlayer, Level, LevelUnload, TimeStun, Timed,
         entities::{
@@ -13,7 +13,7 @@ use crate::{
             },
         },
     },
-    math::FloatTransformExt as _,
+    math::{FloatTransformExt as _, Interp},
     prelude::*,
 };
 
@@ -105,6 +105,7 @@ impl FromLevelEntity for SelenePenumbra {
                     HurtEffect,
                     ChildOf(level_entity),
                     Animation::new(sprites.selene_penumbra_hurt.clone_weak(), "anim"),
+                    AnimationSmoothing(Interp::Identity),
                     AnimationHooks::despawn_on_done("anim"),
                     BaseColor(Color::linear_rgb(25., 50., 300.)),
                     // TODO Maybe create a nicer way to get timer from total animation time instead of hardcoding.
