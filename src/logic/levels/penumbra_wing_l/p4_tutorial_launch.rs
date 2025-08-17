@@ -94,13 +94,15 @@ pub fn init(
                       mut ui: ResMut<SeleneUi>,
                       mut commands: Commands,
                       positions: Query<&Position>,
-                      mut actions: Query<&mut ActionState<AttractedAction>>|
+                      mut actions: Query<(&mut ActionState<AttractedAction>, &mut ActionState<LaunchAction>)>|
                       -> Result {
                     if trigger.at == attractor {
                         let [&pos, &attractor_pos] = positions.get_many([trigger.target(), trigger.at])?;
 
-                        // 1: Secretly enable parrying.
-                        actions.get_mut(trigger.target())?.enable_action(&AttractedAction::Parry);
+                        // 1: Secretly enable parrying, but temporarily disable launching too.
+                        let (mut attracted_action, mut launch_action) = actions.get_mut(trigger.target())?;
+                        attracted_action.enable_action(&AttractedAction::Parry);
+                        launch_action.disable_action(&LaunchAction);
 
                         // 2: Queue a time stun.
                         commands.queue(despawn(trigger.observer()));
