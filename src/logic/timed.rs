@@ -18,7 +18,7 @@ pub struct Timed {
 impl Timed {
     pub fn new(lifetime: Duration) -> Self {
         Self {
-            lifetime,
+            lifetime: lifetime.max(Duration::from_nanos(1)),
             life: Duration::ZERO,
             frac_f64: 0.,
             frac: 0.,
@@ -27,6 +27,7 @@ impl Timed {
     }
 
     pub fn new_at(lifetime: Duration, life: Duration) -> Self {
+        let lifetime = lifetime.max(Duration::from_nanos(1));
         let life = life.min(lifetime);
         let frac = life.div_duration_f64(lifetime);
         Self {
