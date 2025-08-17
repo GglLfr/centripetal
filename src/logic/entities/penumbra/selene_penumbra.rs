@@ -105,7 +105,6 @@ impl FromLevelEntity for SelenePenumbra {
                     AnimationHooks::despawn_on_done("anim"),
                     BaseColor(Color::linear_rgb(25., 50., 300.)),
                     Timed::from_anim("anim"),
-                    // TODO Timed::new(Duration::from_millis(6 * 50)),
                     Transform::from(trns),
                     trns,
                 ));
@@ -139,8 +138,8 @@ impl FromLevelEntity for SelenePenumbra {
                     .spawn((
                         SlashEffect,
                         Animation::new(sprites.attractor_slash.clone_weak(), "anim"),
+                        AnimationSmoothing(Interp::Identity),
                         Timed::from_anim("anim"),
-                        // TODO Timed::new(Duration::from_millis(14 * 24)),
                         BaseColor(Color::linear_rgb(50., 100., 600.)),
                         Transform {
                             translation: attractor_pos.extend(0.),
