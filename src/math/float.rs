@@ -130,6 +130,8 @@ impl<T: Float> FloatTransformer<T> for Pow {
 pub enum Interp<T: Float> {
     Identity,
     Reverse,
+    Zero,
+    One,
     Slope { mid: T },
     PowIn { exponent: u32 },
     PowOut { exponent: u32 },
@@ -142,6 +144,8 @@ impl<T: Float> FloatTransformer<T> for Interp<T> {
         match *self {
             Self::Identity => value,
             Self::Reverse => max - value + min,
+            Self::Zero => min,
+            Self::One => max,
             Self::Slope { mid } => Slope { mid }.apply_within(value, min, max),
             Self::PowIn { exponent } => PowIn { exponent }.apply_within(value, min, max),
             Self::PowOut { exponent } => PowOut { exponent }.apply_within(value, min, max),

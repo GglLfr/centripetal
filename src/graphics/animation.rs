@@ -1,6 +1,7 @@
 use crate::{
     IntoResultSystem, Sprites, despawn,
     graphics::{BaseColor, SpriteDrawer, SpriteSection, SpriteSheet},
+    math::{FloatTransformer as _, Interp},
     prelude::*,
 };
 
@@ -67,7 +68,7 @@ impl BundleEffect for AnimationFrom {
 }
 
 #[derive(Debug, Clone, Default, Component)]
-#[require(SpriteDrawer, AnimationData, AnimationMode)]
+#[require(SpriteDrawer, AnimationSmoothing, AnimationData, AnimationMode)]
 #[component(on_insert = on_animation_insert)]
 pub struct Animation {
     pub sprite: Handle<SpriteSheet>,
@@ -81,6 +82,14 @@ impl Animation {
 
     pub fn key(&self) -> &str {
         &self.key
+    }
+}
+
+#[derive(Debug, Clone, Component, Deref, DerefMut)]
+pub struct AnimationSmoothing(pub Interp<f32>);
+impl Default for AnimationSmoothing {
+    fn default() -> Self {
+        Self(Interp::Zero)
     }
 }
 
@@ -363,23 +372,79 @@ pub fn update_animations(
 pub fn draw_animations(
     sprite_sheets: Res<Assets<SpriteSheet>>,
     sprites: Res<Assets<SpriteSection>>,
-    animations: Query<(&Animation, &AnimationData, &AnimationMode, &SpriteDrawer, Option<&BaseColor>)>,
+    animations: Query<(
+        &Animation,
+        &AnimationSmoothing,
+        &AnimationData,
+        &AnimationMode,
+        &SpriteDrawer,
+        Option<&BaseColor>,
+    )>,
 ) {
-    animations.par_iter().for_each(|(animation, data, &mode, drawer, color)| {
-        let Some(frame) = sprite_sheets
-            .get(&animation.sprite)
-            .and_then(|sheet| sheet.frames.get(data.frame))
-            .and_then(|frame| sprites.get(frame))
-        else {
+    animations.par_iter().for_each(|(animation, smoothing, data, &mode, drawer, color)| {
+        let Some(sprite) = sprite_sheets.get(&animation.sprite) else {
             return;
         };
 
+        let Some(Range { start, end }) = sprite.tags.get(&animation.key).cloned() else { return };
+        let Some((frame, next_frame, duration)) = sprite_sheets.get(&animation.sprite).and_then(|sheet| {
+            Some((
+                sheet.frames.get(data.frame).and_then(|handle| sprites.get(handle))?,
+                match mode {
+                    AnimationMode::Finish | AnimationMode::Saturate => {
+                        if data.frame == end {
+                            None
+                        } else {
+                            Some(data.frame + 1)
+                        }
+                    }
+                    AnimationMode::Repeat => {
+                        if data.frame == end {
+                            Some(start)
+                        } else {
+                            Some(data.frame + 1)
+                        }
+                    }
+                }
+                .and_then(|next_frame| sheet.frames.get(next_frame).and_then(|handle| sprites.get(handle))),
+                *sheet.durations.get(data.frame)?,
+            ))
+        }) else {
+            return
+        };
+
+        let next = smoothing.apply(data.time.min(duration).div_duration_f32(duration));
         if !data.finished || !matches!(mode, AnimationMode::Finish) {
+            let color = color.copied().unwrap_or_default().to_linear();
             drawer.draw_at(
                 Vec3::ZERO,
                 Rot2::IDENTITY,
-                frame.sprite_with(color.copied().unwrap_or_default().0, None, default()),
+                frame.sprite_with(
+                    LinearRgba {
+                        alpha: color.alpha * (1. - next),
+                        ..color
+                    },
+                    None,
+                    default(),
+                ),
             );
+
+            if next != 0.
+                && let Some(next_frame) = next_frame
+            {
+                drawer.draw_at(
+                    Vec3::ZERO,
+                    Rot2::IDENTITY,
+                    next_frame.sprite_with(
+                        LinearRgba {
+                            alpha: color.alpha * next,
+                            ..color
+                        },
+                        None,
+                        default(),
+                    ),
+                );
+            }
         }
     });
 }
