@@ -23,7 +23,7 @@ pub fn init(
 ) -> Result {
     // Entry point.
     commands
-        .get_entity(level_entity)?
+        .entity(level_entity)
         .insert((SpawningAttractor, CameraTarget, CameraConfines::Fixed(attractor_trns.translation.xy())));
 
     // Delay 1 second...
@@ -31,7 +31,7 @@ pub fn init(
         ChildOf(level_entity),
         Timed::run(Duration::from_secs(1), move |mut commands: Commands, sprites: Res<Sprites>| -> Result {
             // ...and then finally create the attractor spawn effectz
-            commands.get_entity(level_entity)?.remove::<(CameraTarget, CameraConfines)>();
+            commands.entity(level_entity).remove::<(CameraTarget, CameraConfines)>();
 
             commands.spawn((
                 ChildOf(level_entity),
@@ -46,7 +46,7 @@ pub fn init(
                     .on_done("in", move |_: In<Entity>, mut commands: Commands, sprites: Res<Sprites>| -> Result {
                         // Make the attractor visible.
                         commands
-                            .get_entity(attractor)?
+                            .entity(attractor)
                             .queue(resume)
                             .insert(CameraTarget)
                             .with_children(move |children| {
@@ -76,7 +76,7 @@ pub fn init(
                             .observe(Timed::despawn_on_finished);
 
                         // Proceed to the next phase after the first sub-animation is done.
-                        commands.get_entity(level_entity)?.remove::<SpawningAttractor>();
+                        commands.entity(level_entity).remove::<SpawningAttractor>();
 
                         Ok(())
                     }),

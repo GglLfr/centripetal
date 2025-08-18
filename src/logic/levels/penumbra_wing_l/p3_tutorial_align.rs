@@ -211,12 +211,12 @@ pub fn init(
     commands
         .entity(selene)
         .observe(move |_: Trigger<Killed>, mut commands: Commands, mut ui: ResMut<SeleneUi>| {
-            if let Some(e) = ui.take()
-                && let Ok(mut e) = commands.get_entity(e)
+            if let Some(ui) = ui.take()
+                && let Ok(mut ui) = commands.get_entity(ui)
             {
-                e.queue(ui_fade_out);
+                ui.queue(ui_fade_out);
 
-                let ui_entity = e.id();
+                let ui_entity = ui.id();
                 commands
                     .entity(selene)
                     .observe(move |trigger: Trigger<Respawned>, mut commands: Commands, mut ui: ResMut<SeleneUi>| {
@@ -253,7 +253,7 @@ pub fn init(
             launch.disable_action(&LaunchAction);
 
             commands
-                .get_entity(hover_target)?
+                .entity(hover_target)
                 .queue(resume)
                 // Set `within = true` when Selene overlaps to increment the counter.
                 .observe(

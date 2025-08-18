@@ -110,9 +110,8 @@ pub fn spawn_selene(
             world
                 .spawn((ChildOf(level_entity), SpawnEffect { target_pos }, effect_trns))
                 .observe(Timed::despawn_on_finished)
-                .observe(move |_: Trigger<TimeFinished>, mut commands: Commands| -> Result {
-                    commands.get_entity(selene)?.queue(resume).trigger(Respawned);
-                    Ok(())
+                .observe(move |_: Trigger<TimeFinished>, mut commands: Commands| {
+                    commands.entity(selene).queue(resume).trigger(Respawned);
                 }),
         )
     }
@@ -142,7 +141,7 @@ pub fn init(
 
             // Reset some states on death...
             commands
-                .get_entity(selene)?
+                .entity(selene)
                 .insert((
                     selene_trns,
                     selene_initial,
@@ -158,7 +157,6 @@ pub fn init(
 
             // ...and respawn her with an animation.
             commands.queue(spawn_selene(level_entity, selene, trns, selene_trns, |_| Ok(())));
-
             Ok(())
         },
     );
@@ -173,8 +171,8 @@ pub fn init(
             commands.queue(spawn_selene(level_entity, selene, attractor_trns, selene_trns, move |e| {
                 e.observe(move |_: Trigger<TimeFinished>, mut commands: Commands| -> Result {
                     // ...proceed to the next phase after she's spawned.
-                    commands.get_entity(attractor)?.remove::<(CameraTarget, CameraConfines)>();
-                    commands.get_entity(level_entity)?.remove::<SpawningSelene>();
+                    commands.entity(attractor).remove::<(CameraTarget, CameraConfines)>();
+                    commands.entity(level_entity).remove::<SpawningSelene>();
 
                     Ok(())
                 });

@@ -395,7 +395,6 @@ pub fn draw_selene_prediction_trajectory(
         let mut skip = 0.;
 
         let Some(mut begin) = prediction.points.first().copied() else { continue };
-
         for points in prediction.points.windows(2) {
             let [a, b] = *points else { continue };
             let add = (b - a).length();
