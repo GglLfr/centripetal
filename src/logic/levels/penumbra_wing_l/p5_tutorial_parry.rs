@@ -196,7 +196,7 @@ pub fn init(
                             let &Parried(parried) = query.get(trigger.target())?;
                             if !parried {
                                 match num_fired {
-                                    1..2 => commands.queue(BottomDialog::show(
+                                    1..=2 => commands.queue(BottomDialog::show(
                                         None,
                                         i18n!(format!("tutorial.parry.fail.1-{num_fired}")),
                                         move |In(e): In<Entity>, mut commands: Commands| {
