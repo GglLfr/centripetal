@@ -5,7 +5,7 @@ use crate::{
     logic::{
         Timed,
         entities::{
-            Killed, ParryCollider, TryHurt,
+            Killed, TryHurt,
             penumbra::{HomingTarget, bullet},
         },
         levels::penumbra_wing_l::{Instance, SeleneUi, p4_tutorial_launch},
@@ -123,8 +123,6 @@ pub fn init(
         move |trigger: Trigger<OnInsert, ParryOne>, mut commands: Commands, mut ui: ResMut<SeleneUi>| -> Result {
             #[derive(Debug, Copy, Clone, Event)]
             struct FireMultiple(u32);
-            #[derive(Debug, Copy, Clone, Component)]
-            struct Parried(bool);
 
             fn spawn_bullet(
                 In([level_entity, selene, attractor]): In<[Entity; 3]>,
@@ -152,25 +150,13 @@ pub fn init(
                     .with_entity(selene),
                 ));
 
-                commands
-                    .entity(bullet)
-                    .insert((
-                        bullet::spiky(level_entity),
-                        HomingTarget(selene),
-                        LinearVelocity(angle * 96.),
-                        attractor_pos,
-                        Rotation { cos: angle.x, sin: angle.y },
-                        Parried(false),
-                    ))
-                    .observe(
-                        |trigger: Trigger<OnCollisionStart>, mut query: Query<&mut Parried>, parry: Query<(), With<ParryCollider>>| {
-                            if trigger.body.is_some_and(|body| parry.contains(body))
-                                && let Ok(mut parried) = query.get_mut(trigger.target())
-                            {
-                                parried.0 = true;
-                            }
-                        },
-                    );
+                commands.entity(bullet).insert((
+                    bullet::spiky(level_entity),
+                    HomingTarget(selene),
+                    LinearVelocity(angle * 96.),
+                    attractor_pos,
+                    Rotation { cos: angle.x, sin: angle.y },
+                ));
 
                 Ok(bullet)
             }
@@ -183,13 +169,8 @@ pub fn init(
 
                     let num_fired = trigger.0;
                     world.entity_mut(bullet).observe(
-                        move |trigger: Trigger<OnRemove, RigidBody>,
-                              mut commands: Commands,
-                              query: Query<&Parried>,
-                              mut ui: ResMut<SeleneUi>|
-                              -> Result {
-                            let &Parried(parried) = query.get(trigger.target())?;
-                            if !parried {
+                        move |trigger: Trigger<Killed>, mut commands: Commands, mut ui: ResMut<SeleneUi>| -> Result {
+                            if trigger.by != selene {
                                 match num_fired {
                                     1..=2 => commands.queue(BottomDialog::show(
                                         None,
@@ -317,7 +298,6 @@ pub fn init(
                                 LinearVelocity(vec2(angle.cos, angle.sin) * 96.),
                                 attractor_pos,
                                 angle,
-                                //Parried(false),
                             ));
                         }),
                     ));
