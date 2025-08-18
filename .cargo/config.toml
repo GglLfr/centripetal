@@ -1,5 +1,5 @@
+# This is only used for GitHub Actions.
 [profile.release]
-codegen-units = 1
 incremental = false
-lto = "on"
+lto = "off"
 debug = 0
