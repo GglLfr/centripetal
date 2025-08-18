@@ -1,19 +1,19 @@
 use std::f32::consts::TAU;
 
 use crate::{
-    Sprites,
+    Sprites, despawn,
     graphics::{Animation, AnimationHooks, AnimationMode, AnimationSmoothing, BaseColor, SpriteDrawer, SpriteSection},
     logic::{
         CameraTarget, Fields, FromLevelEntity, IsPlayer, Level, LevelUnload, TimeStun, Timed,
         entities::{
-            EntityLayers, Health, Hurt, MaxHealth, TryHurt,
+            EntityLayers, Health, Hurt, MaxHealth, ParryCollider, TryHurt,
             penumbra::{
-                AttractedInitial, AttractedParams, AttractedPrediction, LaunchCharging, LaunchCooldown, LaunchDurations, LaunchTarget, Launched,
-                PenumbraEntity, TryLaunch,
+                AttractedAction, AttractedInitial, AttractedParams, AttractedPrediction, LaunchCharging, LaunchCooldown, LaunchDurations,
+                LaunchTarget, Launched, PenumbraEntity, TryLaunch,
             },
         },
     },
-    math::{FloatTransformExt as _, Interp},
+    math::{FloatTransformExt as _, Interp, RngExt},
     prelude::*,
 };
 
@@ -27,12 +27,20 @@ pub struct HurtEffect;
 pub struct SlashEffect;
 
 #[derive(Debug, Copy, Clone, Default, Component)]
+pub struct ParryEffect;
+
+#[derive(Debug, Copy, Clone, Component)]
+#[require(SeleneLastParry)]
 pub struct SeleneParry {
+    pub cooldown: Duration,
     pub radius: f32,
     pub warned: bool,
     pub warn_radius: f32,
     pub warn_time: [Duration; 2],
 }
+
+#[derive(Debug, Copy, Clone, Default, Component, Deref, DerefMut)]
+pub struct SeleneLastParry(pub Duration);
 
 #[derive(Debug, Copy, Clone, Default, Component)]
 #[require(
@@ -42,6 +50,7 @@ pub struct SeleneParry {
     LaunchTarget,
     SpriteDrawer,
     SeleneParry {
+        cooldown: Duration::from_millis(750),
         radius: 24.,
         warned: false,
         warn_radius: 16.,
@@ -130,22 +139,24 @@ impl FromLevelEntity for SelenePenumbra {
                 children.spawn((
                     Transform::from_xyz(0., 0., 0f32.next_up()),
                     Animation::new(sprites.selene_try_launch_front.clone_weak(), "anim"),
+                    AnimationSmoothing(Interp::Identity),
                     AnimationHooks::despawn_on_done("anim"),
-                    BaseColor(Color::linear_rgb(1., 2., 6.)),
+                    BaseColor(Color::linear_rgb(1., 2., 4.)),
                 ));
 
                 children.spawn((
                     Transform::from_xyz(0., 0., 0f32.next_down()),
                     Animation::new(sprites.selene_try_launch_back.clone_weak(), "anim"),
+                    AnimationSmoothing(Interp::Identity),
                     AnimationHooks::despawn_on_done("anim"),
-                    BaseColor(Color::linear_rgb(1., 2., 6.)),
+                    BaseColor(Color::linear_rgb(1., 2., 4.)),
                 ));
             });
         })
         .observe(
             |trigger: Trigger<Launched>, mut commands: Commands, positions: Query<&Position>, sprites: Res<Sprites>| -> Result {
                 if let Some(&hurt) = [1, 4, 8].get(trigger.index) {
-                    commands.entity(trigger.at).queue(TryHurt::by(trigger.target(), hurt));
+                    commands.entity(trigger.at).queue_handled(TryHurt::by(trigger.target(), hurt), ignore);
                 }
 
                 let [&selene_pos, &attractor_pos] = positions.get_many([trigger.target(), trigger.at])?;
@@ -210,12 +221,88 @@ pub fn warn_selene_close(
     }
 }
 
+pub fn selene_parry(
+    mut commands: Commands,
+    sprites: Res<Sprites>,
+    time: Res<Time>,
+    mut selene: Query<(
+        Entity,
+        &ActionState<AttractedAction>,
+        &SeleneParry,
+        &CollisionLayers,
+        &mut SeleneLastParry,
+        &GlobalTransform,
+    )>,
+    level: Query<Entity, (With<Level>, Without<LevelUnload>)>,
+) {
+    let Ok(level_entity) = level.single() else { return };
+    let elapsed = time.elapsed();
+
+    for (e, action, &parry, &layer, mut last, &trns) in &mut selene {
+        if action.just_pressed(&AttractedAction::Parry) && elapsed - **last >= parry.cooldown {
+            let trns = trns.compute_transform();
+
+            **last = elapsed;
+            let anim = commands.spawn_empty().id();
+            commands.entity(anim).insert((
+                ChildOf(level_entity),
+                ParryEffect,
+                Animation::new(sprites.selene_penumbra_parry.clone_weak(), "anim"),
+                AnimationSmoothing(Interp::Identity),
+                AnimationHooks::despawn_on_done("anim"),
+                BaseColor(Color::linear_rgb(10., 20., 120.)),
+                {
+                    let mut trns = trns;
+                    trns.rotation = Quat::from_axis_angle(Vec3::Z, Rng::with_seed(anim.to_bits()).f32_within(0., TAU));
+                    trns.translation.z += 1.;
+                    (trns, GlobalTransform::from(trns))
+                },
+                Timed::new(Duration::from_millis(100)),
+            ));
+
+            commands
+                .spawn((
+                    ChildOf(level_entity),
+                    ParryCollider,
+                    Collider::circle(parry.radius),
+                    CollisionEventsEnabled,
+                    layer,
+                    trns,
+                    GlobalTransform::from(trns),
+                    Timed::new(Duration::from_millis(100)),
+                    DebugRender::none(),
+                ))
+                .observe(
+                    move |trigger: Trigger<OnCollisionStart>, mut commands: Commands, mut last: Query<(&mut SeleneParry, &mut SeleneLastParry)>| {
+                        if let Some(body) = trigger.body
+                            && let Ok((mut parry, mut last)) = last.get_mut(e)
+                        {
+                            parry.warn_time = [Duration::ZERO; 2];
+                            **last = Duration::ZERO;
+
+                            commands.entity(body).queue_handled(TryHurt::by(e, 1), ignore);
+                            commands.queue(despawn(trigger.target()));
+                            commands.spawn((ChildOf(anim), TimeStun::speck()));
+                        }
+                    },
+                )
+                .observe(Timed::despawn_on_finished);
+        }
+    }
+}
+
+pub fn color_selene_parry(mut parries: Query<(&Timed, &mut BaseColor), With<ParryEffect>>) {
+    for (timed, mut color) in &mut parries {
+        **color = Color::linear_rgb(10., 20., 120.).mix(&Color::linear_rgb(0., 1., 4.), timed.frac());
+    }
+}
+
 pub fn draw_selene_close(mut shapes: ShapePainter, time: Res<Time>, selene: Query<(&SeleneParry, &GlobalTransform)>) {
     const FLASH_DURATION: Duration = Duration::from_millis(125);
     const FADE_DURATION: Duration = Duration::from_millis(500);
 
-    const FLASH_COLOR: Color = Color::linear_rgb(1., 4., 12.);
-    const FADE_COLOR: Color = Color::linear_rgba(0., 0.25, 2., 0.5);
+    const FLASH_COLOR: Color = Color::linear_rgb(0.5, 1., 2.);
+    const FADE_COLOR: Color = Color::linear_rgba(0., 0.25, 2., 0.25);
     const CLEAR_COLOR: Color = Color::linear_rgba(0., 0., 1., 0.);
 
     let elapsed = time.elapsed();
@@ -225,9 +312,10 @@ pub fn draw_selene_close(mut shapes: ShapePainter, time: Res<Time>, selene: Quer
         let fade = (elapsed - last).div_duration_f32(FADE_DURATION).min(1.);
 
         shapes.transform = trns.compute_transform();
+        shapes.transform.translation.z -= 1.;
         shapes.color = FLASH_COLOR.mix(&FADE_COLOR.mix(&CLEAR_COLOR, fade), flash);
         shapes.hollow = true;
-        shapes.thickness = 2f32.lerp(1., flash);
+        shapes.thickness = 1f32.lerp(0.5, flash);
         shapes.thickness_type = ThicknessType::World;
         shapes.circle(parry.radius);
     }

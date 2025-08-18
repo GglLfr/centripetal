@@ -57,6 +57,7 @@ pub mod prelude {
             component::{ComponentId, Components, ComponentsRegistrator, HookContext, RequiredComponents, StorageType, Tick},
             entity::{EntityHashMap, EntityHashSet},
             entity_disabling::Disabled,
+            error::{ignore, warn},
             never::Never,
             query::{Access, QueryData, QueryEntityError, QueryFilter, QueryItem, QuerySingleError, ROQueryItem, ReadOnlyQueryData},
             system::{

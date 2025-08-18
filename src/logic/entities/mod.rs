@@ -7,9 +7,9 @@ use crate::{
         GameState, LevelApp, LevelBounds, LevelUnload,
         entities::penumbra::{
             AttractedAction, Attractor, GenericPenumbra, LaunchAction, SelenePenumbra, ThornPillar, ThornRing, apply_attractor_accels,
-            apply_homing_velocity, color_selene_hurt, color_selene_slash, detect_attracted_entities, draw_selene_close, draw_selene_launch_disc,
-            draw_selene_prediction_trajectory, predict_attract_trajectory, remove_attracted_initials, trigger_launch_charging,
-            update_launch_charging, update_launch_idle, warn_selene_close,
+            apply_homing_velocity, color_selene_hurt, color_selene_parry, color_selene_slash, detect_attracted_entities, draw_selene_close,
+            draw_selene_launch_disc, draw_selene_prediction_trajectory, predict_attract_trajectory, remove_attracted_initials, selene_parry,
+            trigger_launch_charging, update_launch_charging, update_launch_idle, warn_selene_close,
         },
     },
     prelude::*,
@@ -135,11 +135,15 @@ pub fn kill_out_of_bounds(commands: ParallelCommands, level_bounds: Query<&Level
     entities.par_iter().for_each(|(e, &pos)| {
         if pos.x < 0. || pos.x > level_bounds.x || pos.y < 0. || pos.y > level_bounds.x {
             commands.command_scope(|mut commands| {
-                commands.entity(e).queue(TryHurt::new(i32::MAX as u32));
+                commands.entity(e).queue_handled(TryHurt::new(i32::MAX as u32), warn);
             });
         }
     });
 }
+
+#[derive(Debug, Copy, Clone, Default, Component)]
+#[require(RigidBody::Kinematic)]
+pub struct ParryCollider;
 
 #[derive(Debug, Copy, Clone, Default, PhysicsLayer)]
 pub enum EntityLayers {
@@ -177,6 +181,7 @@ impl Plugin for EntitiesPlugin {
             (
                 color_selene_hurt,
                 color_selene_slash,
+                color_selene_parry,
                 update_launch_idle,
                 update_launch_charging,
                 draw_selene_launch_disc,
@@ -186,9 +191,13 @@ impl Plugin for EntitiesPlugin {
         )
         .add_systems(
             PostUpdate,
-            (draw_selene_prediction_trajectory, (warn_selene_close, draw_selene_close).chain())
-                .run_if(in_state(GameState::InGame))
-                .after(TransformSystem::TransformPropagate),
+            (
+                // Make sure the collider *instantly* gets a `GlobalTransform` *and* gets feed into the spatial query.
+                selene_parry.in_set(RunFixedMainLoopSystem::BeforeFixedMainLoop),
+                (draw_selene_prediction_trajectory, (warn_selene_close, draw_selene_close).chain()),
+            )
+                .after(TransformSystem::TransformPropagate)
+                .run_if(in_state(GameState::InGame)),
         )
         .add_systems(
             SubstepSchedule,
@@ -204,7 +213,7 @@ impl Plugin for EntitiesPlugin {
         )
         .add_systems(
             PostUpdate,
-            (predict_attract_trajectory.chain(), (trigger_launch_charging, kill_out_of_bounds)).after(RunFixedMainLoopSystem::AfterFixedMainLoop),
+            (predict_attract_trajectory, (trigger_launch_charging, kill_out_of_bounds)).in_set(RunFixedMainLoopSystem::AfterFixedMainLoop),
         );
     }
 }

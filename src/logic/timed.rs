@@ -183,6 +183,10 @@ impl TimeStun {
         Self(kind, Duration::ZERO)
     }
 
+    pub fn speck() -> Self {
+        Self::new(TimeStunKind::Speck)
+    }
+
     pub fn short_instant() -> Self {
         Self::new(TimeStunKind::ShortInstant)
     }
@@ -192,9 +196,9 @@ impl TimeStun {
     }
 }
 
-#[derive(Debug, Copy, Clone, Default)]
+#[derive(Debug, Copy, Clone)]
 pub enum TimeStunKind {
-    #[default]
+    Speck,
     ShortInstant,
     LongSmooth,
 }
@@ -210,6 +214,14 @@ pub fn update_time_stun(time: Res<Time<Real>>, mut virtual_time: ResMut<Time<Vir
 
     for (e, &TimeStun(kind, started)) in &stuns {
         scale = match kind {
+            TimeStunKind::Speck => {
+                if now - started >= Duration::from_millis(100) {
+                    commands.queue(despawn(e));
+                    1.
+                } else {
+                    0.075 + (now - started).div_duration_f32(Duration::from_millis(100)) * (1. - 0.075)
+                }
+            }
             TimeStunKind::ShortInstant => {
                 if now - started >= Duration::from_millis(200) {
                     commands.queue(despawn(e));

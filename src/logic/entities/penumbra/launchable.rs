@@ -208,14 +208,17 @@ pub fn trigger_launch_charging(
                 .entity(e)
                 .insert(LaunchIdle { last_attempted: now })
                 .remove::<LaunchFinished>()
-                .queue(TryLaunch {
-                    by: e,
-                    at: target,
-                    index: finished.index,
-                    stopped: false,
-                    current_hit: None,
-                    hits,
-                });
+                .queue_handled(
+                    TryLaunch {
+                        by: e,
+                        at: target,
+                        index: finished.index,
+                        stopped: false,
+                        current_hit: None,
+                        hits,
+                    },
+                    warn,
+                );
         }
     }
 }

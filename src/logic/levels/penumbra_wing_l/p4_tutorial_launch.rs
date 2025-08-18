@@ -143,6 +143,10 @@ pub fn init(
 
                         let mut hit_observer = Observer::new(
                             move |trigger: Trigger<OnCollisionStart>, mut commands: Commands, mut query: Query<&mut TutorialLaunch>| -> Result {
+                                if trigger.body.is_none_or(|body| body != selene) {
+                                    return Ok(())
+                                }
+
                                 commands.queue(despawn(trigger.observer()));
                                 *query.get_mut(level_entity)? = TutorialLaunch::Normal;
 

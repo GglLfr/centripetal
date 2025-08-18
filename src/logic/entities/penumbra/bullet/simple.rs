@@ -27,9 +27,9 @@ pub fn spiky(level_entity: Entity) -> impl Bundle {
         BaseColor(Color::linear_rgba(4., 2., 1., 1.)),
         Health::new(1),
         Observed::by(|trigger: Trigger<OnCollisionStart>, mut commands: Commands| {
-            commands.entity(trigger.target()).queue(TryHurt::new(i32::MAX as u32));
+            commands.entity(trigger.target()).queue_handled(TryHurt::new(i32::MAX as u32), ignore);
             if let Some(body) = trigger.body {
-                commands.entity(body).queue(TryHurt::by(trigger.target(), 1));
+                commands.entity(body).queue_handled(TryHurt::by(trigger.target(), 1), ignore);
             }
         }),
         DebugRender::none(),

@@ -39,7 +39,7 @@ impl FromLevelEntity for ThornRing {
             |mut trigger: Trigger<TryLaunch>, mut commands: Commands| {
                 if trigger.by() != trigger.target() {
                     trigger.event_mut().stop();
-                    commands.entity(trigger.by()).queue(TryHurt::by(trigger.target(), 1));
+                    commands.entity(trigger.by()).queue_handled(TryHurt::by(trigger.target(), 1), ignore);
                 }
             },
         );

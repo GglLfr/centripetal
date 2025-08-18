@@ -57,7 +57,7 @@ impl FromLevelEntity for Attractor {
         ))
         .observe(|trigger: Trigger<OnCollisionStart>, mut commands: Commands| {
             if let Some(mut e) = trigger.body.and_then(|e| commands.get_entity(e).ok()) {
-                e.queue(TryHurt::by(trigger.target(), i32::MAX as u32));
+                e.queue_handled(TryHurt::by(trigger.target(), i32::MAX as u32), ignore);
             }
         });
 
