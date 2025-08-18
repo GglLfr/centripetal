@@ -27,12 +27,26 @@ pub struct HurtEffect;
 pub struct SlashEffect;
 
 #[derive(Debug, Copy, Clone, Default, Component)]
+pub struct SeleneParry {
+    pub radius: f32,
+    pub warned: bool,
+    pub warn_radius: f32,
+    pub warn_time: [Duration; 2],
+}
+
+#[derive(Debug, Copy, Clone, Default, Component)]
 #[require(
     IsPlayer,
     CameraTarget,
     PenumbraEntity,
     LaunchTarget,
     SpriteDrawer,
+    SeleneParry {
+        radius: 24.,
+        warned: false,
+        warn_radius: 16.,
+        warn_time: default(),
+    },
     AttractedParams {
         ascend: 240.,
         descend: 240.,
@@ -54,6 +68,7 @@ pub struct SlashEffect;
     TransformExtrapolation,
 )]
 pub struct SelenePenumbra;
+
 impl FromLevelEntity for SelenePenumbra {
     type Param = (SRes<Sprites>, ShapeCommands<'static, 'static>);
     type Data = ();
@@ -154,6 +169,67 @@ impl FromLevelEntity for SelenePenumbra {
         );
 
         Ok(())
+    }
+}
+
+pub fn warn_selene_close(
+    time: Res<Time>,
+    pipeline: Res<SpatialQueryPipeline>,
+    mut selene: Query<(Entity, &mut SeleneParry, &GlobalTransform)>,
+    layers: Query<&CollisionLayers>,
+) {
+    let elapsed = time.elapsed();
+    for (e, mut parry, &trns) in &mut selene {
+        let layer = layers.get(e).copied().unwrap_or_default();
+        let mut found = false;
+        pipeline.shape_intersections_callback(
+            &Collider::circle(parry.radius + parry.warn_radius),
+            trns.translation().xy(),
+            0.,
+            &SpatialQueryFilter::from_mask(layer.filters),
+            |hit| {
+                let other_layer = layers.get(hit).copied().unwrap_or_default();
+                if (other_layer.filters & layer.memberships) != 0 {
+                    found = true;
+                    false
+                } else {
+                    true
+                }
+            },
+        );
+
+        if found {
+            let just_warned = !std::mem::replace(&mut parry.warned, true);
+            parry.warn_time = match parry.warn_time {
+                [..] if just_warned => [elapsed; 2],
+                [init, ..] => [init, elapsed],
+            };
+        } else {
+            parry.warned = false;
+        }
+    }
+}
+
+pub fn draw_selene_close(mut shapes: ShapePainter, time: Res<Time>, selene: Query<(&SeleneParry, &GlobalTransform)>) {
+    const FLASH_DURATION: Duration = Duration::from_millis(125);
+    const FADE_DURATION: Duration = Duration::from_millis(500);
+
+    const FLASH_COLOR: Color = Color::linear_rgb(1., 4., 12.);
+    const FADE_COLOR: Color = Color::linear_rgba(0., 0.25, 2., 0.5);
+    const CLEAR_COLOR: Color = Color::linear_rgba(0., 0., 1., 0.);
+
+    let elapsed = time.elapsed();
+    for (&parry, &trns) in &selene {
+        let [init, last] = parry.warn_time;
+        let flash = (elapsed - init).div_duration_f32(FLASH_DURATION).min(1.);
+        let fade = (elapsed - last).div_duration_f32(FADE_DURATION).min(1.);
+
+        shapes.transform = trns.compute_transform();
+        shapes.color = FLASH_COLOR.mix(&FADE_COLOR.mix(&CLEAR_COLOR, fade), flash);
+        shapes.hollow = true;
+        shapes.thickness = 2f32.lerp(1., flash);
+        shapes.thickness_type = ThicknessType::World;
+        shapes.circle(parry.radius);
     }
 }
 

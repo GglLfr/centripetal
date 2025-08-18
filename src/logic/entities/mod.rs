@@ -7,9 +7,9 @@ use crate::{
         GameState, LevelApp, LevelBounds, LevelUnload,
         entities::penumbra::{
             AttractedAction, Attractor, GenericPenumbra, LaunchAction, SelenePenumbra, ThornPillar, ThornRing, apply_attractor_accels,
-            apply_homing_velocity, color_selene_hurt, color_selene_slash, detect_attracted_entities, draw_selene_launch_disc,
+            apply_homing_velocity, color_selene_hurt, color_selene_slash, detect_attracted_entities, draw_selene_close, draw_selene_launch_disc,
             draw_selene_prediction_trajectory, predict_attract_trajectory, remove_attracted_initials, trigger_launch_charging,
-            update_launch_charging, update_launch_idle,
+            update_launch_charging, update_launch_idle, warn_selene_close,
         },
     },
     prelude::*,
@@ -186,7 +186,7 @@ impl Plugin for EntitiesPlugin {
         )
         .add_systems(
             PostUpdate,
-            draw_selene_prediction_trajectory
+            (draw_selene_prediction_trajectory, (warn_selene_close, draw_selene_close).chain())
                 .run_if(in_state(GameState::InGame))
                 .after(TransformSystem::TransformPropagate),
         )
@@ -198,12 +198,13 @@ impl Plugin for EntitiesPlugin {
         )
         .add_systems(
             FixedPostUpdate,
-            (
-                (detect_attracted_entities, remove_attracted_initials, predict_attract_trajectory)
-                    .chain()
-                    .after(PhysicsSet::StepSimulation),
-                (trigger_launch_charging, kill_out_of_bounds).after(PhysicsSet::Writeback),
-            ),
+            (detect_attracted_entities, remove_attracted_initials)
+                .chain()
+                .after(PhysicsSet::StepSimulation),
+        )
+        .add_systems(
+            PostUpdate,
+            (predict_attract_trajectory.chain(), (trigger_launch_charging, kill_out_of_bounds)).after(RunFixedMainLoopSystem::AfterFixedMainLoop),
         );
     }
 }

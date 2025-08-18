@@ -6,7 +6,10 @@ use crate::{
     logic::{
         CameraConfines, CameraTarget, TimeFinished, Timed,
         effects::Ring,
-        entities::{Health, Killed, NoKillDespawn, penumbra::AttractedPrediction},
+        entities::{
+            Health, Killed, NoKillDespawn,
+            penumbra::{AttractedPrediction, SeleneParry},
+        },
         levels::penumbra_wing_l::{Instance, p1_spawn_attractor},
     },
     math::{FloatTransformExt as _, Interp, RngExt as _},
@@ -133,14 +136,24 @@ pub fn init(
 ) -> Result {
     // Make Selene "unkillable"; replace the default behavior with suspending and resuming instead.
     commands.entity(selene).insert(NoKillDespawn).observe(
-        move |trigger: Trigger<Killed>, mut commands: Commands, mut query: Query<(&Transform, &mut AttractedPrediction)>| -> Result {
-            let (&trns, mut prediction) = query.get_mut(trigger.target())?;
+        move |trigger: Trigger<Killed>, mut commands: Commands, mut query: Query<(&Transform, &SeleneParry, &mut AttractedPrediction)>| -> Result {
+            let (&trns, &parry, mut prediction) = query.get_mut(trigger.target())?;
             prediction.points.clear();
 
             // Reset some states on death...
             commands
                 .get_entity(selene)?
-                .insert((selene_trns, selene_initial, LinearVelocity::ZERO, AngularVelocity::ZERO, Health::new(10)))
+                .insert((
+                    selene_trns,
+                    selene_initial,
+                    SeleneParry {
+                        warn_time: default(),
+                        ..parry
+                    },
+                    LinearVelocity::ZERO,
+                    AngularVelocity::ZERO,
+                    Health::new(10),
+                ))
                 .queue(suspend);
 
             // ...and respawn her with an animation.
