@@ -5,7 +5,7 @@ use crate::{
     logic::{
         Timed,
         entities::{
-            TryHurt,
+            ParryCollider, TryHurt,
             penumbra::{HomingTarget, bullet},
         },
         levels::penumbra_wing_l::{Instance, SeleneUi, p4_tutorial_launch},
@@ -157,14 +157,25 @@ pub fn init(
                     .with_entity(selene),
                 ));
 
-                commands.entity(bullet).insert((
-                    bullet::spiky(level_entity),
-                    HomingTarget(selene),
-                    LinearVelocity(angle * 128.),
-                    attractor_pos,
-                    Rotation { cos: angle.x, sin: angle.y },
-                    Parried(false),
-                ));
+                commands
+                    .entity(bullet)
+                    .insert((
+                        bullet::spiky(level_entity),
+                        HomingTarget(selene),
+                        LinearVelocity(angle * 128.),
+                        attractor_pos,
+                        Rotation { cos: angle.x, sin: angle.y },
+                        Parried(false),
+                    ))
+                    .observe(
+                        |trigger: Trigger<OnCollisionStart>, mut query: Query<&mut Parried>, parry: Query<(), With<ParryCollider>>| {
+                            if trigger.body.is_some_and(|body| parry.contains(body))
+                                && let Ok(mut parried) = query.get_mut(trigger.target())
+                            {
+                                parried.0 = true;
+                            }
+                        },
+                    );
 
                 Ok(bullet)
             }
@@ -177,7 +188,11 @@ pub fn init(
 
                     let num_fired = trigger.0;
                     world.entity_mut(bullet).observe(
-                        move |trigger: Trigger<OnRemove, RigidBody>, mut commands: Commands, query: Query<&Parried>| -> Result {
+                        move |trigger: Trigger<OnRemove, RigidBody>,
+                              mut commands: Commands,
+                              query: Query<&Parried>,
+                              mut ui: ResMut<SeleneUi>|
+                              -> Result {
                             let &Parried(parried) = query.get(trigger.target())?;
                             if !parried {
                                 match num_fired {
@@ -206,7 +221,12 @@ pub fn init(
                             } else {
                                 commands.queue(despawn(trigger.observer()));
                                 commands.get_entity(level_entity)?.remove::<ParryOne>().insert(ParryMultiple);
+
+                                if let Some(ui) = ui.take_if(|&mut ui| ui == ui_selene_parry) {
+                                    commands.entity(ui).queue(ui_fade_out);
+                                }
                             }
+
                             Ok(())
                         },
                     );
