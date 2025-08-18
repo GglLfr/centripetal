@@ -1,5 +1,5 @@
 use crate::{
-    Affected, IntoResultSystem, Observed, despawn,
+    Affected, IntoResultSystem, Observed,
     graphics::{Animation, SpriteSheet},
     logic::entities::TryHurt,
     math::FloatTransformExt,
@@ -74,7 +74,7 @@ impl Timed {
                 let mut world = DeferredWorld::from(world);
                 sys.queue_deferred(world.reborrow());
 
-                world.commands().queue(despawn(trigger.target()));
+                world.commands().entity(trigger.target()).try_despawn();
                 Ok(())
             }),
         )
@@ -108,12 +108,12 @@ impl Timed {
         )
     }
 
-    pub fn kill_on_finished(trigger: Trigger<TimeFinished>, world: &mut World) {
-        world.trigger_targets(TryHurt::by(trigger.target(), i32::MAX as u32), trigger.target());
+    pub fn kill_on_finished(trigger: Trigger<TimeFinished>, mut commands: Commands) {
+        commands.trigger_targets(TryHurt::by(trigger.target(), i32::MAX as u32), trigger.target());
     }
 
     pub fn despawn_on_finished(trigger: Trigger<TimeFinished>, mut commands: Commands) {
-        commands.queue(despawn(trigger.target()));
+        commands.entity(trigger.target()).try_despawn();
     }
 
     pub fn life(&self) -> Duration {
@@ -216,7 +216,7 @@ pub fn update_time_stun(time: Res<Time<Real>>, mut virtual_time: ResMut<Time<Vir
         scale = match kind {
             TimeStunKind::Speck => {
                 if now - started >= Duration::from_millis(100) {
-                    commands.queue(despawn(e));
+                    commands.entity(e).despawn();
                     1.
                 } else {
                     0.075 + (now - started).div_duration_f32(Duration::from_millis(100)) * (1. - 0.075)
@@ -224,7 +224,7 @@ pub fn update_time_stun(time: Res<Time<Real>>, mut virtual_time: ResMut<Time<Vir
             }
             TimeStunKind::ShortInstant => {
                 if now - started >= Duration::from_millis(200) {
-                    commands.queue(despawn(e));
+                    commands.entity(e).despawn();
                     1.
                 } else {
                     0.075
@@ -232,7 +232,7 @@ pub fn update_time_stun(time: Res<Time<Real>>, mut virtual_time: ResMut<Time<Vir
             }
             TimeStunKind::LongSmooth => {
                 if now - started >= Duration::from_millis(1000) {
-                    commands.queue(despawn(e));
+                    commands.entity(e).despawn();
                     1.
                 } else {
                     let f = (now - started).div_duration_f32(Duration::from_millis(1000));

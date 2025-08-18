@@ -1,5 +1,5 @@
 use crate::{
-    IntoResultSystem, Sprites, despawn,
+    IntoResultSystem, Sprites,
     graphics::{BaseColor, SpriteDrawer, SpriteSection, SpriteSheet},
     math::{FloatTransformer as _, Interp},
     prelude::*,
@@ -218,7 +218,7 @@ impl AnimationHooks {
     }
 
     pub fn despawn(In(entity): In<Entity>, mut commands: Commands) {
-        commands.queue(despawn(entity));
+        commands.entity(entity).try_despawn();
     }
 
     pub fn despawn_on_done(key: impl Into<String>) -> Self {

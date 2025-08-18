@@ -1,5 +1,5 @@
 use crate::{
-    I18n, IntoResultSystem, Observed, despawn,
+    I18n, IntoResultSystem, Observed,
     logic::{TimeFinished, Timed},
     prelude::*,
     ui::{
@@ -80,7 +80,7 @@ impl BottomDialog {
                         },
                         widgets::scroll_text(i18n.clone()),
                         Observed::by(move |trigger: Trigger<ScrollTextFinished>, mut commands: Commands| -> Result {
-                            commands.queue(despawn(trigger.observer()));
+                            commands.entity(trigger.observer()).despawn();
                             let mut on_done = on_done.take().ok_or("`ScrollTextFinished` fired twice")?;
 
                             commands.queue(move |world: &mut World| -> Result {
@@ -131,7 +131,7 @@ impl BottomDialog {
                 world.spawn((
                     ChildOf(prev),
                     Timed::run(UI_STRETCH_TIME, move |mut commands: Commands| {
-                        commands.queue(despawn(prev));
+                        commands.entity(prev).try_despawn();
                     }),
                 ));
             }

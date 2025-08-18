@@ -1,7 +1,7 @@
 use std::f32::consts::TAU;
 
 use crate::{
-    Sprites, despawn,
+    Sprites,
     graphics::{Animation, AnimationMode, BaseColor},
     i18n,
     logic::{
@@ -43,10 +43,9 @@ pub fn update_align_time(
     align.time = if align.within { (align.time + delta).min(TUTORIAL_MOVE_ALIGN_DURATION) } else { align.time.saturating_sub(delta) };
 
     if align.time == TUTORIAL_MOVE_ALIGN_DURATION {
-        commands.entity(instance.level_entity).remove::<TutorialAlign>();
-
         // TODO FX for this.
-        commands.queue(despawn(instance.hover_target));
+        commands.entity(instance.hover_target).despawn();
+        commands.entity(instance.level_entity).remove::<TutorialAlign>();
     }
 
     let Ok((mut material, mut disc)) = target.get_mut(instance.hover_target) else { return };
@@ -72,6 +71,7 @@ pub fn init(
         EntityLayers::penumbra_hostile(),
         Collider::circle(8.),
         CollisionEventsEnabled,
+        Sensor,
         Animation::new(sprites.collectible_32.clone_weak(), "anim"),
         AnimationMode::Repeat,
         BaseColor(Color::linear_rgb(12., 2., 1.)),
@@ -85,7 +85,7 @@ pub fn init(
         },
         ShapeFill {
             color: Color::linear_rgb(4., 2., 1.),
-            ty: FillType::Stroke(1.5, ThicknessType::World),
+            ty: FillType::Stroke(1., ThicknessType::World),
         },
         Timed::repeat(Duration::from_secs(1), |In(e): In<Entity>, mut commands: Commands| {
             commands.spawn((
@@ -220,7 +220,7 @@ pub fn init(
                 commands
                     .entity(selene)
                     .observe(move |trigger: Trigger<Respawned>, mut commands: Commands, mut ui: ResMut<SeleneUi>| {
-                        commands.queue(despawn(trigger.observer()));
+                        commands.entity(trigger.observer()).despawn();
                         // Needs `is_none()` here to ensure we don't accidentally replace an existing UI.
                         // Such condition should be considered a bug; this is only a failsafe.
                         if ui.is_none()
@@ -241,7 +241,7 @@ pub fn init(
               mut ui: ResMut<SeleneUi>,
               mut actions: Query<(&mut ActionState<AttractedAction>, &mut ActionState<LaunchAction>)>|
               -> Result {
-            commands.queue(despawn(trigger.observer()));
+            commands.entity(trigger.observer()).despawn();
             commands.entity(level_entity).insert(TutorialAlign::default());
 
             **ui = Some(ui_selene_hover);

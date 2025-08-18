@@ -1,7 +1,7 @@
 use std::f32::consts::TAU;
 
 use crate::{
-    despawn, i18n,
+    i18n,
     logic::{
         TimeStun, Timed,
         entities::penumbra::{AttractedAction, HomingTarget, LaunchAction, Launched, bullet},
@@ -74,7 +74,7 @@ pub fn init(
               mut actions: Query<&mut ActionState<LaunchAction>>|
               -> Result {
             // Default to `Special` state; see below on bullet hits.
-            commands.queue(despawn(trigger.observer()));
+            commands.entity(trigger.observer()).despawn();
             commands.entity(level_entity).insert(TutorialLaunch::Special);
 
             // `Launch` is enabled now.
@@ -105,7 +105,7 @@ pub fn init(
                         launch_action.disable_action(&LaunchAction);
 
                         // 2: Queue a time stun.
-                        commands.queue(despawn(trigger.observer()));
+                        commands.entity(trigger.observer()).despawn();
                         commands.spawn((ChildOf(level_entity), TimeStun::long_smooth()));
 
                         // 3: Spawn 3 bullets that, when at least one hits Selene, will trigger a "normal" branch.
@@ -147,7 +147,7 @@ pub fn init(
                                     return Ok(())
                                 }
 
-                                commands.queue(despawn(trigger.observer()));
+                                commands.entity(trigger.observer()).despawn();
                                 *query.get_mut(level_entity)? = TutorialLaunch::Normal;
 
                                 for bullet in bullets {

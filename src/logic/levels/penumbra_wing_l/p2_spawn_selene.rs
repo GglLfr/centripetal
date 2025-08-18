@@ -1,7 +1,7 @@
 use std::f32::consts::TAU;
 
 use crate::{
-    PIXELS_PER_UNIT, Sprites, despawn,
+    PIXELS_PER_UNIT, Sprites,
     graphics::{SpriteDrawer, SpriteSection},
     logic::{
         CameraConfines, CameraTarget, TimeFinished, Timed,
@@ -166,7 +166,7 @@ pub fn init(
     // Entry point.
     commands.entity(level_entity).observe(
         move |trigger: Trigger<OnRemove, p1_spawn_attractor::SpawningAttractor>, mut commands: Commands| {
-            commands.queue(despawn(trigger.observer()));
+            commands.entity(trigger.observer()).despawn();
             commands.entity(level_entity).insert(SpawningSelene);
 
             // Spawn Selene with an animation, and...

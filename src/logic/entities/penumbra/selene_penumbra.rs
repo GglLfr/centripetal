@@ -1,7 +1,7 @@
 use std::f32::consts::TAU;
 
 use crate::{
-    Sprites, despawn,
+    Sprites,
     graphics::{Animation, AnimationHooks, AnimationMode, AnimationSmoothing, BaseColor, SpriteDrawer, SpriteSection},
     logic::{
         CameraTarget, Fields, FromLevelEntity, IsPlayer, Level, LevelUnload, TimeStun, Timed,
@@ -53,7 +53,7 @@ pub struct SeleneLastParry(pub Duration);
         cooldown: Duration::from_millis(750),
         radius: 24.,
         warned: false,
-        warn_radius: 16.,
+        warn_radius: 8.,
         warn_time: default(),
     },
     AttractedParams {
@@ -188,6 +188,7 @@ pub fn warn_selene_close(
     pipeline: Res<SpatialQueryPipeline>,
     mut selene: Query<(Entity, &mut SeleneParry, &GlobalTransform)>,
     layers: Query<&CollisionLayers>,
+    sensors: Query<(), With<Sensor>>,
 ) {
     let elapsed = time.elapsed();
     for (e, mut parry, &trns) in &mut selene {
@@ -199,6 +200,10 @@ pub fn warn_selene_close(
             0.,
             &SpatialQueryFilter::from_mask(layer.filters),
             |hit| {
+                if sensors.contains(hit) {
+                    return true
+                }
+
                 let other_layer = layers.get(hit).copied().unwrap_or_default();
                 if (other_layer.filters & layer.memberships) != 0 {
                     found = true;
@@ -281,7 +286,7 @@ pub fn selene_parry(
                             **last = Duration::ZERO;
 
                             commands.entity(body).queue_handled(TryHurt::by(e, 1), ignore);
-                            commands.queue(despawn(trigger.target()));
+                            commands.entity(trigger.target()).try_despawn();
                             commands.spawn((ChildOf(anim), TimeStun::speck()));
                         }
                     },

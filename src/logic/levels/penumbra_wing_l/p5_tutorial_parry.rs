@@ -1,7 +1,7 @@
 use std::f32::consts::TAU;
 
 use crate::{
-    despawn, i18n,
+    i18n,
     logic::{
         Timed,
         entities::{
@@ -82,7 +82,7 @@ pub fn init(
               launches: Query<&p4_tutorial_launch::TutorialLaunch>,
               mut commands: Commands|
               -> Result {
-            commands.queue(despawn(trigger.observer()));
+            commands.entity(trigger.observer()).despawn();
             commands.entity(level_entity).insert(TutorialParry);
 
             // If we got the "special" outcome (obtained by not getting hit, which is by parrying), skip the
@@ -149,7 +149,7 @@ pub fn init(
                 commands.spawn((
                     ChildOf(selene),
                     Observer::new(move |mut trigger: Trigger<TryHurt>, mut commands: Commands| {
-                        commands.queue(despawn(trigger.observer()));
+                        commands.entity(trigger.observer()).despawn();
                         if trigger.by == bullet {
                             trigger.stop();
                         }
@@ -219,7 +219,7 @@ pub fn init(
                                     }
                                 }
                             } else {
-                                commands.queue(despawn(trigger.observer()));
+                                commands.entity(trigger.observer()).despawn();
                                 commands.get_entity(level_entity)?.remove::<ParryOne>().insert(ParryMultiple);
 
                                 if let Some(ui) = ui.take_if(|&mut ui| ui == ui_selene_parry) {
@@ -237,7 +237,7 @@ pub fn init(
             ));
 
             // Show some initial dialog...
-            commands.queue(despawn(trigger.observer()));
+            commands.entity(trigger.observer()).despawn();
             commands.queue(BottomDialog::show(
                 None,
                 i18n!("tutorial.parry.aid"),
@@ -270,7 +270,7 @@ pub fn init(
     commands
         .entity(level_entity)
         .observe(move |trigger: Trigger<OnInsert, ParryMultiple>, mut commands: Commands| {
-            commands.queue(despawn(trigger.observer()));
+            commands.entity(trigger.observer()).despawn();
             commands.queue(BottomDialog::show(
                 None,
                 i18n!("tutorial.parry.success.1.good"),
