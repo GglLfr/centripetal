@@ -67,40 +67,40 @@ impl TryLaunch {
     }
 }
 
-impl EntityCommand<Result> for TryLaunch {
-    fn apply(mut self, mut entity: EntityWorldMut) -> Result {
+impl EntityCommand for TryLaunch {
+    fn apply(mut self, entity: EntityWorldMut) {
         let by = entity.id();
         self.by = by; // Sanity assignment.
         let hits = std::mem::take(&mut self.hits);
 
-        let stopped_by = entity.world_scope(|world| {
+        let world = entity.into_world_mut();
+        let stopped_by = {
             world.trigger_targets_ref(&mut self, by);
-            if self.stopped {
-                return by;
-            }
-
+            self.stopped.then_some(by)
+        }
+        .or_else(|| {
             for hit in hits {
                 self.current_hit = Some(hit);
                 world.trigger_targets_ref(&mut self, hit.entity);
 
                 if self.stopped {
-                    return hit.entity;
+                    return Some(hit.entity)
                 }
             }
-
-            Entity::PLACEHOLDER
+            None
         });
 
-        if stopped_by == Entity::PLACEHOLDER {
-            entity.trigger(Launched {
-                at: self.at,
-                index: self.index,
-            });
+        if let Some(stopped_by) = stopped_by {
+            world.trigger_targets(LaunchFailed { stopped_by }, by);
         } else {
-            entity.trigger(LaunchFailed { stopped_by });
+            world.trigger_targets(
+                Launched {
+                    at: self.at,
+                    index: self.index,
+                },
+                by,
+            );
         }
-
-        Ok(())
     }
 }
 

@@ -75,16 +75,14 @@ impl TryHurt {
     }
 }
 
-impl EntityCommand<Result> for TryHurt {
-    fn apply(mut self, entity: EntityWorldMut) -> Result {
+impl EntityCommand for TryHurt {
+    fn apply(mut self, entity: EntityWorldMut) {
         let id = entity.id();
         let world = entity.into_world_mut();
 
         world.trigger_targets_ref(&mut self, id);
         if !self.stopped {
-            let Ok(Some(should_kill)) = world.modify_component(id, |health: &mut Health| health.hurt(self.amount)) else {
-                return Ok(())
-            };
+            let Ok(Some(should_kill)) = world.modify_component(id, |health: &mut Health| health.hurt(self.amount)) else { return };
 
             world.trigger_targets(Hurt::by(self.by, self.amount), id);
             if should_kill {
@@ -94,8 +92,6 @@ impl EntityCommand<Result> for TryHurt {
                 }
             }
         }
-
-        Ok(())
     }
 }
 
