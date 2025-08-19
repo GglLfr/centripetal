@@ -135,7 +135,6 @@ pub struct NoKillDespawn;
 
 pub fn kill_out_of_bounds(commands: ParallelCommands, level_bounds: Query<&LevelBounds, Without<LevelUnload>>, entities: Query<(Entity, &Position)>) {
     let Ok(&level_bounds) = level_bounds.single() else { return };
-
     entities.par_iter().for_each(|(e, &pos)| {
         if pos.x < 0. || pos.x > level_bounds.x || pos.y < 0. || pos.y > level_bounds.x {
             commands.command_scope(|mut commands| {

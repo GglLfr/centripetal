@@ -153,7 +153,6 @@ impl FromLevelEntity for SelenePenumbra {
                 children.spawn((
                     Transform::from_xyz(0., 0., 0f32.next_down()),
                     Animation::new(sprites.selene_try_launch_back.clone_weak(), "anim"),
-                    AnimationSmoothing(Interp::Identity),
                     AnimationHooks::despawn_on_done("anim"),
                     BaseColor(Color::linear_rgb(1., 2., 4.)),
                 ));
@@ -170,7 +169,6 @@ impl FromLevelEntity for SelenePenumbra {
                     .spawn((
                         SlashEffect,
                         Animation::new(sprites.attractor_slash.clone_weak(), "anim"),
-                        AnimationSmoothing(Interp::Identity),
                         Timed::from_anim("anim"),
                         BaseColor(Color::linear_rgb(50., 100., 600.)),
                         Transform {
@@ -258,7 +256,6 @@ pub fn selene_parry(
                 ChildOf(level_entity),
                 ParryEffect,
                 Animation::new(sprites.selene_penumbra_parry.clone_weak(), "anim"),
-                AnimationSmoothing(Interp::Identity),
                 AnimationHooks::despawn_on_done("anim"),
                 BaseColor(Color::linear_rgb(10., 20., 120.)),
                 {
