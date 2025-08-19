@@ -13,7 +13,10 @@ use crate::{
 
 #[derive(Debug, Copy, Clone, Default, Component)]
 #[require(PenumbraEntity, CollisionLayers = EntityLayers::penumbra_hostile())]
-pub struct ThornRing;
+pub struct ThornRing {
+    pub radius: f32,
+}
+
 impl FromLevelEntity for ThornRing {
     type Param = ();
     type Data = Write<Transform>;
@@ -35,14 +38,13 @@ impl FromLevelEntity for ThornRing {
         }
 
         trns.rotation = Quat::from_axis_angle(Vec3::Z, (facing - trns.translation.xy()).to_angle());
-        e.insert((Self, AttractedInitial { ccw }, Collider::polyline(vertices, None))).observe(
-            |mut trigger: Trigger<TryLaunch>, mut commands: Commands| {
+        e.insert((Self { radius }, AttractedInitial { ccw }, Collider::polyline(vertices, None)))
+            .observe(|mut trigger: Trigger<TryLaunch>, mut commands: Commands| {
                 if trigger.by() != trigger.target() {
                     trigger.event_mut().stop();
                     commands.entity(trigger.by()).queue_handled(TryHurt::by(trigger.target(), 1), ignore);
                 }
-            },
-        );
+            });
 
         Ok(())
     }

@@ -2,7 +2,7 @@ use std::f32::consts::TAU;
 
 use crate::{
     Affected, Observed, Sprites,
-    graphics::{Animation, AnimationFrom, AnimationMode, BaseColor},
+    graphics::{Animation, AnimationFrom, AnimationMode, AnimationSmoothing, BaseColor},
     logic::{
         Timed,
         entities::{
@@ -10,7 +10,7 @@ use crate::{
             penumbra::{HomingPower, NoAttract, PenumbraEntity},
         },
     },
-    math::{FloatTransformExt as _, RngExt as _},
+    math::{FloatTransformExt as _, Interp, RngExt as _},
     prelude::*,
 };
 
@@ -56,6 +56,7 @@ pub fn spiky(level_entity: Entity) -> impl Bundle {
                         ChildOf(level_entity),
                         SpikySpawnEffect,
                         Animation::new(sprites.bullet_spawn_cloudy.clone_weak(), "anim"),
+                        AnimationSmoothing(Interp::Identity),
                         Timed::from_anim("anim"),
                         BaseColor(Color::linear_rgb(24., 4., 2.)),
                         Transform {

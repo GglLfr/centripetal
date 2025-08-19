@@ -125,7 +125,7 @@ pub fn init(
                             commands.spawn((
                                 ChildOf(level_entity),
                                 Timed::run(
-                                    Duration::from_millis((i as u64 + 1) * 150),
+                                    Duration::from_millis(100 + (i as u64 + 1) * 50),
                                     move |mut commands: Commands, query: Query<&TutorialLaunch>| {
                                         let mut bullet = commands.entity(bullet);
                                         bullet.insert((
@@ -175,7 +175,7 @@ pub fn init(
                         // 4: Spawn 2 rings that protect the attractor from being slashed by Selene.
                         commands.spawn((
                             ChildOf(level_entity),
-                            Timed::run(Duration::from_millis(750), move |mut commands: Commands| {
+                            Timed::run(Duration::from_secs(2), move |mut commands: Commands| {
                                 for ring in rings {
                                     // TODO FX for this.
                                     commands.entity(ring).queue(resume);

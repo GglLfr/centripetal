@@ -32,6 +32,7 @@ pub fn init(
         level_entity,
         selene,
         attractor,
+        outer_ring_radius,
         ..
     }): InRef<Instance>,
     mut commands: Commands,
@@ -125,7 +126,7 @@ pub fn init(
             struct FireMultiple(u32);
 
             fn spawn_bullet(
-                In([level_entity, selene, attractor]): In<[Entity; 3]>,
+                In(([level_entity, selene, attractor], outer_ring_radius)): In<([Entity; 3], f32)>,
                 mut commands: Commands,
                 positions: Query<&Position>,
             ) -> Result<Entity> {
@@ -154,7 +155,7 @@ pub fn init(
                     bullet::spiky(level_entity),
                     HomingTarget(selene),
                     LinearVelocity(angle * 96.),
-                    attractor_pos,
+                    Position(*attractor_pos + angle * outer_ring_radius),
                     Rotation { cos: angle.x, sin: angle.y },
                 ));
 
@@ -165,7 +166,7 @@ pub fn init(
             commands.spawn((
                 ChildOf(level_entity),
                 Observer::new(move |trigger: Trigger<FireMultiple>, world: &mut World| -> Result {
-                    let bullet = world.run_system_cached_with(spawn_bullet, [level_entity, selene, attractor])??;
+                    let bullet = world.run_system_cached_with(spawn_bullet, ([level_entity, selene, attractor], outer_ring_radius))??;
 
                     let num_fired = trigger.0;
                     world.entity_mut(bullet).observe(
@@ -265,7 +266,7 @@ pub fn init(
             struct FireMultiple(u32);
 
             fn spawn_bullet(
-                In([level_entity, selene, attractor]): In<[Entity; 3]>,
+                In(([level_entity, selene, attractor], outer_ring_radius)): In<([Entity; 3], f32)>,
                 mut commands: Commands,
                 positions: Query<&Position>,
                 mut rng: Local<Rng>,
@@ -290,25 +291,21 @@ pub fn init(
                         bullet::spiky(level_entity),
                         HomingTarget(selene),
                         LinearVelocity(vec2(angle.cos, angle.sin) * 96.),
-                        attractor_pos,
+                        Position(*attractor_pos + vec2(angle.cos, angle.sin) * outer_ring_radius),
                         angle,
                     );
 
                     if i == 0 {
                         commands.entity(bullet).insert(bundle);
                     } else {
+                        let mut bundle = Some(bundle);
                         commands.spawn((
                             ChildOf(level_entity),
-                            Timed::run(Duration::from_millis(i as u64 * 250), move |mut commands: Commands| {
+                            Timed::run(Duration::from_millis(i as u64 * 250), move |mut commands: Commands| -> Result {
                                 // Use `try_insert` here because the bullets might've been despawned before it even appeared. Such
                                 // is the case when Selene gets hit before all bullets are spawned.
-                                commands.entity(bullet).try_insert((
-                                    bullet::spiky(level_entity),
-                                    HomingTarget(selene),
-                                    LinearVelocity(vec2(angle.cos, angle.sin) * 96.),
-                                    attractor_pos,
-                                    angle,
-                                ));
+                                commands.entity(bullet).try_insert(bundle.take().ok_or("`TimeFinished` fired twice")?);
+                                Ok(())
                             }),
                         ));
                     }
@@ -334,7 +331,7 @@ pub fn init(
                     #[derive(Debug, Copy, Clone, Component)]
                     struct ParryCount(usize);
 
-                    let bullets = world.run_system_cached_with(spawn_bullet, [level_entity, selene, attractor])??;
+                    let bullets = world.run_system_cached_with(spawn_bullet, ([level_entity, selene, attractor], outer_ring_radius))??;
                     let mut hit_observer = Observer::new(
                         move |trigger: Trigger<Killed>, mut commands: Commands, mut query: Query<&mut ParryCount>| -> Result {
                             if trigger.by == selene {

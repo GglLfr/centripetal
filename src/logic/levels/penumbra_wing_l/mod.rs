@@ -6,7 +6,7 @@ use crate::{
     logic::{
         Fields, FromLevel, LevelApp as _, LevelEntities, TimeFinished, Timed,
         effects::Ring,
-        entities::penumbra::{AttractedInitial, Attractor},
+        entities::penumbra::{AttractedInitial, Attractor, ThornRing},
         levels::{LevelTransitionSet, in_level},
     },
     math::{FloatTransformExt as _, Interp, RngExt as _},
@@ -145,6 +145,7 @@ pub struct Instance {
     pub attractor_radius: f32,
     pub selene_trns: Transform,
     pub attractor_trns: Transform,
+    pub outer_ring_radius: f32,
 }
 
 impl FromLevel for Instance {
@@ -153,13 +154,14 @@ impl FromLevel for Instance {
         SQuery<Read<Transform>>,
         SQuery<Read<AttractedInitial>>,
         SQuery<Read<Attractor>>,
+        SQuery<Read<ThornRing>>,
     );
     type Data = Read<LevelEntities>;
 
     fn from_level(
         mut e: EntityCommands,
         _: &Fields,
-        (cutscene_shown, transforms, initials, attractors): SystemParamItem<Self::Param>,
+        (cutscene_shown, transforms, initials, attractors, rings): SystemParamItem<Self::Param>,
         entities: QueryItem<Self::Data>,
     ) -> Result {
         if **cutscene_shown {
@@ -179,6 +181,7 @@ impl FromLevel for Instance {
         let selene_initial = initials.get(selene).copied().unwrap_or_default();
         let attractor_radius = attractors.get(attractor)?.radius;
         let [&selene_trns, &attractor_trns] = transforms.get_many([selene, attractor])?;
+        let outer_ring_radius = rings.get(ring_1)?.radius;
 
         commands.init_resource::<SeleneUi>();
         commands.queue(move |world: &mut World| -> Result {
@@ -192,6 +195,7 @@ impl FromLevel for Instance {
                 attractor_radius,
                 selene_trns,
                 attractor_trns,
+                outer_ring_radius,
             };
 
             world.run_system_cached_with(p1_spawn_attractor::init, &this)??;

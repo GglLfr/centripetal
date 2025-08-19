@@ -255,6 +255,7 @@ pub fn selene_parry(
                 ChildOf(level_entity),
                 ParryEffect,
                 Animation::new(sprites.selene_penumbra_parry.clone_weak(), "anim"),
+                AnimationSmoothing(Interp::Identity),
                 AnimationHooks::despawn_on_done("anim"),
                 BaseColor(Color::linear_rgb(10., 20., 120.)),
                 {
