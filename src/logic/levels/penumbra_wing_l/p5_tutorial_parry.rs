@@ -1,12 +1,15 @@
 use std::f32::consts::TAU;
 
 use crate::{
-    i18n,
+    Observed, i18n,
     logic::{
-        Timed,
+        TimeFinished, Timed,
         entities::{
             Killed, TryHurt,
-            penumbra::{HomingTarget, bullet},
+            penumbra::{
+                HomingTarget,
+                bullet::{self, SpikyChargeEffect},
+            },
         },
         levels::penumbra_wing_l::{Instance, SeleneUi, p4_tutorial_launch},
     },
@@ -140,24 +143,36 @@ pub fn init(
                     Vec2::from_angle(Rng::with_seed(bullet.to_bits()).f32_within(0., TAU))
                 };
 
-                commands.spawn((
-                    ChildOf(level_entity),
-                    Observer::new(move |mut trigger: Trigger<TryHurt>, mut commands: Commands| {
-                        if trigger.by == bullet {
-                            commands.entity(trigger.observer()).despawn();
-                            trigger.stop();
-                        }
-                    })
-                    .with_entity(selene),
-                ));
+                let ignore_hit = commands
+                    .spawn((
+                        ChildOf(level_entity),
+                        Observer::new(move |mut trigger: Trigger<TryHurt>| {
+                            if trigger.by == bullet {
+                                trigger.stop();
+                            }
+                        })
+                        .with_entity(selene),
+                    ))
+                    .id();
 
-                commands.entity(bullet).insert((
-                    bullet::spiky(level_entity),
-                    HomingTarget(selene),
-                    LinearVelocity(angle * 96.),
-                    Position(*attractor_pos + angle * outer_ring_radius),
-                    Rotation { cos: angle.x, sin: angle.y },
-                ));
+                let pos = *attractor_pos + angle * outer_ring_radius;
+                commands
+                    .spawn((ChildOf(level_entity), SpikyChargeEffect, Transform::from_translation(pos.extend(0.))))
+                    .observe(move |trigger: Trigger<TimeFinished>, mut commands: Commands| {
+                        commands.entity(trigger.target()).despawn();
+                        commands
+                            .entity(bullet)
+                            .insert((
+                                bullet::spiky(level_entity),
+                                HomingTarget(selene),
+                                LinearVelocity(angle * 96.),
+                                Position(pos),
+                                Rotation { cos: angle.x, sin: angle.y },
+                            ))
+                            .observe(move |_: Trigger<Killed>, mut commands: Commands| {
+                                commands.entity(ignore_hit).despawn();
+                            });
+                    });
 
                 Ok(bullet)
             }
@@ -283,45 +298,66 @@ pub fn init(
                 let bullets = std::array::from_fn(|_| commands.spawn_empty().id());
                 let incr = Rotation::radians(TAU / bullets.len() as f32);
 
+                let ignore_hit = commands
+                    .spawn((
+                        ChildOf(level_entity),
+                        Observer::new(move |mut trigger: Trigger<TryHurt>| {
+                            if bullets.contains(&trigger.by) {
+                                trigger.stop();
+                            }
+                        })
+                        .with_entity(selene),
+                    ))
+                    .id();
+
+                let mut remove_ignore_hit = Observer::new(move |_: Trigger<Killed>, mut commands: Commands, mut count: Local<usize>| {
+                    *count += 1;
+                    if *count == bullets.len() {
+                        commands.entity(ignore_hit).despawn();
+                    }
+                });
+
                 for (i, &bullet) in bullets.iter().enumerate() {
+                    remove_ignore_hit.watch_entity(bullet);
+
                     let angle = base_angle;
+                    let pos = *attractor_pos + vec2(angle.cos, angle.sin) * outer_ring_radius;
                     base_angle *= incr;
 
-                    let bundle = (
-                        bullet::spiky(level_entity),
-                        HomingTarget(selene),
-                        LinearVelocity(vec2(angle.cos, angle.sin) * 96.),
-                        Position(*attractor_pos + vec2(angle.cos, angle.sin) * outer_ring_radius),
-                        angle,
+                    let charge = (
+                        ChildOf(level_entity),
+                        SpikyChargeEffect,
+                        Transform::from_translation(pos.extend(0.)),
+                        Observed::by(move |trigger: Trigger<TimeFinished>, mut commands: Commands| {
+                            commands.entity(trigger.target()).despawn();
+
+                            // Use `try_insert` here because the bullets might've been despawned before it even appeared. Such
+                            // is the case when Selene gets hit before all bullets are spawned.
+                            commands.entity(bullet).try_insert((
+                                bullet::spiky(level_entity),
+                                HomingTarget(selene),
+                                LinearVelocity(vec2(angle.cos, angle.sin) * 96.),
+                                Position(pos),
+                                angle,
+                            ));
+                        }),
                     );
 
                     if i == 0 {
-                        commands.entity(bullet).insert(bundle);
+                        commands.spawn(charge);
                     } else {
-                        let mut bundle = Some(bundle);
+                        let mut charge = Some(charge);
                         commands.spawn((
                             ChildOf(level_entity),
                             Timed::run(Duration::from_millis(i as u64 * 250), move |mut commands: Commands| -> Result {
-                                // Use `try_insert` here because the bullets might've been despawned before it even appeared. Such
-                                // is the case when Selene gets hit before all bullets are spawned.
-                                commands.entity(bullet).try_insert(bundle.take().ok_or("`TimeFinished` fired twice")?);
+                                commands.spawn(charge.take().ok_or("`TimeFinished` fired twice")?);
                                 Ok(())
                             }),
                         ));
                     }
                 }
 
-                commands.spawn((
-                    ChildOf(level_entity),
-                    Observer::new(move |mut trigger: Trigger<TryHurt>, mut commands: Commands| {
-                        commands.entity(trigger.observer()).despawn();
-                        if bullets.contains(&trigger.by) {
-                            trigger.stop();
-                        }
-                    })
-                    .with_entity(selene),
-                ));
-
+                commands.spawn((ChildOf(level_entity), remove_ignore_hit));
                 Ok(bullets)
             }
 

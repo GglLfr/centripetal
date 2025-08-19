@@ -177,6 +177,7 @@ impl Plugin for EntitiesPlugin {
                 color_selene_slash,
                 color_selene_parry,
                 bullet::color_spiky_spawn_effect,
+                bullet::update_spiky_charge_effect,
                 update_launch_idle,
                 update_launch_charging,
                 draw_selene_launch_disc,
