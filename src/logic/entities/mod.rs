@@ -8,8 +8,8 @@ use crate::{
         entities::penumbra::{
             AttractedAction, Attractor, GenericPenumbra, LaunchAction, SelenePenumbra, ThornPillar, ThornRing, apply_attractor_accels,
             apply_homing_velocity, color_selene_hurt, color_selene_parry, color_selene_slash, detect_attracted_entities, draw_selene_close,
-            draw_selene_launch_disc, draw_selene_prediction_trajectory, predict_attract_trajectory, remove_attracted_initials, selene_parry,
-            trigger_launch_charging, update_launch_charging, update_launch_idle, warn_selene_close,
+            draw_selene_launch_disc, draw_selene_prediction_trajectory, predict_attract_trajectory, remove_attracted_initials, selene_cast_parry,
+            selene_parry, trigger_launch_charging, update_launch_charging, update_launch_idle, warn_selene_close,
         },
     },
     prelude::*,
@@ -76,17 +76,21 @@ impl TryHurt {
 }
 
 impl EntityCommand<Result> for TryHurt {
-    fn apply(mut self, mut entity: EntityWorldMut) -> Result {
+    fn apply(mut self, entity: EntityWorldMut) -> Result {
         let id = entity.id();
-        entity.world_scope(|world| world.trigger_targets_ref(&mut self, id));
+        let world = entity.into_world_mut();
 
+        world.trigger_targets_ref(&mut self, id);
         if !self.stopped {
-            let Some(should_kill) = entity.modify_component(|health: &mut Health| health.hurt(self.amount)) else { return Ok(()) };
-            entity.trigger(Hurt::by(self.by, self.amount));
+            let Ok(Some(should_kill)) = world.modify_component(id, |health: &mut Health| health.hurt(self.amount)) else {
+                return Ok(())
+            };
+
+            world.trigger_targets(Hurt::by(self.by, self.amount), id);
             if should_kill {
-                entity.trigger(Killed::by(self.by));
-                if !entity.contains::<NoKillDespawn>() {
-                    entity.despawn();
+                world.trigger_targets(Killed::by(self.by), id);
+                if let None = world.get::<NoKillDespawn>(id) {
+                    _ = world.try_despawn(id);
                 }
             }
         }
@@ -141,10 +145,6 @@ pub fn kill_out_of_bounds(commands: ParallelCommands, level_bounds: Query<&Level
     });
 }
 
-#[derive(Debug, Copy, Clone, Default, Component)]
-#[require(RigidBody::Kinematic)]
-pub struct ParryCollider;
-
 #[derive(Debug, Copy, Clone, Default, PhysicsLayer)]
 pub enum EntityLayers {
     #[default]
@@ -192,8 +192,10 @@ impl Plugin for EntitiesPlugin {
         .add_systems(
             PostUpdate,
             (
-                // Make sure the collider *instantly* gets a `GlobalTransform` *and* gets feed into the spatial query.
-                selene_parry.in_set(RunFixedMainLoopSystem::BeforeFixedMainLoop),
+                // Make sure the parry caster instantly gets an up-to-date `GlobalTransform`.
+                (selene_parry, selene_cast_parry)
+                    .chain()
+                    .in_set(RunFixedMainLoopSystem::BeforeFixedMainLoop),
                 (draw_selene_prediction_trajectory, (warn_selene_close, draw_selene_close).chain()),
             )
                 .after(TransformSystem::TransformPropagate)

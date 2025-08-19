@@ -6,7 +6,7 @@ use crate::{
     logic::{
         CameraTarget, Fields, FromLevelEntity, IsPlayer, Level, LevelUnload, TimeStun, Timed,
         entities::{
-            EntityLayers, Health, Hurt, MaxHealth, ParryCollider, TryHurt,
+            EntityLayers, Health, Hurt, MaxHealth, TryHurt,
             penumbra::{
                 AttractedAction, AttractedInitial, AttractedParams, AttractedPrediction, LaunchCharging, LaunchCooldown, LaunchDurations,
                 LaunchTarget, Launched, PenumbraEntity, TryLaunch,
@@ -28,6 +28,12 @@ pub struct SlashEffect;
 
 #[derive(Debug, Copy, Clone, Default, Component)]
 pub struct ParryEffect;
+
+#[derive(Debug, Clone, Component)]
+pub struct ParryCast {
+    pub selene: Entity,
+    pub caster: Collider,
+}
 
 #[derive(Debug, Copy, Clone, Component)]
 #[require(SeleneLastParry)]
@@ -234,7 +240,6 @@ pub fn selene_parry(
         Entity,
         &ActionState<AttractedAction>,
         &SeleneParry,
-        &CollisionLayers,
         &mut SeleneLastParry,
         &GlobalTransform,
     )>,
@@ -243,9 +248,9 @@ pub fn selene_parry(
     let Ok(level_entity) = level.single() else { return };
     let elapsed = time.elapsed();
 
-    for (e, action, &parry, &layer, mut last, &trns) in &mut selene {
+    for (e, action, &parry, mut last, &trns) in &mut selene {
         if action.just_pressed(&AttractedAction::Parry) && elapsed - **last >= parry.cooldown {
-            let trns = trns.compute_transform();
+            let local_trns = trns.compute_transform();
 
             **last = elapsed;
             let anim = commands.spawn_empty().id();
@@ -257,48 +262,75 @@ pub fn selene_parry(
                 AnimationHooks::despawn_on_done("anim"),
                 BaseColor(Color::linear_rgb(10., 20., 120.)),
                 {
-                    let mut trns = trns;
+                    let mut trns = local_trns;
                     trns.rotation = Quat::from_axis_angle(Vec3::Z, Rng::with_seed(anim.to_bits()).f32_within(0., TAU));
                     trns.translation.z += 1.;
                     (trns, GlobalTransform::from(trns))
                 },
-                Timed::new(Duration::from_millis(100)),
+                Timed::new(Duration::from_millis(50)),
             ));
 
             commands
                 .spawn((
                     ChildOf(level_entity),
-                    ParryCollider,
-                    Collider::circle(parry.radius),
-                    CollisionEventsEnabled,
-                    layer,
+                    local_trns,
                     trns,
-                    GlobalTransform::from(trns),
-                    Timed::new(Duration::from_millis(100)),
-                    DebugRender::none(),
-                ))
-                .observe(
-                    move |trigger: Trigger<OnCollisionStart>, mut commands: Commands, mut last: Query<(&mut SeleneParry, &mut SeleneLastParry)>| {
-                        if let Some(body) = trigger.body
-                            && let Ok((mut parry, mut last)) = last.get_mut(e)
-                        {
-                            parry.warn_time = [Duration::ZERO; 2];
-                            **last = Duration::ZERO;
-
-                            commands.entity(body).queue_handled(TryHurt::by(e, 1), ignore);
-                            commands.entity(trigger.target()).try_despawn();
-                            commands.spawn((ChildOf(anim), TimeStun::speck()));
-                        }
+                    ParryCast {
+                        selene: e,
+                        caster: Collider::circle(parry.radius),
                     },
-                )
+                    Timed::new(Duration::from_millis(50)),
+                ))
                 .observe(Timed::despawn_on_finished);
+        }
+    }
+}
+
+pub fn selene_cast_parry(
+    mut commands: Commands,
+    pipeline: Res<SpatialQueryPipeline>,
+    mut selene: Query<(&mut SeleneParry, &mut SeleneLastParry)>,
+    cast: Query<(Entity, &ChildOf, &ParryCast, &GlobalTransform)>,
+    layers: Query<&CollisionLayers>,
+) {
+    for (e, child_of, cast, &trns) in &cast {
+        let Ok((mut parry, mut last)) = selene.get_mut(cast.selene) else {
+            commands.entity(e).try_despawn();
+            continue
+        };
+
+        let layer = layers.get(cast.selene).copied().unwrap_or_default();
+        let mut hits = pipeline.shape_hits(
+            &cast.caster,
+            trns.translation().xy(),
+            0.,
+            Dir2::X,
+            u32::MAX,
+            &ShapeCastConfig {
+                max_distance: 0.,
+                target_distance: 0.,
+                compute_contact_on_penetration: true,
+                ignore_origin_penetration: false,
+            },
+            &SpatialQueryFilter::from_mask(layer.filters),
+        );
+
+        hits.retain(|&hit| (layers.get(hit.entity).copied().unwrap_or_default().filters & layer.memberships) != 0);
+        hits.sort_unstable_by_key(|hit: &ShapeHitData| FloatOrd(hit.distance));
+        if let Some(&hit) = hits.first() {
+            parry.warn_time = default();
+            **last = default();
+
+            commands.spawn((ChildOf(child_of.parent()), TimeStun::speck()));
+            commands.entity(hit.entity).queue_handled(TryHurt::by(cast.selene, 1), warn);
+            commands.entity(e).try_despawn();
         }
     }
 }
 
 pub fn color_selene_parry(mut parries: Query<(&Timed, &mut BaseColor), With<ParryEffect>>) {
     for (timed, mut color) in &mut parries {
-        **color = Color::linear_rgb(10., 20., 120.).mix(&Color::linear_rgb(0., 1., 4.), timed.frac());
+        **color = Color::linear_rgb(20., 40., 240.).mix(&Color::linear_rgb(0., 1., 4.), timed.frac());
     }
 }
 
