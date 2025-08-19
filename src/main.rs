@@ -64,7 +64,7 @@ pub mod prelude {
                 BoxedSystem, IntoObserverSystem, ReadOnlySystemParam, RunSystemError, RunSystemOnce as _, StaticSystemParam, SystemId, SystemMeta,
                 SystemParam, SystemParamItem, SystemParamValidationError, SystemState, lifetimeless::*,
             },
-            world::{DeferredWorld, unsafe_world_cell::UnsafeWorldCell},
+            world::{DeferredWorld, OnDespawn, unsafe_world_cell::UnsafeWorldCell},
         },
         image::{ImageSampler, TextureFormatPixelInfo as _},
         math::FloatOrd,

@@ -26,7 +26,7 @@ impl Plugin for GraphicsPlugin {
             PostUpdate,
             (update_animations.after(LevelTransitionSet), draw_animations, flush_drawer_to_children)
                 .chain()
-                .before(TransformSystem::TransformPropagate),
+                .after(TransformSystem::TransformPropagate),
         );
 
         if let Some(render_app) = app.get_sub_app_mut(RenderApp) {

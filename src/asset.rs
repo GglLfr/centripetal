@@ -43,6 +43,8 @@ pub struct Sprites {
     // -- Bullet.
     #[asset(path = "entities/bullet/spiky.json")]
     pub bullet_spiky: Handle<SpriteSheet>,
+    #[asset(path = "entities/bullet/spawn_cloudy.json")]
+    pub bullet_spawn_cloudy: Handle<SpriteSheet>,
     // -- Generic.
     #[asset(path = "entities/generic/collectible_32.json")]
     pub collectible_32: Handle<SpriteSheet>,

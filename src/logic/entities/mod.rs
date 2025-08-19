@@ -1,15 +1,14 @@
 use avian2d::dynamics::integrator::IntegrationSet;
 
-#[cfg(feature = "dev")]
-use crate::logic::entities::penumbra::draw_attractor_radius;
 use crate::{
     logic::{
         GameState, LevelApp, LevelBounds, LevelUnload,
         entities::penumbra::{
             AttractedAction, Attractor, GenericPenumbra, LaunchAction, SelenePenumbra, ThornPillar, ThornRing, apply_attractor_accels,
-            apply_homing_velocity, color_selene_hurt, color_selene_parry, color_selene_slash, detect_attracted_entities, draw_selene_close,
-            draw_selene_launch_disc, draw_selene_prediction_trajectory, predict_attract_trajectory, remove_attracted_initials, selene_cast_parry,
-            selene_parry, trigger_launch_charging, update_launch_charging, update_launch_idle, warn_selene_close,
+            apply_homing_velocity, bullet, color_selene_hurt, color_selene_parry, color_selene_slash, detect_attracted_entities,
+            draw_attractor_radius, draw_selene_close, draw_selene_launch_disc, draw_selene_prediction_trajectory, predict_attract_trajectory,
+            remove_attracted_initials, selene_cast_parry, selene_parry, trigger_launch_charging, update_launch_charging, update_launch_idle,
+            warn_selene_close,
         },
     },
     prelude::*,
@@ -177,6 +176,7 @@ impl Plugin for EntitiesPlugin {
                 color_selene_hurt,
                 color_selene_slash,
                 color_selene_parry,
+                bullet::color_spiky_spawn_effect,
                 update_launch_idle,
                 update_launch_charging,
                 draw_selene_launch_disc,
@@ -187,7 +187,6 @@ impl Plugin for EntitiesPlugin {
         .add_systems(
             PostUpdate,
             (
-                // Make sure the parry caster instantly gets an up-to-date `GlobalTransform`.
                 (selene_parry, selene_cast_parry)
                     .chain()
                     .in_set(RunFixedMainLoopSystem::BeforeFixedMainLoop),

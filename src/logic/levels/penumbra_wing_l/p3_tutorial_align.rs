@@ -8,12 +8,12 @@ use crate::{
         Timed,
         effects::Ring,
         entities::{
-            EntityLayers, Killed,
+            EntityLayers,
             penumbra::{AttractedAction, LaunchAction},
         },
         levels::penumbra_wing_l::{
             Instance, SeleneUi,
-            p2_spawn_selene::{self, Respawned},
+            p2_spawn_selene::{self},
         },
     },
     prelude::*,
@@ -206,32 +206,6 @@ pub fn init(
         ))
         .queue(ui_hide)
         .id();
-
-    // Fade out UI during death and fade it back in on respawn.
-    commands
-        .entity(selene)
-        .observe(move |_: Trigger<Killed>, mut commands: Commands, mut ui: ResMut<SeleneUi>| {
-            if let Some(ui) = ui.take()
-                && let Ok(mut ui) = commands.get_entity(ui)
-            {
-                ui.queue(ui_fade_out);
-
-                let ui_entity = ui.id();
-                commands
-                    .entity(selene)
-                    .observe(move |trigger: Trigger<Respawned>, mut commands: Commands, mut ui: ResMut<SeleneUi>| {
-                        commands.entity(trigger.observer()).despawn();
-                        // Needs `is_none()` here to ensure we don't accidentally replace an existing UI.
-                        // Such condition should be considered a bug; this is only a failsafe.
-                        if ui.is_none()
-                            && let Ok(mut e) = commands.get_entity(ui_entity)
-                        {
-                            e.queue(ui_fade_in);
-                            **ui = Some(e.id());
-                        }
-                    });
-            }
-        });
 
     // Entry point.
     // Refer to `update_align_time` for when this phase is finished.

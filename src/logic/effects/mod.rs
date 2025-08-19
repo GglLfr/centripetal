@@ -1,7 +1,7 @@
 use crate::prelude::*;
 
-mod basic;
-pub use basic::*;
+mod ring;
+pub use ring::*;
 
 #[derive(Debug, Copy, Clone, Default)]
 pub struct EffectsPlugin;

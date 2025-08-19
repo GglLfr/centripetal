@@ -37,10 +37,10 @@ pub struct Draw {
 
 pub fn flush_drawer_to_children(
     mut commands: Commands,
-    mut drawers: Query<(Entity, &mut SpriteDrawer, Option<&Children>)>,
-    mut sprite_items: Query<(&mut Sprite, &mut Transform)>,
+    mut drawers: Query<(Entity, &mut SpriteDrawer, &GlobalTransform, Option<&Children>)>,
+    mut sprite_items: Query<(&mut Sprite, &mut Transform, &mut GlobalTransform), Without<SpriteDrawer>>,
 ) {
-    for (drawer_entity, mut drawer, sprites) in &mut drawers {
+    for (drawer_entity, mut drawer, &parent_trns, sprites) in &mut drawers {
         let sprites = sprites.map(Children::deref).unwrap_or(&[]);
         let mut sprites = sprite_items.iter_many_mut(sprites);
 
@@ -53,9 +53,10 @@ pub fn flush_drawer_to_children(
                     scale: Vec3::ONE,
                 };
 
-                if let Some((mut sprite, mut trns)) = sprites.fetch_next() {
+                if let Some((mut sprite, mut trns, mut glob_trns)) = sprites.fetch_next() {
                     *sprite = draw.sprite;
                     *trns = transform;
+                    *glob_trns = parent_trns * transform;
                 } else {
                     drawer_entity.with_child((draw.sprite, transform));
                 }

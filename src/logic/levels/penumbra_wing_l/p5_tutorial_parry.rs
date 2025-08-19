@@ -279,28 +279,39 @@ pub fn init(
                     Rotation::radians(rng.f32_within(0., TAU))
                 };
 
-                let mut bullets = [Entity::PLACEHOLDER; 3];
+                let bullets = std::array::from_fn(|_| commands.spawn_empty().id());
                 let incr = Rotation::radians(TAU / bullets.len() as f32);
 
-                for (i, e) in bullets.iter_mut().enumerate() {
-                    *e = commands.spawn_empty().id();
-                    let bullet = *e;
-
+                for (i, &bullet) in bullets.iter().enumerate() {
                     let angle = base_angle;
                     base_angle *= incr;
 
-                    commands.spawn((
-                        ChildOf(level_entity),
-                        Timed::run(Duration::from_millis(i as u64 * 250), move |mut commands: Commands| {
-                            commands.entity(bullet).insert((
-                                bullet::spiky(level_entity),
-                                HomingTarget(selene),
-                                LinearVelocity(vec2(angle.cos, angle.sin) * 96.),
-                                attractor_pos,
-                                angle,
-                            ));
-                        }),
-                    ));
+                    let bundle = (
+                        bullet::spiky(level_entity),
+                        HomingTarget(selene),
+                        LinearVelocity(vec2(angle.cos, angle.sin) * 96.),
+                        attractor_pos,
+                        angle,
+                    );
+
+                    if i == 0 {
+                        commands.entity(bullet).insert(bundle);
+                    } else {
+                        commands.spawn((
+                            ChildOf(level_entity),
+                            Timed::run(Duration::from_millis(i as u64 * 250), move |mut commands: Commands| {
+                                // Use `try_insert` here because the bullets might've been despawned before it even appeared. Such
+                                // is the case when Selene gets hit before all bullets are spawned.
+                                commands.entity(bullet).try_insert((
+                                    bullet::spiky(level_entity),
+                                    HomingTarget(selene),
+                                    LinearVelocity(vec2(angle.cos, angle.sin) * 96.),
+                                    attractor_pos,
+                                    angle,
+                                ));
+                            }),
+                        ));
+                    }
                 }
 
                 commands.spawn((
@@ -331,13 +342,12 @@ pub fn init(
                                 count.0 += 1;
 
                                 if count.0 == bullets.len() {
-                                    commands.entity(trigger.observer()).despawn();
+                                    commands.entity(trigger.observer()).try_despawn();
                                 }
                             } else {
                                 for b in bullets {
                                     commands.entity(b).try_despawn();
                                 }
-                                commands.entity(trigger.observer()).despawn();
                             }
 
                             Ok(())
@@ -392,7 +402,7 @@ pub fn init(
                                         commands.spawn((
                                             ChildOf(level_entity),
                                             Timed::run(Duration::from_secs(1), move |world: &mut World| {
-                                                world.trigger_targets(FireMultiple(3), level_entity);
+                                                world.trigger(FireMultiple(3));
                                             }),
                                         ));
                                     }

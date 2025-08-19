@@ -145,7 +145,6 @@ impl FromLevelEntity for SelenePenumbra {
                 children.spawn((
                     Transform::from_xyz(0., 0., 0f32.next_up()),
                     Animation::new(sprites.selene_try_launch_front.clone_weak(), "anim"),
-                    AnimationSmoothing(Interp::Identity),
                     AnimationHooks::despawn_on_done("anim"),
                     BaseColor(Color::linear_rgb(1., 2., 4.)),
                 ));

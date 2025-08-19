@@ -1,12 +1,17 @@
+use std::f32::consts::TAU;
+
 use crate::{
-    SaveApp as _,
+    PIXELS_PER_UNIT, SaveApp as _, Sprites,
+    graphics::{SpriteDrawer, SpriteSection},
     logic::{
-        Fields, FromLevel, LevelApp as _, LevelEntities,
+        Fields, FromLevel, LevelApp as _, LevelEntities, TimeFinished, Timed,
+        effects::Ring,
         entities::penumbra::{AttractedInitial, Attractor},
         levels::{LevelTransitionSet, in_level},
     },
+    math::{FloatTransformExt as _, Interp, RngExt as _},
     prelude::*,
-    suspend,
+    resume, suspend,
 };
 
 pub mod p1_spawn_attractor;
@@ -28,6 +33,106 @@ pub struct IntroShown(pub bool);
 
 #[derive(Debug, Copy, Clone, Default, Deref, DerefMut, Resource)]
 pub struct SeleneUi(pub Option<Entity>);
+
+#[derive(Debug, Clone, Component, Default)]
+#[require(SpriteDrawer, Timed::new(Duration::from_millis(2500)))]
+pub struct SpawnEffect {
+    target_pos: Vec2,
+}
+
+pub fn draw_spawn_effect(
+    sprites: Res<Sprites>,
+    sprite_sections: Res<Assets<SpriteSection>>,
+    effects: Query<(Entity, &SpawnEffect, &SpriteDrawer, &Timed)>,
+) {
+    let rings @ [Some(..), Some(..), Some(..), Some(..), Some(..)] = [
+        sprite_sections.get(&sprites.ring_2),
+        sprite_sections.get(&sprites.ring_3),
+        sprite_sections.get(&sprites.ring_4),
+        sprite_sections.get(&sprites.ring_6),
+        sprite_sections.get(&sprites.ring_8),
+    ] else {
+        return
+    };
+
+    let rings = rings.map(Option::unwrap);
+    for (e, effect, drawer, &timed) in &effects {
+        let mut rng = Rng::with_seed(e.to_bits());
+        let f = timed.frac();
+
+        let mut layer = -1f32;
+        for (angle, vec) in rng
+            .fork()
+            .len_vectors(40, 0., TAU, 5. * PIXELS_PER_UNIT as f32, 10. * PIXELS_PER_UNIT as f32)
+        {
+            let ring = rings[rng.usize(0..rings.len())];
+            let f_scl = f.threshold(0., rng.f32_within(0.75, 1.));
+
+            let green = rng.f32_within(1., 2.);
+            let blue = rng.f32_within(12., 24.);
+            let alpha = rng.f32_within(0.5, 1.);
+
+            let rotate = f_scl.threshold(0.4, 0.9).pow_in(2);
+            let proceed = f_scl.threshold(0.25, 1.);
+            let width = ring.size.x + (1. - f_scl.slope(0.5)).pow_in(6) * ring.size.x * 1.5;
+
+            drawer.draw_at(
+                (vec * f.pow_out(5)).lerp(effect.target_pos, proceed.pow_in(6)).extend(layer),
+                angle.slerp(Rot2::radians((effect.target_pos - vec).to_angle()), rotate),
+                ring.sprite_with(
+                    Color::linear_rgba(1., green, blue, alpha * (1. - proceed.pow_in(7))),
+                    vec2(width, ring.size.y),
+                    Anchor::CenterRight,
+                ),
+            );
+
+            layer = layer.next_down();
+        }
+    }
+}
+
+#[derive(Debug, Copy, Clone, Default, Event)]
+pub struct Respawned;
+
+#[must_use]
+pub fn spawn_selene(
+    level_entity: Entity,
+    selene: Entity,
+    effect_trns: Transform,
+    selene_trns: Transform,
+    accept: impl FnOnce(&mut EntityWorldMut) -> Result + 'static + Send,
+) -> impl Command<Result> {
+    let target_pos = GlobalTransform::from(selene_trns)
+        .reparented_to(&GlobalTransform::from(effect_trns))
+        .translation
+        .xy();
+
+    move |world: &mut World| -> Result {
+        world
+            .spawn((
+                ChildOf(level_entity),
+                effect_trns,
+                Ring {
+                    radius_to: 128.,
+                    thickness_from: 2.,
+                    colors: smallvec![Color::linear_rgb(1., 2., 6.), Color::linear_rgb(1., 1., 2.)],
+                    radius_interp: Interp::PowOut { exponent: 2 },
+                    ..default()
+                },
+                Timed::new(Duration::from_millis(640)),
+            ))
+            .observe(Timed::despawn_on_finished);
+
+        accept(
+            world
+                .spawn((ChildOf(level_entity), SpawnEffect { target_pos }, effect_trns))
+                .observe(Timed::despawn_on_finished)
+                .observe(move |_: Trigger<TimeFinished>, mut commands: Commands| {
+                    commands.entity(selene).queue(resume).trigger(Respawned);
+                }),
+        )
+    }
+}
 
 #[derive(Debug, Component)]
 pub struct Instance {
@@ -107,7 +212,7 @@ pub(super) fn plugin(app: &mut App) {
     app.register_level::<Instance>("penumbra_wing_l")
         .add_systems(
             PostUpdate,
-            (p2_spawn_selene::draw_spawn_effect, p3_tutorial_align::update_align_time)
+            (draw_spawn_effect, p3_tutorial_align::update_align_time)
                 .in_set(LevelTransitionSet)
                 .run_if(in_level("penumbra_wing_l")),
         )
