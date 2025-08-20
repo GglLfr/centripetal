@@ -63,11 +63,11 @@ pub struct SeleneLastParry(pub Duration);
         warn_time: default(),
     },
     AttractedParams {
-        ascend: 240.,
-        descend: 240.,
-        prograde: 80.,
-        retrograde: 80.,
-        precise_scale: 1. / 5.,
+        ascend: 200.,
+        descend: 200.,
+        prograde: 60.,
+        retrograde: 60.,
+        precise_scale: 1. / 4.,
     },
     AttractedPrediction {
         points: Vec::new(),

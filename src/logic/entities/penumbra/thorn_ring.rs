@@ -1,22 +1,33 @@
 use std::f32::consts::TAU;
 
 use crate::{
+    Sprites,
+    graphics::{Animation, AnimationHooks, AnimationSmoothing, BaseColor},
     logic::{
-        Fields, FromLevelEntity,
+        Fields, FromLevelEntity, Level, LevelUnload,
         entities::{
             EntityLayers, TryHurt,
             penumbra::{AttractedInitial, PenumbraEntity, TryLaunch},
         },
     },
+    math::{Interp, RngExt as _},
     prelude::*,
 };
 
 #[derive(Debug, Copy, Clone, Default, Component)]
-#[require(PenumbraEntity, CollisionLayers = EntityLayers::penumbra_hostile(), CollisionEventsEnabled, DebugRender::none())]
+#[require(PenumbraEntity, ThornRingTimers, CollisionLayers = EntityLayers::penumbra_hostile(), CollisionEventsEnabled, DebugRender::none())]
 pub struct ThornRing {
     pub radius: f32,
     pub opening: f32,
 }
+
+#[derive(Debug, Copy, Clone, Default, Component)]
+pub struct ThornRingTimers {
+    pub particle: f32,
+}
+
+#[derive(Debug, Copy, Clone, Default, Component)]
+pub struct ThornRingParticle;
 
 impl FromLevelEntity for ThornRing {
     type Param = ();
@@ -55,6 +66,52 @@ impl FromLevelEntity for ThornRing {
             });
 
         Ok(())
+    }
+}
+
+pub fn update_thorn_ring_timers(
+    mut commands: Commands,
+    time: Res<Time>,
+    sprites: Res<Sprites>,
+    mut rings: Query<(&mut ThornRingTimers, &ThornRing, &GlobalTransform)>,
+    mut rng: Local<Rng>,
+    level: Query<Entity, (With<Level>, Without<LevelUnload>)>,
+) {
+    let Ok(level_entity) = level.single() else { return };
+    let dt = time.delta_secs();
+
+    for (mut timers, &ring, &trns) in &mut rings {
+        timers.particle += dt;
+
+        let particle_period = 1. / (2. * (TAU - ring.opening) * ring.radius / 24.);
+        let particles = timers.particle / particle_period;
+        if particles >= 1. {
+            let count = particles as usize;
+            timers.particle = particles.fract() * particle_period;
+
+            for (angle, offset) in rng
+                .fork()
+                .len_vectors(count, ring.opening / 2., TAU - ring.opening / 2., ring.radius + 1., ring.radius + 1.)
+            {
+                let local_trns = trns.compute_transform()
+                    * Transform {
+                        translation: vec3(offset.x + ring.radius, offset.y, 0.),
+                        rotation: Quat::from_axis_angle(Vec3::Z, angle.as_radians()),
+                        scale: vec3(1., if rng.bool() { 1. } else { -1. }, 1.),
+                    };
+
+                commands.spawn((
+                    ChildOf(level_entity),
+                    ThornRingParticle,
+                    local_trns,
+                    GlobalTransform::from(local_trns),
+                    BaseColor(Color::linear_rgb(1., 4., 2.)),
+                    Animation::new(sprites.thorn.clone_weak(), "anim"),
+                    AnimationSmoothing(Interp::Identity),
+                    AnimationHooks::despawn_on_done("anim"),
+                ));
+            }
+        }
     }
 }
 

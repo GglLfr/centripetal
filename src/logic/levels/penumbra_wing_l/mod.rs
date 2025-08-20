@@ -22,10 +22,7 @@ pub mod p5_tutorial_parry;
 
 const SELENE: Uuid = uuid!("332e5310-3740-11f0-b0d1-4b444b848a1e");
 const ATTRACTOR: Uuid = uuid!("8226eab0-3740-11f0-b0d1-31c3cf318fb2");
-const RINGS: [Uuid; 2] = [
-    uuid!("483defc0-3740-11f0-bea9-1bca02df9366"),
-    uuid!("516847d0-3740-11f0-bea9-db42cbfffb80"),
-];
+const RING: Uuid = uuid!("516847d0-3740-11f0-bea9-db42cbfffb80");
 const HOVER_TARGET: Uuid = uuid!("ddc89020-3740-11f0-bea9-17dccf039850");
 
 #[derive(Debug, Copy, Clone, Default, Resource, TypePath, Serialize, Deserialize, Deref, DerefMut)]
@@ -147,7 +144,7 @@ pub struct Instance {
     pub level_entity: Entity,
     pub selene: Entity,
     pub attractor: Entity,
-    pub rings: [Entity; 2],
+    pub ring: Entity,
     pub hover_target: Entity,
     pub selene_initial: AttractedInitial,
     pub attractor_radius: f32,
@@ -179,7 +176,7 @@ impl FromLevel for Instance {
 
         let level_entity = e.id();
         let mut commands = e.commands();
-        let [selene, attractor, ring_0, ring_1, hover_target] = [SELENE, ATTRACTOR, RINGS[0], RINGS[1], HOVER_TARGET].map(|iid| {
+        let [selene, attractor, ring, hover_target] = [SELENE, ATTRACTOR, RING, HOVER_TARGET].map(|iid| {
             let e = entities.get(iid).unwrap();
             commands.entity(e).queue(suspend);
 
@@ -189,7 +186,7 @@ impl FromLevel for Instance {
         let selene_initial = initials.get(selene).copied().unwrap_or_default();
         let attractor_radius = attractors.get(attractor)?.radius;
         let [&selene_trns, &attractor_trns] = transforms.get_many([selene, attractor])?;
-        let ring_radius = rings.get(ring_1)?.radius;
+        let ring_radius = rings.get(ring)?.radius;
 
         commands.init_resource::<SeleneUi>();
         commands.queue(move |world: &mut World| -> Result {
@@ -197,7 +194,7 @@ impl FromLevel for Instance {
                 level_entity,
                 selene,
                 attractor,
-                rings: [ring_0, ring_1],
+                ring,
                 hover_target,
                 selene_initial,
                 attractor_radius,

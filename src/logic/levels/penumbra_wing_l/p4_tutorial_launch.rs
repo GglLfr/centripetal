@@ -28,7 +28,7 @@ pub fn init(
         level_entity,
         selene,
         attractor,
-        rings,
+        ring,
         ..
     }): InRef<Instance>,
     mut commands: Commands,
@@ -174,14 +174,12 @@ pub fn init(
                         }
                         let hit_observer = commands.spawn((ChildOf(level_entity), hit_observer)).id();
 
-                        // 4: Spawn 2 rings that protect the attractor from being slashed by Selene.
+                        // 4: Spawn a ring that protect the attractor from being slashed by Selene.
                         commands.spawn((
                             ChildOf(level_entity),
                             Timed::run(Duration::from_secs(2), move |mut commands: Commands| {
-                                for ring in rings {
-                                    // TODO FX for this.
-                                    commands.entity(ring).queue(resume);
-                                }
+                                // TODO FX for this.
+                                commands.entity(ring).queue(resume);
                             }),
                         ));
 

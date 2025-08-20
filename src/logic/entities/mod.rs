@@ -8,7 +8,7 @@ use crate::{
             apply_homing_velocity, bullet, color_selene_hurt, color_selene_parry, color_selene_slash, detect_attracted_entities,
             draw_attractor_radius, draw_selene_close, draw_selene_launch_disc, draw_selene_prediction_trajectory, draw_thorn_ring,
             predict_attract_trajectory, remove_attracted_initials, selene_cast_parry, selene_parry, trigger_launch_charging, update_launch_charging,
-            update_launch_idle, warn_selene_close,
+            update_launch_idle, update_thorn_ring_timers, warn_selene_close,
         },
     },
     prelude::*,
@@ -180,6 +180,7 @@ impl Plugin for EntitiesPlugin {
                 bullet::update_spiky_charge_effect,
                 update_launch_idle,
                 update_launch_charging,
+                update_thorn_ring_timers,
                 draw_selene_launch_disc,
                 draw_attractor_radius,
             )
