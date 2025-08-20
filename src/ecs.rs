@@ -1,3 +1,5 @@
+use bevy::ecs::system::AdapterSystem;
+
 use crate::prelude::*;
 
 pub struct Affected<M: 'static, T: IntoResultSystem<In<Entity>, (), M>>(pub T::System, PhantomData<fn(M)>);
@@ -121,10 +123,10 @@ impl<In: SystemInput, Out: 'static, Marker, S: 'static + IntoSystem<In, Result<O
 }
 
 impl<In: SystemInput, Out: 'static, Marker, S: 'static + IntoSystem<In, Never, Marker>> IntoResultSystem<In, Out, (fn() -> Never, Marker)> for S {
-    type System = NeverSystem<S::System, Result<Out>>;
+    type System = AdapterSystem<fn(Never) -> Result<Out>, S::System>;
 
     fn into_system(this: Self) -> Self::System {
-        NeverSystem(IntoSystem::into_system(this), PhantomData)
+        IntoSystem::into_system(this.map((|input| input) as fn(Never) -> Result<Out>))
     }
 }
 
@@ -159,72 +161,6 @@ impl<S: System> System for ResultSystem<S> {
 
     unsafe fn run_unsafe(&mut self, input: SystemIn<'_, Self>, world: UnsafeWorldCell) -> Self::Out {
         Ok(unsafe { self.0.run_unsafe(input, world) })
-    }
-
-    fn apply_deferred(&mut self, world: &mut World) {
-        self.0.apply_deferred(world);
-    }
-
-    fn queue_deferred(&mut self, world: DeferredWorld) {
-        self.0.queue_deferred(world);
-    }
-
-    unsafe fn validate_param_unsafe(&mut self, world: UnsafeWorldCell) -> Result<(), SystemParamValidationError> {
-        unsafe { self.0.validate_param_unsafe(world) }
-    }
-
-    fn initialize(&mut self, world: &mut World) {
-        self.0.initialize(world);
-    }
-
-    fn update_archetype_component_access(&mut self, world: UnsafeWorldCell) {
-        self.0.update_archetype_component_access(world);
-    }
-
-    fn check_change_tick(&mut self, change_tick: Tick) {
-        self.0.check_change_tick(change_tick);
-    }
-
-    fn get_last_run(&self) -> Tick {
-        self.0.get_last_run()
-    }
-
-    fn set_last_run(&mut self, last_run: Tick) {
-        self.0.set_last_run(last_run);
-    }
-}
-
-pub struct NeverSystem<S: System<Out = Never>, Out: 'static>(S, PhantomData<fn() -> Out>);
-impl<S: System<Out = Never>, Out: 'static> System for NeverSystem<S, Out> {
-    type In = S::In;
-    type Out = Out;
-
-    fn name(&self) -> Cow<'static, str> {
-        self.0.name()
-    }
-
-    fn component_access(&self) -> &Access<ComponentId> {
-        self.0.component_access()
-    }
-
-    fn archetype_component_access(&self) -> &Access<ArchetypeComponentId> {
-        self.0.archetype_component_access()
-    }
-
-    fn is_send(&self) -> bool {
-        self.0.is_send()
-    }
-
-    fn is_exclusive(&self) -> bool {
-        self.0.is_exclusive()
-    }
-
-    fn has_deferred(&self) -> bool {
-        self.0.has_deferred()
-    }
-
-    unsafe fn run_unsafe(&mut self, input: SystemIn<'_, Self>, world: UnsafeWorldCell) -> Self::Out {
-        unsafe { self.0.run_unsafe(input, world) }
     }
 
     fn apply_deferred(&mut self, world: &mut World) {

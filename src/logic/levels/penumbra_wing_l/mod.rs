@@ -1,7 +1,7 @@
 use std::f32::consts::TAU;
 
 use crate::{
-    PIXELS_PER_UNIT, SaveApp as _, Sprites,
+    IntoResultSystem, PIXELS_PER_UNIT, SaveApp as _, Sprites,
     graphics::{SpriteDrawer, SpriteSection},
     logic::{
         Fields, FromLevel, LevelApp as _, LevelEntities, TimeFinished, Timed,
@@ -95,19 +95,20 @@ pub fn draw_spawn_effect(
 pub struct Respawned;
 
 #[must_use]
-pub fn spawn_selene(
+pub fn spawn_selene<M>(
     level_entity: Entity,
     selene: Entity,
     effect_trns: Transform,
     selene_trns: Transform,
-    accept: impl FnOnce(&mut EntityWorldMut) -> Result + 'static + Send,
-) -> impl Command<Result> {
+    on_done: impl IntoResultSystem<(), (), M>,
+) -> impl Command {
     let target_pos = GlobalTransform::from(selene_trns)
         .reparented_to(&GlobalTransform::from(effect_trns))
         .translation
         .xy();
 
-    move |world: &mut World| -> Result {
+    let mut on_done = IntoResultSystem::into_system(on_done);
+    move |world: &mut World| {
         world
             .spawn((
                 ChildOf(level_entity),
@@ -123,14 +124,21 @@ pub fn spawn_selene(
             ))
             .observe(Timed::despawn_on_finished);
 
-        accept(
-            world
-                .spawn((ChildOf(level_entity), SpawnEffect { target_pos }, effect_trns))
-                .observe(Timed::despawn_on_finished)
-                .observe(move |_: Trigger<TimeFinished>, mut commands: Commands| {
-                    commands.entity(selene).queue(resume).trigger(Respawned);
-                }),
-        )
+        world.spawn((ChildOf(level_entity), SpawnEffect { target_pos }, effect_trns)).observe(
+            move |trigger: Trigger<TimeFinished>, world: &mut World| -> Result {
+                resume(world.get_entity_mut(selene)?);
+                world.trigger_targets(Respawned, selene);
+                world.flush();
+
+                on_done.initialize(world);
+                on_done.validate_param(world)?;
+                on_done.run((), world)?;
+
+                _ = world.try_despawn(trigger.target());
+                world.flush();
+                Ok(())
+            },
+        );
     }
 }
 
@@ -145,7 +153,7 @@ pub struct Instance {
     pub attractor_radius: f32,
     pub selene_trns: Transform,
     pub attractor_trns: Transform,
-    pub outer_ring_radius: f32,
+    pub ring_radius: f32,
 }
 
 impl FromLevel for Instance {
@@ -181,7 +189,7 @@ impl FromLevel for Instance {
         let selene_initial = initials.get(selene).copied().unwrap_or_default();
         let attractor_radius = attractors.get(attractor)?.radius;
         let [&selene_trns, &attractor_trns] = transforms.get_many([selene, attractor])?;
-        let outer_ring_radius = rings.get(ring_1)?.radius;
+        let ring_radius = rings.get(ring_1)?.radius;
 
         commands.init_resource::<SeleneUi>();
         commands.queue(move |world: &mut World| -> Result {
@@ -195,7 +203,7 @@ impl FromLevel for Instance {
                 attractor_radius,
                 selene_trns,
                 attractor_trns,
-                outer_ring_radius,
+                ring_radius,
             };
 
             world.run_system_cached_with(p1_spawn_attractor::init, &this)??;

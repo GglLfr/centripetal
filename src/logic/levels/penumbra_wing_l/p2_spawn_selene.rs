@@ -1,6 +1,6 @@
 use crate::{
     logic::{
-        CameraConfines, CameraTarget, TimeFinished,
+        CameraConfines, CameraTarget,
         entities::{
             Health, Killed, NoKillDespawn,
             penumbra::{AttractedPrediction, SeleneParry},
@@ -57,7 +57,7 @@ pub fn init(
                     .queue(suspend);
 
                 // ...and respawn her with an animation.
-                commands.queue(spawn_selene(level_entity, selene, trns, selene_trns, |_| Ok(())));
+                commands.queue(spawn_selene(level_entity, selene, trns, selene_trns, || {}));
                 Ok(())
             },
         )
@@ -92,16 +92,16 @@ pub fn init(
             commands.entity(level_entity).insert(SpawningSelene);
 
             // Spawn Selene with an animation, and...
-            commands.queue(spawn_selene(level_entity, selene, attractor_trns, selene_trns, move |e| {
-                e.observe(move |_: Trigger<TimeFinished>, mut commands: Commands| -> Result {
-                    // ...proceed to the next phase after she's spawned.
+            commands.queue(spawn_selene(
+                level_entity,
+                selene,
+                attractor_trns,
+                selene_trns,
+                move |mut commands: Commands| {
                     commands.entity(attractor).remove::<(CameraTarget, CameraConfines)>();
                     commands.entity(level_entity).remove::<SpawningSelene>();
-
-                    Ok(())
-                });
-                Ok(())
-            }));
+                },
+            ));
         },
     );
 

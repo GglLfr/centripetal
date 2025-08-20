@@ -21,10 +21,5 @@ pub struct LevelTransitionSet;
 
 pub fn in_level(level_id: impl Into<String>) -> impl FnMut(Query<&Level, Without<LevelUnload>>) -> bool + Clone {
     let id = level_id.into();
-    move |level: Query<&Level, Without<LevelUnload>>| {
-        let Ok(level) = level.single() else {
-            return false;
-        };
-        level.id == id
-    }
+    move |level: Query<&Level, Without<LevelUnload>>| level.single().is_ok_and(|level| level.id == id)
 }

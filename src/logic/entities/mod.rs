@@ -6,9 +6,9 @@ use crate::{
         entities::penumbra::{
             AttractedAction, Attractor, GenericPenumbra, LaunchAction, SelenePenumbra, ThornPillar, ThornRing, apply_attractor_accels,
             apply_homing_velocity, bullet, color_selene_hurt, color_selene_parry, color_selene_slash, detect_attracted_entities,
-            draw_attractor_radius, draw_selene_close, draw_selene_launch_disc, draw_selene_prediction_trajectory, predict_attract_trajectory,
-            remove_attracted_initials, selene_cast_parry, selene_parry, trigger_launch_charging, update_launch_charging, update_launch_idle,
-            warn_selene_close,
+            draw_attractor_radius, draw_selene_close, draw_selene_launch_disc, draw_selene_prediction_trajectory, draw_thorn_ring,
+            predict_attract_trajectory, remove_attracted_initials, selene_cast_parry, selene_parry, trigger_launch_charging, update_launch_charging,
+            update_launch_idle, warn_selene_close,
         },
     },
     prelude::*,
@@ -191,7 +191,11 @@ impl Plugin for EntitiesPlugin {
                 (selene_parry, selene_cast_parry)
                     .chain()
                     .in_set(RunFixedMainLoopSystem::BeforeFixedMainLoop),
-                (draw_selene_prediction_trajectory, (warn_selene_close, draw_selene_close).chain()),
+                (
+                    draw_selene_prediction_trajectory,
+                    draw_thorn_ring,
+                    (warn_selene_close, draw_selene_close).chain(),
+                ),
             )
                 .after(TransformSystem::TransformPropagate)
                 .run_if(in_state(GameState::InGame)),

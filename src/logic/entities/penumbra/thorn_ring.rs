@@ -12,9 +12,10 @@ use crate::{
 };
 
 #[derive(Debug, Copy, Clone, Default, Component)]
-#[require(PenumbraEntity, CollisionLayers = EntityLayers::penumbra_hostile())]
+#[require(PenumbraEntity, CollisionLayers = EntityLayers::penumbra_hostile(), CollisionEventsEnabled, DebugRender::none())]
 pub struct ThornRing {
     pub radius: f32,
+    pub opening: f32,
 }
 
 impl FromLevelEntity for ThornRing {
@@ -38,7 +39,14 @@ impl FromLevelEntity for ThornRing {
         }
 
         trns.rotation = Quat::from_axis_angle(Vec3::Z, (facing - trns.translation.xy()).to_angle());
-        e.insert((Self { radius }, AttractedInitial { ccw }, Collider::polyline(vertices, None)))
+        e.insert((Self { radius, opening }, AttractedInitial { ccw }, Collider::polyline(vertices, None)))
+            .observe(|trigger: Trigger<OnCollisionStart>, mut commands: Commands| {
+                if let Some(body) = trigger.body {
+                    commands
+                        .entity(body)
+                        .queue_handled(TryHurt::by(trigger.target(), i32::MAX as u32), ignore);
+                }
+            })
             .observe(|mut trigger: Trigger<TryLaunch>, mut commands: Commands| {
                 if trigger.by() != trigger.target() {
                     trigger.event_mut().stop();
@@ -47,5 +55,15 @@ impl FromLevelEntity for ThornRing {
             });
 
         Ok(())
+    }
+}
+
+pub fn draw_thorn_ring(mut shapes: ShapePainter, rings: Query<(&GlobalTransform, &ThornRing)>) {
+    for (&trns, &ring) in &rings {
+        shapes.transform = (trns * Transform::from_xyz(ring.radius, 0., 0.)).compute_transform();
+        shapes.color = Color::linear_rgb(1., 4., 2.);
+        shapes.thickness = 1.;
+        shapes.hollow = true;
+        shapes.arc(ring.radius, ring.opening / 2., TAU - ring.opening / 2.);
     }
 }

@@ -35,7 +35,7 @@ pub fn init(
         level_entity,
         selene,
         attractor,
-        outer_ring_radius,
+        ring_radius,
         ..
     }): InRef<Instance>,
     mut commands: Commands,
@@ -122,16 +122,16 @@ pub fn init(
         },
     );
 
+    #[must_use = "commands aren't executed immediately"]
     fn try_fire(selene: Entity, e: impl Event + Copy) -> impl Command<Result> {
         move |world: &mut World| -> Result {
             let mut selene = world.get_entity_mut(selene)?;
             if selene.contains::<Disabled>() {
-            } else {
                 selene.observe(move |trigger: Trigger<Respawned>, world: &mut World| {
                     world.despawn(trigger.observer());
                     world.trigger(e);
                 });
-
+            } else {
                 world.trigger(e);
             }
 
@@ -146,7 +146,7 @@ pub fn init(
             struct FireOne(u32);
 
             fn spawn_bullet(
-                In(([level_entity, selene, attractor], outer_ring_radius)): In<([Entity; 3], f32)>,
+                In(([level_entity, selene, attractor], ring_radius)): In<([Entity; 3], f32)>,
                 mut commands: Commands,
                 positions: Query<&Position>,
             ) -> Result<Entity> {
@@ -172,7 +172,7 @@ pub fn init(
                     ))
                     .id();
 
-                let pos = *attractor_pos + angle * outer_ring_radius;
+                let pos = *attractor_pos + angle * ring_radius;
                 commands
                     .spawn((ChildOf(level_entity), SpikyChargeEffect, Transform::from_translation(pos.extend(0.))))
                     .observe(move |trigger: Trigger<TimeFinished>, mut commands: Commands| {
@@ -198,14 +198,14 @@ pub fn init(
             commands.spawn((
                 ChildOf(level_entity),
                 Observer::new(move |trigger: Trigger<FireOne>, world: &mut World| -> Result {
-                    let bullet = world.run_system_cached_with(spawn_bullet, ([level_entity, selene, attractor], outer_ring_radius))??;
+                    let bullet = world.run_system_cached_with(spawn_bullet, ([level_entity, selene, attractor], ring_radius))??;
 
                     let num_fired = trigger.0;
                     world.entity_mut(bullet).observe(
                         move |trigger: Trigger<Killed>, mut commands: Commands, mut ui: ResMut<SeleneUi>| -> Result {
                             if trigger.by != selene {
                                 match num_fired {
-                                    1..=2 => commands.queue(BottomDialog::show(
+                                    1..=2 if trigger.by == trigger.target() => commands.queue(BottomDialog::show(
                                         None,
                                         i18n!(format!("tutorial.parry.fail.1-{num_fired}")),
                                         move |In(e): In<Entity>, mut commands: Commands| {
@@ -218,11 +218,11 @@ pub fn init(
                                             ));
                                         },
                                     )),
-                                    _ => {
+                                    num => {
                                         commands.spawn((
                                             ChildOf(level_entity),
                                             Timed::run(Duration::from_secs(1), move |world: &mut World| -> Result {
-                                                try_fire(selene, FireOne(3)).apply(world)
+                                                try_fire(selene, FireOne(num)).apply(world)
                                             }),
                                         ));
                                     }
@@ -296,7 +296,7 @@ pub fn init(
             struct FireMultiple(u32);
 
             fn spawn_bullet(
-                In(([level_entity, selene, attractor], outer_ring_radius)): In<([Entity; 3], f32)>,
+                In(([level_entity, selene, attractor], ring_radius)): In<([Entity; 3], f32)>,
                 mut commands: Commands,
                 positions: Query<&Position>,
                 mut rng: Local<Rng>,
@@ -336,7 +336,7 @@ pub fn init(
                     remove_ignore_hit.watch_entity(bullet);
 
                     let angle = base_angle;
-                    let pos = *attractor_pos + vec2(angle.cos, angle.sin) * outer_ring_radius;
+                    let pos = *attractor_pos + vec2(angle.cos, angle.sin) * ring_radius;
                     base_angle *= incr;
 
                     let charge = (
@@ -387,7 +387,7 @@ pub fn init(
                     #[derive(Debug, Copy, Clone, Component)]
                     struct ParryCount(usize);
 
-                    let bullets = world.run_system_cached_with(spawn_bullet, ([level_entity, selene, attractor], outer_ring_radius))??;
+                    let bullets = world.run_system_cached_with(spawn_bullet, ([level_entity, selene, attractor], ring_radius))??;
                     let mut hit_observer = Observer::new(
                         move |trigger: Trigger<Killed>, mut commands: Commands, mut query: Query<&mut ParryCount>| -> Result {
                             if trigger.by == selene {
@@ -451,11 +451,11 @@ pub fn init(
                                             ));
                                         },
                                     )),
-                                    _ => {
+                                    num => {
                                         commands.spawn((
                                             ChildOf(level_entity),
                                             Timed::run(Duration::from_secs(1), move |world: &mut World| -> Result {
-                                                try_fire(selene, FireMultiple(3)).apply(world)
+                                                try_fire(selene, FireMultiple(num)).apply(world)
                                             }),
                                         ));
                                     }
