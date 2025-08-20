@@ -151,7 +151,9 @@ pub fn init(
                                   mut query: Query<&mut TutorialLaunch>,
                                   mut count: Local<usize>|
                                   -> Result {
-                                if trigger.by == trigger.target() {
+                                // This holds true if either the bullet hits Selene or goes out of bounds, which can only happen if
+                                // Selene goes out of orbit. The bullet is only considered killed by Selene if she parries it.
+                                if trigger.by != selene {
                                     *query.get_mut(level_entity)? = TutorialLaunch::Normal;
                                     for bullet in bullets {
                                         commands.entity(bullet).try_remove::<HomingTarget>();

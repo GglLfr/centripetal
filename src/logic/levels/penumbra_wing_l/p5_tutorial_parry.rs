@@ -13,7 +13,7 @@ use crate::{
         },
         levels::penumbra_wing_l::{Instance, SeleneUi, p4_tutorial_launch},
     },
-    math::RngExt,
+    math::RngExt as _,
     prelude::*,
     ui::{BottomDialog, WorldspaceUi, ui_fade_in, ui_fade_out, ui_hide, widgets},
 };
@@ -331,15 +331,20 @@ pub fn init(
                         Observed::by(move |trigger: Trigger<TimeFinished>, mut commands: Commands| {
                             commands.entity(trigger.target()).despawn();
 
-                            // Use `try_insert` here because the bullets might've been despawned before it even appeared. Such
-                            // is the case when Selene gets hit before all bullets are spawned.
-                            commands.entity(bullet).try_insert((
-                                bullet::spiky(level_entity),
-                                HomingTarget(selene),
-                                LinearVelocity(vec2(angle.cos, angle.sin) * 96.),
-                                Position(pos),
-                                angle,
-                            ));
+                            // Bullet might've been despawned before it even appeared. Such is the case when Selene gets hit
+                            // before all bullets are spawned. In that case, spawn a simple cancellation effect.
+                            if let Ok(mut bullet) = commands.get_entity(bullet) {
+                                // Use `try_insert` just in case.
+                                bullet.try_insert((
+                                    bullet::spiky(level_entity),
+                                    HomingTarget(selene),
+                                    LinearVelocity(vec2(angle.cos, angle.sin) * 96.),
+                                    Position(pos),
+                                    angle,
+                                ));
+                            } else {
+                                // TODO "Pull away" effect immediately.
+                            }
                         }),
                     );
 

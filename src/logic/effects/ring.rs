@@ -20,7 +20,7 @@ pub struct Ring {
 }
 
 impl Ring {
-    pub fn bundle(self) -> impl Bundle {
+    pub fn bundle(self) -> impl Bundle + Clone {
         (self, Observed::by(Timed::despawn_on_finished))
     }
 }
