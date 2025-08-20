@@ -11,7 +11,7 @@ use crate::{
                 bullet::{self, SpikyChargeEffect},
             },
         },
-        levels::penumbra_wing_l::{Instance, SeleneUi, p4_tutorial_launch},
+        levels::penumbra_wing_l::{Instance, Respawned, SeleneUi, p4_tutorial_launch},
     },
     math::RngExt as _,
     prelude::*,
@@ -122,11 +122,28 @@ pub fn init(
         },
     );
 
+    fn try_fire(selene: Entity, e: impl Event + Copy) -> impl Command<Result> {
+        move |world: &mut World| -> Result {
+            let mut selene = world.get_entity_mut(selene)?;
+            if selene.contains::<Disabled>() {
+            } else {
+                selene.observe(move |trigger: Trigger<Respawned>, world: &mut World| {
+                    world.despawn(trigger.observer());
+                    world.trigger(e);
+                });
+
+                world.trigger(e);
+            }
+
+            Ok(())
+        }
+    }
+
     // 1: Parry one bullet.
     commands.entity(level_entity).observe(
         move |trigger: Trigger<OnInsert, ParryOne>, mut commands: Commands, mut ui: ResMut<SeleneUi>| -> Result {
             #[derive(Debug, Copy, Clone, Event)]
-            struct FireMultiple(u32);
+            struct FireOne(u32);
 
             fn spawn_bullet(
                 In(([level_entity, selene, attractor], outer_ring_radius)): In<([Entity; 3], f32)>,
@@ -180,7 +197,7 @@ pub fn init(
             // This observer calls `spawn_bullet` after optionally displaying a dialog.
             commands.spawn((
                 ChildOf(level_entity),
-                Observer::new(move |trigger: Trigger<FireMultiple>, world: &mut World| -> Result {
+                Observer::new(move |trigger: Trigger<FireOne>, world: &mut World| -> Result {
                     let bullet = world.run_system_cached_with(spawn_bullet, ([level_entity, selene, attractor], outer_ring_radius))??;
 
                     let num_fired = trigger.0;
@@ -195,8 +212,8 @@ pub fn init(
                                             commands.spawn((
                                                 ChildOf(level_entity),
                                                 Timed::run(Duration::from_secs(2), move |world: &mut World| -> Result {
-                                                    world.trigger(FireMultiple(num_fired + 1));
-                                                    BottomDialog::hide(e).apply(world)
+                                                    BottomDialog::hide(e).apply(world)?;
+                                                    try_fire(selene, FireOne(num_fired + 1)).apply(world)
                                                 }),
                                             ));
                                         },
@@ -204,8 +221,8 @@ pub fn init(
                                     _ => {
                                         commands.spawn((
                                             ChildOf(level_entity),
-                                            Timed::run(Duration::from_secs(1), move |world: &mut World| {
-                                                world.trigger(FireMultiple(3));
+                                            Timed::run(Duration::from_secs(1), move |world: &mut World| -> Result {
+                                                try_fire(selene, FireOne(3)).apply(world)
                                             }),
                                         ));
                                     }
@@ -254,9 +271,7 @@ pub fn init(
                         Timed::run(Duration::from_secs(2), move |world: &mut World| -> Result {
                             // ...then start firing the bullet.
                             BottomDialog::hide(e).apply(world)?;
-                            world.trigger(FireMultiple(1));
-
-                            Ok(())
+                            try_fire(selene, FireOne(1)).apply(world)
                         }),
                     ));
                 },
@@ -415,8 +430,8 @@ pub fn init(
                                                     commands.spawn((
                                                         ChildOf(level_entity),
                                                         Timed::run(Duration::from_secs(2), move |world: &mut World| -> Result {
-                                                            world.trigger(FireMultiple(num_fired + 1));
-                                                            BottomDialog::hide(e).apply(world)
+                                                            BottomDialog::hide(e).apply(world)?;
+                                                            try_fire(selene, FireMultiple(2)).apply(world)
                                                         }),
                                                     ));
                                                 },
@@ -430,8 +445,8 @@ pub fn init(
                                             commands.spawn((
                                                 ChildOf(level_entity),
                                                 Timed::run(Duration::from_secs(2), move |world: &mut World| -> Result {
-                                                    world.trigger(FireMultiple(num_fired + 1));
-                                                    BottomDialog::hide(e).apply(world)
+                                                    BottomDialog::hide(e).apply(world)?;
+                                                    try_fire(selene, FireMultiple(3)).apply(world)
                                                 }),
                                             ));
                                         },
@@ -439,8 +454,8 @@ pub fn init(
                                     _ => {
                                         commands.spawn((
                                             ChildOf(level_entity),
-                                            Timed::run(Duration::from_secs(1), move |world: &mut World| {
-                                                world.trigger(FireMultiple(3));
+                                            Timed::run(Duration::from_secs(1), move |world: &mut World| -> Result {
+                                                try_fire(selene, FireMultiple(3)).apply(world)
                                             }),
                                         ));
                                     }
@@ -475,7 +490,7 @@ pub fn init(
 
             // Start firing the bullets immediately. The continuation dialog was done previously.
             commands.entity(trigger.observer()).despawn();
-            commands.trigger(FireMultiple(1));
+            commands.queue(try_fire(selene, FireMultiple(1)));
         });
 
     Ok(())
