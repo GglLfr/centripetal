@@ -39,7 +39,7 @@ pub fn init(
         ..
     }): InRef<Instance>,
     mut commands: Commands,
-) -> Result {
+) {
     let ui_selene_parry = commands
         .spawn((
             Node {
@@ -127,9 +127,9 @@ pub fn init(
         move |world: &mut World| -> Result {
             let mut selene = world.get_entity_mut(selene)?;
             if selene.contains::<Disabled>() {
-                selene.observe(move |trigger: Trigger<Respawned>, world: &mut World| {
-                    world.despawn(trigger.observer());
-                    world.trigger(e);
+                selene.observe(move |trigger: Trigger<Respawned>, mut commands: Commands| {
+                    commands.entity(trigger.observer()).despawn();
+                    commands.trigger(e);
                 });
             } else {
                 world.trigger(e);
@@ -197,66 +197,67 @@ pub fn init(
             // This observer calls `spawn_bullet` after optionally displaying a dialog.
             commands.spawn((
                 ChildOf(level_entity),
-                Observer::new(move |trigger: Trigger<FireOne>, world: &mut World| -> Result {
-                    let bullet = world.run_system_cached_with(spawn_bullet, ([level_entity, selene, attractor], ring_radius))??;
-
+                Observer::new(move |trigger: Trigger<FireOne>, mut commands: Commands| {
                     let num_fired = trigger.0;
-                    world.entity_mut(bullet).observe(
-                        move |trigger: Trigger<Killed>, mut commands: Commands, mut ui: ResMut<SeleneUi>| -> Result {
-                            if trigger.by != selene {
-                                match num_fired {
-                                    1..=2 if trigger.by == trigger.target() => commands.queue(BottomDialog::show(
-                                        None,
-                                        i18n!(format!("tutorial.parry.fail.1-{num_fired}")),
-                                        move |In(e): In<Entity>, mut commands: Commands| {
+                    commands.queue(move |world: &mut World| -> Result {
+                        let bullet = world.run_system_cached_with(spawn_bullet, ([level_entity, selene, attractor], ring_radius))??;
+                        world.entity_mut(bullet).observe(
+                            move |trigger: Trigger<Killed>, mut commands: Commands, mut ui: ResMut<SeleneUi>| -> Result {
+                                if trigger.by != selene {
+                                    match num_fired {
+                                        1..=2 if trigger.by == trigger.target() => commands.queue(BottomDialog::show(
+                                            None,
+                                            i18n!(format!("tutorial.parry.fail.1-{num_fired}")),
+                                            move |In(e): In<Entity>, mut commands: Commands| {
+                                                commands.spawn((
+                                                    ChildOf(level_entity),
+                                                    Timed::run(Duration::from_secs(2), move |world: &mut World| -> Result {
+                                                        BottomDialog::hide(e).apply(world)?;
+                                                        try_fire(selene, FireOne(num_fired + 1)).apply(world)
+                                                    }),
+                                                ));
+                                            },
+                                        )),
+                                        num => {
                                             commands.spawn((
                                                 ChildOf(level_entity),
-                                                Timed::run(Duration::from_secs(2), move |world: &mut World| -> Result {
-                                                    BottomDialog::hide(e).apply(world)?;
-                                                    try_fire(selene, FireOne(num_fired + 1)).apply(world)
+                                                Timed::run(Duration::from_secs(1), move |world: &mut World| -> Result {
+                                                    try_fire(selene, FireOne(num)).apply(world)
                                                 }),
                                             ));
-                                        },
-                                    )),
-                                    num => {
-                                        commands.spawn((
-                                            ChildOf(level_entity),
-                                            Timed::run(Duration::from_secs(1), move |world: &mut World| -> Result {
-                                                try_fire(selene, FireOne(num)).apply(world)
-                                            }),
-                                        ));
+                                        }
                                     }
+                                } else {
+                                    commands.entity(trigger.observer()).despawn();
+                                    if let Some(ui) = ui.take_if(|&mut ui| ui == ui_selene_parry) {
+                                        commands.entity(ui).queue(ui_fade_out);
+                                    }
+
+                                    commands.queue(BottomDialog::show(
+                                        None,
+                                        i18n!("tutorial.parry.success.1.1"),
+                                        BottomDialog::show_next_after(
+                                            Duration::from_secs(2),
+                                            i18n!("tutorial.parry.success.1.2"),
+                                            move |In(e): In<Entity>, mut commands: Commands| {
+                                                commands.spawn((
+                                                    ChildOf(level_entity),
+                                                    Timed::run(Duration::from_secs(2), move |world: &mut World| -> Result {
+                                                        world.get_entity_mut(level_entity)?.remove::<ParryOne>().insert(ParryMultiple);
+                                                        BottomDialog::hide(e).apply(world)
+                                                    }),
+                                                ));
+                                            },
+                                        ),
+                                    ));
                                 }
-                            } else {
-                                commands.entity(trigger.observer()).despawn();
-                                if let Some(ui) = ui.take_if(|&mut ui| ui == ui_selene_parry) {
-                                    commands.entity(ui).queue(ui_fade_out);
-                                }
 
-                                commands.queue(BottomDialog::show(
-                                    None,
-                                    i18n!("tutorial.parry.success.1.1"),
-                                    BottomDialog::show_next_after(
-                                        Duration::from_secs(2),
-                                        i18n!("tutorial.parry.success.1.2"),
-                                        move |In(e): In<Entity>, mut commands: Commands| {
-                                            commands.spawn((
-                                                ChildOf(level_entity),
-                                                Timed::run(Duration::from_secs(2), move |world: &mut World| -> Result {
-                                                    world.get_entity_mut(level_entity)?.remove::<ParryOne>().insert(ParryMultiple);
-                                                    BottomDialog::hide(e).apply(world)
-                                                }),
-                                            ));
-                                        },
-                                    ),
-                                ));
-                            }
+                                Ok(())
+                            },
+                        );
 
-                            Ok(())
-                        },
-                    );
-
-                    Ok(())
+                        Ok(())
+                    });
                 }),
             ));
 
@@ -383,108 +384,110 @@ pub fn init(
 
             commands.spawn((
                 ChildOf(level_entity),
-                Observer::new(move |trigger: Trigger<FireMultiple>, world: &mut World| -> Result {
-                    #[derive(Debug, Copy, Clone, Component)]
-                    struct ParryCount(usize);
-
-                    let bullets = world.run_system_cached_with(spawn_bullet, ([level_entity, selene, attractor], ring_radius))??;
-                    let mut hit_observer = Observer::new(
-                        move |trigger: Trigger<Killed>, mut commands: Commands, mut query: Query<&mut ParryCount>| -> Result {
-                            if trigger.by == selene {
-                                let mut count = query.get_mut(trigger.observer())?;
-                                count.0 += 1;
-
-                                if count.0 == bullets.len() {
-                                    commands.entity(trigger.observer()).try_despawn();
-                                }
-                            } else {
-                                for b in bullets {
-                                    commands.entity(b).try_despawn();
-                                }
-                            }
-
-                            Ok(())
-                        },
-                    );
-
-                    for e in bullets {
-                        hit_observer.watch_entity(e);
-                    }
-
+                Observer::new(move |trigger: Trigger<FireMultiple>, mut commands: Commands| {
                     let num_fired = trigger.0;
-                    world.spawn((ChildOf(level_entity), ParryCount(0), hit_observer)).observe(
-                        move |trigger: Trigger<OnRemove, ParryCount>, mut commands: Commands, query: Query<&ParryCount>| -> Result {
-                            let &ParryCount(count) = query.get(trigger.target())?;
-                            if count != bullets.len() {
-                                match num_fired {
-                                    1 => commands.queue(BottomDialog::show(
-                                        None,
-                                        i18n!("tutorial.parry.fail.2-1.1"),
-                                        BottomDialog::show_next_after(
-                                            Duration::from_secs(2),
-                                            i18n!("tutorial.parry.fail.2-1.2"),
-                                            BottomDialog::show_next_after(
-                                                Duration::from_secs(2),
-                                                i18n!("tutorial.parry.fail.2-1.3"),
-                                                move |In(e): In<Entity>, mut commands: Commands| {
-                                                    commands.spawn((
-                                                        ChildOf(level_entity),
-                                                        Timed::run(Duration::from_secs(2), move |world: &mut World| -> Result {
-                                                            BottomDialog::hide(e).apply(world)?;
-                                                            try_fire(selene, FireMultiple(2)).apply(world)
-                                                        }),
-                                                    ));
-                                                },
-                                            ),
-                                        ),
-                                    )),
-                                    2 => commands.queue(BottomDialog::show(
-                                        None,
-                                        i18n!("tutorial.parry.fail.2-2"),
-                                        move |In(e): In<Entity>, mut commands: Commands| {
-                                            commands.spawn((
-                                                ChildOf(level_entity),
-                                                Timed::run(Duration::from_secs(2), move |world: &mut World| -> Result {
-                                                    BottomDialog::hide(e).apply(world)?;
-                                                    try_fire(selene, FireMultiple(3)).apply(world)
-                                                }),
-                                            ));
-                                        },
-                                    )),
-                                    num => {
-                                        commands.spawn((
-                                            ChildOf(level_entity),
-                                            Timed::run(Duration::from_secs(1), move |world: &mut World| -> Result {
-                                                try_fire(selene, FireMultiple(num)).apply(world)
-                                            }),
-                                        ));
+                    commands.queue(move |world: &mut World| -> Result {
+                        #[derive(Debug, Copy, Clone, Component)]
+                        struct ParryCount(usize);
+
+                        let bullets = world.run_system_cached_with(spawn_bullet, ([level_entity, selene, attractor], ring_radius))??;
+                        let mut hit_observer = Observer::new(
+                            move |trigger: Trigger<Killed>, mut commands: Commands, mut query: Query<&mut ParryCount>| -> Result {
+                                if trigger.by == selene {
+                                    let mut count = query.get_mut(trigger.observer())?;
+                                    count.0 += 1;
+
+                                    if count.0 == bullets.len() {
+                                        commands.entity(trigger.observer()).try_despawn();
+                                    }
+                                } else {
+                                    for b in bullets {
+                                        commands.entity(b).try_despawn();
                                     }
                                 }
-                            } else {
-                                commands.queue(BottomDialog::show(
-                                    None,
-                                    i18n!("tutorial.parry.success.2.1"),
-                                    BottomDialog::show_next_after(
-                                        Duration::from_secs(2),
-                                        i18n!("tutorial.parry.success.2.2"),
-                                        move |In(e): In<Entity>, mut commands: Commands| {
+
+                                Ok(())
+                            },
+                        );
+
+                        for e in bullets {
+                            hit_observer.watch_entity(e);
+                        }
+
+                        world.spawn((ChildOf(level_entity), ParryCount(0), hit_observer)).observe(
+                            move |trigger: Trigger<OnRemove, ParryCount>, mut commands: Commands, query: Query<&ParryCount>| -> Result {
+                                let &ParryCount(count) = query.get(trigger.target())?;
+                                if count != bullets.len() {
+                                    match num_fired {
+                                        1 => commands.queue(BottomDialog::show(
+                                            None,
+                                            i18n!("tutorial.parry.fail.2-1.1"),
+                                            BottomDialog::show_next_after(
+                                                Duration::from_secs(2),
+                                                i18n!("tutorial.parry.fail.2-1.2"),
+                                                BottomDialog::show_next_after(
+                                                    Duration::from_secs(2),
+                                                    i18n!("tutorial.parry.fail.2-1.3"),
+                                                    move |In(e): In<Entity>, mut commands: Commands| {
+                                                        commands.spawn((
+                                                            ChildOf(level_entity),
+                                                            Timed::run(Duration::from_secs(2), move |world: &mut World| -> Result {
+                                                                BottomDialog::hide(e).apply(world)?;
+                                                                try_fire(selene, FireMultiple(2)).apply(world)
+                                                            }),
+                                                        ));
+                                                    },
+                                                ),
+                                            ),
+                                        )),
+                                        2 => commands.queue(BottomDialog::show(
+                                            None,
+                                            i18n!("tutorial.parry.fail.2-2"),
+                                            move |In(e): In<Entity>, mut commands: Commands| {
+                                                commands.spawn((
+                                                    ChildOf(level_entity),
+                                                    Timed::run(Duration::from_secs(2), move |world: &mut World| -> Result {
+                                                        BottomDialog::hide(e).apply(world)?;
+                                                        try_fire(selene, FireMultiple(3)).apply(world)
+                                                    }),
+                                                ));
+                                            },
+                                        )),
+                                        num => {
                                             commands.spawn((
                                                 ChildOf(level_entity),
-                                                Timed::run(Duration::from_secs(2), move |world: &mut World| -> Result {
-                                                    world.get_entity_mut(level_entity)?.remove::<(ParryMultiple, TutorialParry)>();
-                                                    BottomDialog::hide(e).apply(world)
+                                                Timed::run(Duration::from_secs(1), move |world: &mut World| -> Result {
+                                                    try_fire(selene, FireMultiple(num)).apply(world)
                                                 }),
                                             ));
-                                        },
-                                    ),
-                                ));
-                            }
+                                        }
+                                    }
+                                } else {
+                                    commands.queue(BottomDialog::show(
+                                        None,
+                                        i18n!("tutorial.parry.success.2.1"),
+                                        BottomDialog::show_next_after(
+                                            Duration::from_secs(2),
+                                            i18n!("tutorial.parry.success.2.2"),
+                                            move |In(e): In<Entity>, mut commands: Commands| {
+                                                commands.spawn((
+                                                    ChildOf(level_entity),
+                                                    Timed::run(Duration::from_secs(2), move |world: &mut World| -> Result {
+                                                        world.get_entity_mut(level_entity)?.remove::<(ParryMultiple, TutorialParry)>();
+                                                        BottomDialog::hide(e).apply(world)
+                                                    }),
+                                                ));
+                                            },
+                                        ),
+                                    ));
+                                }
 
-                            Ok(())
-                        },
-                    );
+                                Ok(())
+                            },
+                        );
 
-                    Ok(())
+                        Ok(())
+                    });
                 }),
             ));
 
@@ -492,6 +495,4 @@ pub fn init(
             commands.entity(trigger.observer()).despawn();
             commands.queue(try_fire(selene, FireMultiple(1)));
         });
-
-    Ok(())
 }

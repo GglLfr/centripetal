@@ -154,10 +154,9 @@ impl BottomDialog {
             commands
                 .entity(e)
                 .insert(Timed::new(duration))
-                .observe(move |trigger: Trigger<TimeFinished>, world: &mut World| -> Result {
+                .observe(move |trigger: Trigger<TimeFinished>, mut commands: Commands| -> Result {
                     let on_done = on_done.take().ok_or("`TimeFinished` fired twice")?;
-                    Self::show(trigger.target(), i18n.clone(), on_done).apply(world)?;
-
+                    commands.queue(Self::show(trigger.target(), i18n.clone(), on_done));
                     Ok(())
                 });
             Ok(())
@@ -169,7 +168,7 @@ impl BottomDialog {
             commands
                 .entity(e)
                 .insert(Timed::new(duration))
-                .observe(move |_: Trigger<TimeFinished>, world: &mut World| -> Result { Self::hide(e).apply(world) });
+                .observe(move |_: Trigger<TimeFinished>, mut commands: Commands| commands.queue(Self::hide(e)));
             Ok(())
         })
     }

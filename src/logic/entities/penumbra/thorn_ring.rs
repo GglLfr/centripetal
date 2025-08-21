@@ -83,7 +83,7 @@ pub fn update_thorn_ring_timers(
     for (mut timers, &ring, &trns) in &mut rings {
         timers.particle += dt;
 
-        let particle_period = 1. / (2. * (TAU - ring.opening) * ring.radius / 24.);
+        let particle_period = 1. / ((TAU - ring.opening) * ring.radius / 12.);
         let particles = timers.particle / particle_period;
         if particles >= 1. {
             let count = particles as usize;

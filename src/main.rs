@@ -1,5 +1,7 @@
 #![allow(clippy::type_complexity)]
 
+use std::{mem::MaybeUninit, ptr::slice_from_raw_parts_mut};
+
 #[cfg(feature = "dev")]
 use bevy::log::DEFAULT_FILTER;
 use bevy::log::LogPlugin;
@@ -70,7 +72,7 @@ pub mod prelude {
         math::FloatOrd,
         platform::{
             collections::{HashMap, HashSet},
-            sync::{LazyLock, Mutex, MutexGuard, PoisonError, RwLock, RwLockReadGuard, RwLockWriteGuard},
+            sync::{Arc, LazyLock, Mutex, MutexGuard, PoisonError, RwLock, RwLockReadGuard, RwLockWriteGuard},
         },
         prelude::*,
         ptr::{OwningPtr, Ptr, PtrMut},
@@ -158,4 +160,34 @@ fn dev_init(mut commands: Commands, mut state: ResMut<NextState<GameState>>) {
     state.set(GameState::InGame);
 
     commands.queue(ApplySave::default().with(LoadLevel("penumbra_wing_l".into())));
+}
+
+pub trait OptionArrayExt {
+    type Output;
+
+    fn flatten(self) -> Self::Output;
+}
+
+impl<T, const N: usize> OptionArrayExt for [Option<T>; N] {
+    type Output = Option<[T; N]>;
+
+    fn flatten(self) -> Self::Output {
+        let mut output: MaybeUninit<[T; N]> = MaybeUninit::uninit();
+        let mut end = output.as_mut_ptr() as *mut T;
+        for item in self {
+            let Some(item) = item else {
+                let start = output.as_mut_ptr() as *mut T;
+                unsafe { slice_from_raw_parts_mut(start, end.offset_from(start) as usize).drop_in_place() }
+
+                return None
+            };
+
+            unsafe {
+                end.write(item);
+                end = end.add(1);
+            }
+        }
+
+        Some(unsafe { output.assume_init() })
+    }
 }

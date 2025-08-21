@@ -19,6 +19,7 @@ pub mod p2_spawn_selene;
 pub mod p3_tutorial_align;
 pub mod p4_tutorial_launch;
 pub mod p5_tutorial_parry;
+pub mod p6_tutorial_end;
 
 const SELENE: Uuid = uuid!("332e5310-3740-11f0-b0d1-4b444b848a1e");
 const ATTRACTOR: Uuid = uuid!("8226eab0-3740-11f0-b0d1-31c3cf318fb2");
@@ -104,7 +105,7 @@ pub fn spawn_selene<M>(
         .translation
         .xy();
 
-    let mut on_done = IntoResultSystem::into_system(on_done);
+    let mut on_done = Some(IntoResultSystem::into_system(on_done));
     move |world: &mut World| {
         world
             .spawn((
@@ -122,17 +123,21 @@ pub fn spawn_selene<M>(
             .observe(Timed::despawn_on_finished);
 
         world.spawn((ChildOf(level_entity), SpawnEffect { target_pos }, effect_trns)).observe(
-            move |trigger: Trigger<TimeFinished>, world: &mut World| -> Result {
-                resume(world.get_entity_mut(selene)?);
-                world.trigger_targets(Respawned, selene);
-                world.flush();
+            move |trigger: Trigger<TimeFinished>, mut commands: Commands| -> Result {
+                let on_done = on_done.take().ok_or("`TimeFinished` called twice")?;
+                let e = trigger.target();
 
-                on_done.initialize(world);
-                on_done.validate_param(world)?;
-                on_done.run((), world)?;
+                commands.queue(move |world: &mut World| -> Result {
+                    resume(world.get_entity_mut(selene)?);
+                    world.trigger_targets(Respawned, selene);
+                    world.flush();
 
-                _ = world.try_despawn(trigger.target());
-                world.flush();
+                    world.run_system_once(on_done)??;
+                    _ = world.try_despawn(e);
+
+                    Ok(())
+                });
+
                 Ok(())
             },
         );
@@ -203,11 +208,12 @@ impl FromLevel for Instance {
                 ring_radius,
             };
 
-            world.run_system_cached_with(p1_spawn_attractor::init, &this)??;
-            world.run_system_cached_with(p2_spawn_selene::init, &this)??;
-            world.run_system_cached_with(p3_tutorial_align::init, &this)??;
-            world.run_system_cached_with(p4_tutorial_launch::init, &this)??;
-            world.run_system_cached_with(p5_tutorial_parry::init, &this)??;
+            world.run_system_cached_with(p1_spawn_attractor::init, &this)?;
+            world.run_system_cached_with(p2_spawn_selene::init, &this)?;
+            world.run_system_cached_with(p3_tutorial_align::init, &this)?;
+            world.run_system_cached_with(p4_tutorial_launch::init, &this)?;
+            world.run_system_cached_with(p5_tutorial_parry::init, &this)?;
+            world.run_system_cached_with(p6_tutorial_end::init, &this)?;
 
             world.get_entity_mut(level_entity)?.insert(this);
             Ok(())
@@ -220,8 +226,12 @@ impl FromLevel for Instance {
 pub(super) fn plugin(app: &mut App) {
     app.register_level::<Instance>("penumbra_wing_l")
         .add_systems(
+            Update,
+            (draw_spawn_effect, p4_tutorial_launch::draw_ring_spawn_effect).run_if(in_level("penumbra_wing_l")),
+        )
+        .add_systems(
             PostUpdate,
-            (draw_spawn_effect, p3_tutorial_align::update_align_time)
+            p3_tutorial_align::update_align_time
                 .in_set(LevelTransitionSet)
                 .run_if(in_level("penumbra_wing_l")),
         )

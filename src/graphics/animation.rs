@@ -178,10 +178,9 @@ pub struct OnAnimateExit(String);
 
 #[derive(Default)]
 pub struct AnimationHooks {
-    //hooks: Box<dyn FnOnce(&mut Entity)>,
-    enter: HashMap<String, Vec<BoxedSystem<In<Entity>, Result>>>,
-    done: HashMap<String, Vec<BoxedSystem<In<Entity>, Result>>>,
-    exit: HashMap<String, Vec<BoxedSystem<In<Entity>, Result>>>,
+    enter: HashMap<String, Vec<Arc<Mutex<dyn System<In = In<Entity>, Out = Result>>>>>,
+    done: HashMap<String, Vec<Arc<Mutex<dyn System<In = In<Entity>, Out = Result>>>>>,
+    exit: HashMap<String, Vec<Arc<Mutex<dyn System<In = In<Entity>, Out = Result>>>>>,
 }
 
 impl AnimationHooks {
@@ -189,7 +188,7 @@ impl AnimationHooks {
         self.enter
             .entry(key.into())
             .or_default()
-            .push(Box::new(IntoResultSystem::into_system(system)));
+            .push(Arc::new(Mutex::new(IntoResultSystem::into_system(system))));
         self
     }
 
@@ -197,7 +196,7 @@ impl AnimationHooks {
         self.done
             .entry(key.into())
             .or_default()
-            .push(Box::new(IntoResultSystem::into_system(system)));
+            .push(Arc::new(Mutex::new(IntoResultSystem::into_system(system))));
         self
     }
 
@@ -205,7 +204,7 @@ impl AnimationHooks {
         self.exit
             .entry(key.into())
             .or_default()
-            .push(Box::new(IntoResultSystem::into_system(system)));
+            .push(Arc::new(Mutex::new(IntoResultSystem::into_system(system))));
         self
     }
 
@@ -252,61 +251,73 @@ impl BundleEffect for AnimationHooks {
 
         entity.world_scope(|world| {
             for sys in enter.values_mut().chain(done.values_mut()).chain(exit.values_mut()).flatten() {
-                sys.initialize(world);
+                sys.lock().unwrap_or_else(PoisonError::into_inner).initialize(world);
             }
         });
 
         if !enter.is_empty() {
-            entity.observe(move |trigger: Trigger<OnAnimateEnter>, world: &mut World| -> Result {
+            entity.observe(move |trigger: Trigger<OnAnimateEnter>, mut commands: Commands| {
                 let e = trigger.target();
-                if let Some(on_enter) = enter.get_mut(trigger.as_str()) {
-                    for on_enter in on_enter.iter_mut() {
-                        on_enter.run_without_applying_deferred(e, world)?;
-                    }
-                }
+                if let Some(on_enter) = enter.get(trigger.as_str()).cloned() {
+                    commands.queue(move |world: &mut World| -> Result {
+                        let cell = world.as_unsafe_world_cell();
+                        for on_enter in on_enter {
+                            let mut on_enter = on_enter.lock().unwrap_or_else(PoisonError::into_inner);
+                            on_enter.update_archetype_component_access(cell);
+                            unsafe {
+                                on_enter.validate_param_unsafe(cell)?;
+                                on_enter.run_unsafe(e, cell)?;
+                                on_enter.queue_deferred(DeferredWorld::from(cell.world_mut()));
+                            }
+                        }
 
-                for on_enter in enter.values_mut().flatten() {
-                    on_enter.queue_deferred(DeferredWorld::from(&mut *world));
+                        Ok(())
+                    });
                 }
-
-                world.flush();
-                Ok(())
             });
         }
 
         if !done.is_empty() {
-            entity.observe(move |trigger: Trigger<OnAnimateDone>, world: &mut World| -> Result {
+            entity.observe(move |trigger: Trigger<OnAnimateDone>, mut commands: Commands| {
                 let e = trigger.target();
-                if let Some(on_done) = done.get_mut(trigger.as_str()) {
-                    for on_done in on_done.iter_mut() {
-                        on_done.run_without_applying_deferred(e, world)?;
-                    }
-                }
+                if let Some(on_done) = done.get(trigger.as_str()).cloned() {
+                    commands.queue(move |world: &mut World| -> Result {
+                        let cell = world.as_unsafe_world_cell();
+                        for on_done in on_done {
+                            let mut on_done = on_done.lock().unwrap_or_else(PoisonError::into_inner);
+                            on_done.update_archetype_component_access(cell);
+                            unsafe {
+                                on_done.validate_param_unsafe(cell)?;
+                                on_done.run_unsafe(e, cell)?;
+                                on_done.queue_deferred(DeferredWorld::from(cell.world_mut()));
+                            }
+                        }
 
-                for on_done in done.values_mut().flatten() {
-                    on_done.queue_deferred(DeferredWorld::from(&mut *world));
+                        Ok(())
+                    });
                 }
-
-                world.flush();
-                Ok(())
             });
         }
 
         if !exit.is_empty() {
-            entity.observe(move |trigger: Trigger<OnAnimateExit>, world: &mut World| -> Result {
+            entity.observe(move |trigger: Trigger<OnAnimateExit>, mut commands: Commands| {
                 let e = trigger.target();
-                if let Some(on_exit) = exit.get_mut(trigger.as_str()) {
-                    for on_exit in on_exit.iter_mut() {
-                        on_exit.run_without_applying_deferred(e, world)?;
-                    }
-                }
+                if let Some(on_exit) = exit.get(trigger.as_str()).cloned() {
+                    commands.queue(move |world: &mut World| -> Result {
+                        let cell = world.as_unsafe_world_cell();
+                        for on_exit in on_exit {
+                            let mut on_exit = on_exit.lock().unwrap_or_else(PoisonError::into_inner);
+                            on_exit.update_archetype_component_access(cell);
+                            unsafe {
+                                on_exit.validate_param_unsafe(cell)?;
+                                on_exit.run_unsafe(e, cell)?;
+                                on_exit.queue_deferred(DeferredWorld::from(cell.world_mut()));
+                            }
+                        }
 
-                for on_exit in exit.values_mut().flatten() {
-                    on_exit.queue_deferred(DeferredWorld::from(&mut *world));
+                        Ok(())
+                    });
                 }
-
-                world.flush();
-                Ok(())
             });
         }
     }

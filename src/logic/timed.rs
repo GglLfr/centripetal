@@ -63,48 +63,78 @@ impl Timed {
     }
 
     pub fn run<M>(lifetime: Duration, sys: impl IntoResultSystem<(), (), M>) -> impl Bundle {
-        let mut sys = IntoResultSystem::into_system(sys);
+        let mut sys = Some(IntoResultSystem::into_system(sys));
         (
             Self::new(lifetime),
-            Observed::by(move |trigger: Trigger<TimeFinished>, world: &mut World| -> Result {
-                sys.initialize(world);
-                sys.validate_param(world)?;
-                sys.run_without_applying_deferred((), world)?;
+            Observed::by(move |trigger: Trigger<TimeFinished>, mut commands: Commands| {
+                let e = trigger.target();
+                if let Some(mut sys) = sys.take() {
+                    commands.queue(move |world: &mut World| -> Result {
+                        sys.initialize(world);
 
-                let mut world = DeferredWorld::from(world);
-                sys.queue_deferred(world.reborrow());
+                        let world = world.as_unsafe_world_cell();
+                        let (result, mut world) = unsafe {
+                            sys.update_archetype_component_access(world);
+                            sys.validate_param_unsafe(world)?;
+                            let result = sys.run_unsafe((), world);
+                            (result, DeferredWorld::from(world.world_mut()))
+                        };
 
-                world.commands().entity(trigger.target()).try_despawn();
-                Ok(())
+                        if result.is_ok() {
+                            sys.queue_deferred(world.reborrow());
+                        }
+                        world.commands().entity(e).try_despawn();
+                        result
+                    });
+                }
             }),
         )
     }
 
     pub fn repeat<M>(lifetime: Duration, sys: impl IntoResultSystem<In<Entity>, (), M>) -> impl Bundle {
-        let mut sys = IntoResultSystem::into_system(sys);
+        let sys = Arc::new(Mutex::new(IntoResultSystem::into_system(sys)));
         let mut initialized = false;
 
         (
             Self::new(lifetime),
-            Observed::by(
-                move |trigger: Trigger<TimeFinished>, world: &mut World, query: &mut QueryState<&mut Self>| -> Result {
-                    if !std::mem::replace(&mut initialized, true) {
+            Observed::by(move |trigger: Trigger<TimeFinished>, mut commands: Commands| {
+                let was_initialized = std::mem::replace(&mut initialized, true);
+                let sys = sys.clone();
+                let e = trigger.target();
+
+                let event = *trigger.event();
+                commands.queue(move |world: &mut World| -> Result {
+                    let mut sys = sys.lock().unwrap_or_else(PoisonError::into_inner);
+                    if !was_initialized {
                         sys.initialize(world);
                     }
 
-                    sys.validate_param(world)?;
-                    sys.run_without_applying_deferred(trigger.target(), world)?;
-                    sys.queue_deferred(DeferredWorld::from(&mut *world));
+                    let world = world.as_unsafe_world_cell();
+                    let (result, mut world) = unsafe {
+                        sys.update_archetype_component_access(world);
+                        sys.validate_param_unsafe(world)?;
+                        let result = sys.run_unsafe(e, world);
+                        (result, DeferredWorld::from(world.world_mut()))
+                    };
 
-                    let mut timed = query.get_mut(world, trigger.target())?;
-                    timed.life = trigger.overtime;
-                    timed.frac_f64 = trigger.overtime_frac_f64;
-                    timed.frac = trigger.overtime_frac;
-                    timed.finished = false;
+                    if result.is_ok() {
+                        sys.queue_deferred(world.reborrow());
+                    }
 
-                    Ok(())
-                },
-            ),
+                    world.commands().entity(e).queue_handled(
+                        move |mut e: EntityWorldMut| {
+                            let Some(mut timed) = e.get_mut::<Timed>() else { return };
+                            timed.life = event.overtime;
+                            timed.frac_f64 = event.overtime_frac_f64;
+                            timed.frac = event.overtime_frac;
+                            timed.finished = false;
+                        },
+                        ignore,
+                    );
+
+                    result
+                });
+            }),
         )
     }
 

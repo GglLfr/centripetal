@@ -1,19 +1,29 @@
 use std::f32::consts::TAU;
 
 use crate::{
+    OptionArrayExt, Sprites,
+    graphics::{SpriteDrawer, SpriteSection},
     i18n,
     logic::{
-        TimeStun, Timed,
+        TimeFinished, TimeStun, Timed,
+        effects::Ring,
         entities::{
             Killed,
             penumbra::{AttractedAction, HomingTarget, LaunchAction, Launched, bullet},
         },
         levels::penumbra_wing_l::{Instance, SeleneUi, p3_tutorial_align},
     },
+    math::{FloatTransformExt, Interp, RngExt},
     prelude::*,
     resume,
     ui::{BottomDialog, WorldspaceUi, ui_fade_in, ui_fade_out, ui_hide, widgets},
 };
+
+#[derive(Debug, Copy, Clone, Default, Component)]
+#[require(SpriteDrawer, Timed::new(Duration::from_millis(750)))]
+pub struct RingSpawnEffect {
+    pub ring_radius: f32,
+}
 
 #[derive(Debug, Copy, Clone, Default, Component)]
 #[component(storage = "SparseSet")]
@@ -28,11 +38,13 @@ pub fn init(
         level_entity,
         selene,
         attractor,
+        attractor_trns,
         ring,
+        ring_radius,
         ..
     }): InRef<Instance>,
     mut commands: Commands,
-) -> Result {
+) {
     let ui_selene_launch = commands
         .spawn((
             Node {
@@ -177,9 +189,30 @@ pub fn init(
                         // 4: Spawn a ring that protect the attractor from being slashed by Selene.
                         commands.spawn((
                             ChildOf(level_entity),
-                            Timed::run(Duration::from_secs(2), move |mut commands: Commands| {
-                                // TODO FX for this.
-                                commands.entity(ring).queue(resume);
+                            Timed::run(Duration::from_millis(1250), move |mut commands: Commands| {
+                                commands
+                                    .spawn((ChildOf(level_entity), attractor_trns, RingSpawnEffect { ring_radius }))
+                                    .observe(move |_: Trigger<TimeFinished>, mut commands: Commands| {
+                                        commands.entity(ring).queue(resume);
+                                        commands.spawn((
+                                            ChildOf(level_entity),
+                                            Ring {
+                                                radius_from: ring_radius,
+                                                radius_to: ring_radius + 16.,
+                                                thickness_from: 3.,
+                                                thickness_to: 0.,
+                                                colors: smallvec![
+                                                    Color::linear_rgb(50., 200., 100.),
+                                                    Color::linear_rgb(1., 4., 2.),
+                                                    Color::linear_rgb(0., 1., 2.)
+                                                ],
+                                                color_interp: Interp::PowOut { exponent: 4 },
+                                                ..default()
+                                            }
+                                            .bundle(),
+                                            attractor_trns,
+                                        ));
+                                    });
                             }),
                         ));
 
@@ -231,6 +264,64 @@ pub fn init(
             Ok(())
         },
     );
+}
 
-    Ok(())
+pub fn draw_ring_spawn_effect(
+    mut shapes: ShapePainter,
+    sprites: Res<Sprites>,
+    sprite_sections: Res<Assets<SpriteSection>>,
+    effects: Query<(Entity, &SpriteDrawer, &Timed, &RingSpawnEffect, &Transform)>,
+) {
+    let Some(rings) = [
+        sprite_sections.get(&sprites.ring_1),
+        sprite_sections.get(&sprites.ring_2),
+        sprite_sections.get(&sprites.ring_3),
+        sprite_sections.get(&sprites.ring_4),
+    ]
+    .flatten() else {
+        return
+    };
+
+    let col_from = Color::linear_rgb(0., 1., 2.);
+    let col_to = Color::linear_rgb(1., 4., 2.);
+    for (e, drawer, &timed, &RingSpawnEffect { ring_radius }, &trns) in &effects {
+        let mut rng = Rng::with_seed(e.to_bits());
+        let f = timed.frac();
+
+        let sprite_index = f * (rings.len() as f32);
+        let Some(&a) = rings.get(sprite_index as usize) else { continue };
+        let b = rings.get(sprite_index as usize + 1);
+        let lerp = sprite_index.fract();
+
+        for sign in [-1., 1.] {
+            for (angle, offset) in rng
+                .fork()
+                .len_vectors((TAU * ring_radius / 8.).round() as usize, 0., TAU, ring_radius, ring_radius)
+            {
+                let angle_offset = rng.f32_within(TAU / 12., TAU / 6.) * sign;
+                let angle @ Rot2 { cos, sin } = angle * Rot2::radians(angle_offset * f.pow_out(2));
+                let offset = offset.rotate(vec2(cos, sin));
+
+                let col = col_from.mix(&col_to, f.pow_in(2));
+                let scl = (1. - f.threshold(0.6, 1.)).pow_out(2);
+
+                drawer.draw_at(
+                    offset.extend(0.),
+                    angle,
+                    a.sprite_with(col.with_alpha(f * (1. - lerp)), a.size * scl, default()),
+                );
+
+                if let Some(&b) = b {
+                    drawer.draw_at(offset.extend(0.), angle, b.sprite_with(col.with_alpha(f * lerp), b.size * scl, default()));
+                }
+            }
+        }
+
+        let f = f.threshold(0.6, 1.);
+        shapes.transform = trns;
+        shapes.hollow = true;
+        shapes.thickness = f.pow_in(2) * 3.;
+        shapes.color = Color::linear_rgba(5., 20., 10., f.pow_in(2));
+        shapes.circle(ring_radius);
+    }
 }

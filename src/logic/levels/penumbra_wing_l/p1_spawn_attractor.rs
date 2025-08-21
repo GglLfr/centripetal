@@ -20,7 +20,7 @@ pub fn init(
         ..
     }): InRef<Instance>,
     mut commands: Commands,
-) -> Result {
+) {
     // Entry point.
     commands
         .entity(level_entity)
@@ -86,6 +86,4 @@ pub fn init(
             Ok(())
         }),
     ));
-
-    Ok(())
 }

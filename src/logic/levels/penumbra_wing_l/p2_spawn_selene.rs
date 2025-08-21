@@ -27,7 +27,7 @@ pub fn init(
         ..
     }): InRef<Instance>,
     mut commands: Commands,
-) -> Result {
+) {
     commands
         .entity(selene)
         // Make Selene "unkillable"; replace the default behavior with suspending and resuming instead.
@@ -104,6 +104,4 @@ pub fn init(
             ));
         },
     );
-
-    Ok(())
 }

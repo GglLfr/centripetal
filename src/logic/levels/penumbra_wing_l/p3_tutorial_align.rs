@@ -66,7 +66,7 @@ pub fn init(
     mut commands: Commands,
     shapes: ShapeCommands,
     sprites: Res<Sprites>,
-) -> Result {
+) {
     commands.entity(hover_target).insert((
         EntityLayers::penumbra_hostile(),
         Collider::circle(8.),
@@ -272,6 +272,4 @@ pub fn init(
             Ok(())
         },
     );
-
-    Ok(())
 }
