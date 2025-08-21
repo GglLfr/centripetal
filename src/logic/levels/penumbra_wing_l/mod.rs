@@ -1,7 +1,7 @@
 use std::f32::consts::TAU;
 
 use crate::{
-    IntoResultSystem, PIXELS_PER_UNIT, SaveApp as _, Sprites,
+    IntoResultSystem, OptionArrayExt as _, PIXELS_PER_UNIT, SaveApp as _, Sprites,
     graphics::{SpriteDrawer, SpriteSection},
     logic::{
         Fields, FromLevel, LevelApp as _, LevelEntities, TimeFinished, Timed,
@@ -38,22 +38,116 @@ pub struct SpawnEffect {
     target_pos: Vec2,
 }
 
+#[derive(Debug, Copy, Clone, Default, Component)]
+#[require(SpriteDrawer, Timed::new(Duration::from_millis(750)))]
+#[component(on_add = ring_add_end_effect)]
+pub struct RingSpawnEffect {
+    pub ring_radius: f32,
+}
+
+fn ring_add_end_effect(mut world: DeferredWorld, HookContext { entity, .. }: HookContext) {
+    world.commands().entity(entity).observe(
+        move |trigger: Trigger<TimeFinished>, mut commands: Commands, query: Query<(&ChildOf, &Transform, &RingSpawnEffect)>| -> Result {
+            let (child_of, &trns, &RingSpawnEffect { ring_radius }) = query.get(trigger.target())?;
+            commands.spawn((
+                ChildOf(child_of.parent()),
+                Ring {
+                    radius_from: ring_radius,
+                    radius_to: ring_radius + 16.,
+                    thickness_from: 3.,
+                    thickness_to: 0.,
+                    colors: smallvec![
+                        Color::linear_rgb(50., 200., 100.),
+                        Color::linear_rgb(1., 4., 2.),
+                        Color::linear_rgb(0., 1., 2.)
+                    ],
+                    color_interp: Interp::PowOut { exponent: 4 },
+                    ..default()
+                }
+                .bundle(),
+                trns,
+            ));
+            Ok(())
+        },
+    );
+}
+
+pub fn draw_ring_spawn_effect(
+    mut shapes: ShapePainter,
+    sprites: Res<Sprites>,
+    sprite_sections: Res<Assets<SpriteSection>>,
+    effects: Query<(Entity, &SpriteDrawer, &Timed, &RingSpawnEffect, &Transform)>,
+) {
+    let Some(rings) = [
+        sprite_sections.get(&sprites.ring_1),
+        sprite_sections.get(&sprites.ring_2),
+        sprite_sections.get(&sprites.ring_3),
+        sprite_sections.get(&sprites.ring_4),
+    ]
+    .flatten() else {
+        return
+    };
+
+    let col_from = Color::linear_rgb(0., 1., 2.);
+    let col_to = Color::linear_rgb(1., 4., 2.);
+    for (e, drawer, &timed, &RingSpawnEffect { ring_radius }, &trns) in &effects {
+        let mut rng = Rng::with_seed(e.to_bits());
+        let f = timed.frac();
+
+        let sprite_index = f * (rings.len() as f32);
+        let Some(&a) = rings.get(sprite_index as usize) else { continue };
+        let b = rings.get(sprite_index as usize + 1);
+        let lerp = sprite_index.fract();
+
+        for sign in [-1., 1.] {
+            for (angle, offset) in rng
+                .fork()
+                .len_vectors((TAU * ring_radius / 8.).round() as usize, 0., TAU, ring_radius, ring_radius)
+            {
+                let angle_offset = rng.f32_within(TAU / 12., TAU / 6.) * sign;
+                let angle @ Rot2 { cos, sin } = angle * Rot2::radians(angle_offset * f.pow_out(2));
+                let offset = offset.rotate(vec2(cos, sin));
+
+                let col = col_from.mix(&col_to, f.pow_in(2));
+                let scl = (1. - f.threshold(0.6, 1.)).pow_out(2);
+
+                drawer.draw_at(
+                    offset.extend(0.),
+                    angle,
+                    a.sprite_with(col.with_alpha(f * (1. - lerp)), a.size * scl, default()),
+                );
+
+                if let Some(&b) = b {
+                    drawer.draw_at(offset.extend(0.), angle, b.sprite_with(col.with_alpha(f * lerp), b.size * scl, default()));
+                }
+            }
+        }
+
+        let f = f.threshold(0.6, 1.);
+        shapes.transform = trns;
+        shapes.hollow = true;
+        shapes.thickness = f.pow_in(2) * 3.;
+        shapes.color = Color::linear_rgba(5., 20., 10., f.pow_in(2));
+        shapes.circle(ring_radius);
+    }
+}
+
 pub fn draw_spawn_effect(
     sprites: Res<Sprites>,
     sprite_sections: Res<Assets<SpriteSection>>,
     effects: Query<(Entity, &SpawnEffect, &SpriteDrawer, &Timed)>,
 ) {
-    let rings @ [Some(..), Some(..), Some(..), Some(..), Some(..)] = [
+    let Some(rings) = [
         sprite_sections.get(&sprites.ring_2),
         sprite_sections.get(&sprites.ring_3),
         sprite_sections.get(&sprites.ring_4),
         sprite_sections.get(&sprites.ring_6),
         sprite_sections.get(&sprites.ring_8),
-    ] else {
+    ]
+    .flatten() else {
         return
     };
 
-    let rings = rings.map(Option::unwrap);
     for (e, effect, drawer, &timed) in &effects {
         let mut rng = Rng::with_seed(e.to_bits());
         let f = timed.frac();
@@ -225,10 +319,7 @@ impl FromLevel for Instance {
 
 pub(super) fn plugin(app: &mut App) {
     app.register_level::<Instance>("penumbra_wing_l")
-        .add_systems(
-            Update,
-            (draw_spawn_effect, p4_tutorial_launch::draw_ring_spawn_effect).run_if(in_level("penumbra_wing_l")),
-        )
+        .add_systems(Update, (draw_spawn_effect, draw_ring_spawn_effect).run_if(in_level("penumbra_wing_l")))
         .add_systems(
             PostUpdate,
             p3_tutorial_align::update_align_time
