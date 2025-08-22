@@ -257,11 +257,11 @@ pub fn handle_load_level_begin(
     }
 
     if !identity {
-        let handle = server.load(world.levels.get(next).ok_or_else(|| format!("Level {next} not found"))?);
-
-        commands.spawn(Level { id: next.into(), handle });
-
         state.set(InGameState::Loading);
+        commands.spawn(Level {
+            id: next.into(),
+            handle: server.load(world.levels.get(next).ok_or_else(|| format!("Level {next} not found"))?),
+        });
     }
 
     Ok(())
@@ -463,6 +463,7 @@ pub fn handle_load_level_end(
         world.try_despawn(unload)?;
     }
 
+    world.flush();
     for (&id, entities) in &mut entity_targets {
         world.run_system_with(id, entities.drain(..).as_slice())??;
     }
@@ -475,6 +476,5 @@ pub fn handle_load_level_end(
         world.run_system_with(id, level)??;
     }
 
-    world.flush();
     Ok(())
 }

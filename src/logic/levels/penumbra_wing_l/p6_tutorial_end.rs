@@ -1,8 +1,8 @@
 use crate::{
     i18n,
     logic::{
-        TimeFinished, Timed,
-        entities::penumbra::LaunchAction,
+        LoadLevel, TimeFinished, Timed,
+        entities::{Killed, penumbra::LaunchAction},
         levels::penumbra_wing_l::{Instance, RingSpawnEffect, p5_tutorial_parry},
     },
     prelude::*,
@@ -14,6 +14,7 @@ pub fn init(
     InRef(&Instance {
         level_entity,
         selene,
+        attractor,
         attractor_trns,
         ring,
         ring_radius,
@@ -61,6 +62,12 @@ pub fn init(
                     },
                 ),
             ));
+
+            commands
+                .entity(attractor)
+                .observe(move |_: Trigger<Killed>, mut load_level: ResMut<LoadLevel>| {
+                    "sanctuary_chapel_nw".clone_into(&mut load_level);
+                });
         },
     );
 }

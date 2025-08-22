@@ -55,7 +55,7 @@ pub fn spiky(level_entity: Entity) -> impl Bundle {
             TransformExtrapolation,
         ),
         (Timed::new(Duration::from_secs(2)), Observed::by(Timed::kill_on_finished)),
-        HomingPower(180f32.to_radians()),
+        HomingPower(240f32.to_radians()),
         (
             AnimationFrom::sprite(|sprites| (sprites.bullet_spiky.clone_weak(), "anim")),
             AnimationMode::Repeat,

@@ -32,6 +32,7 @@ pub struct Attractor {
     pub radius: f32,
     pub gravity: f32,
     pub caster: Collider,
+    pub level_target: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, Component, Deref, DerefMut)]
@@ -45,13 +46,14 @@ impl FromLevelEntity for Attractor {
         let radius = fields.f32("radius")?;
         let strength = fields.f32("strength")?;
         let health = fields.u32("health")?;
-        let _level_target = fields.str("level_target").ok().map(String::from);
+        let level_target = fields.str("level_target").ok().map(String::from);
 
         e.insert((
             Self {
                 radius,
                 gravity: strength * strength * radius,
                 caster: Collider::circle(radius),
+                level_target,
             },
             MaxHealth::new(health),
             Animation::new(sprites.attractor_regular.clone_weak(), "anim"),

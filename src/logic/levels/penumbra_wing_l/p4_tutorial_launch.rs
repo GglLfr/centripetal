@@ -5,7 +5,7 @@ use crate::{
     logic::{
         TimeFinished, TimeStun, Timed,
         entities::{
-            Hurt, Killed,
+            EntityLayers, Hurt, Killed, TryHurt,
             penumbra::{AttractedAction, HomingTarget, LaunchAction, bullet},
         },
         levels::penumbra_wing_l::{Instance, RingSpawnEffect, SeleneUi, p3_tutorial_align},
@@ -131,7 +131,7 @@ pub fn init(
                                     let mut bullet = commands.entity(bullet);
                                     bullet.insert((
                                         bullet::spiky(level_entity),
-                                        LinearVelocity(vec2(cos * 1., sin * 1.)),
+                                        LinearVelocity(vec2(cos * 156., sin * 156.)),
                                         attractor_pos,
                                         Rotation { cos, sin },
                                     ));
@@ -178,9 +178,28 @@ pub fn init(
                         Timed::run(Duration::from_millis(1250), move |mut commands: Commands| {
                             commands
                                 .spawn((ChildOf(level_entity), attractor_trns, RingSpawnEffect { ring_radius }))
-                                .observe(move |_: Trigger<TimeFinished>, mut commands: Commands| {
-                                    commands.entity(ring).queue(resume);
-                                });
+                                .observe(
+                                    move |_: Trigger<TimeFinished>,
+                                          mut commands: Commands,
+                                          pipeline: Res<SpatialQueryPipeline>,
+                                          layers: Query<&CollisionLayers>| {
+                                        commands.entity(ring).queue(resume);
+                                        pipeline.shape_intersections_callback(
+                                            &Collider::circle(ring_radius),
+                                            attractor_trns.translation.xy(),
+                                            0.,
+                                            &SpatialQueryFilter::from_mask(EntityLayers::penumbra_hostile().filters),
+                                            |e| {
+                                                if (EntityLayers::penumbra_hostile().memberships & layers.get(e).copied().unwrap_or_default().filters)
+                                                    != 0
+                                                {
+                                                    commands.entity(e).queue_handled(TryHurt::by(ring, i32::MAX as u32), ignore);
+                                                }
+                                                true
+                                            },
+                                        );
+                                    },
+                                );
                         }),
                     ));
 
