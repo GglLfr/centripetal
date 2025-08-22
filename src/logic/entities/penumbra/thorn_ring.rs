@@ -36,7 +36,7 @@ impl FromLevelEntity for ThornRing {
     fn from_level_entity(mut e: EntityCommands, fields: &Fields, _: &mut SystemParamItem<Self::Param>, mut trns: QueryItem<Self::Data>) -> Result {
         let ccw = fields.bool("ccw")?;
         let facing = fields.point_px("facing")?.as_vec2();
-        let opening = fields.float("opening")?.to_radians();
+        let opening = fields.f32("opening")?.to_radians();
 
         let pos = trns.translation.xy();
         let radius = (facing - pos).length();

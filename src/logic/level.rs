@@ -61,7 +61,7 @@ pub enum FieldError {
 }
 
 impl Fields {
-    pub fn int(&self, name: impl AsRef<str>) -> Result<u32, FieldError> {
+    pub fn u32(&self, name: impl AsRef<str>) -> Result<u32, FieldError> {
         self.get(name.as_ref())
             .map(|f| match f {
                 LdtkEntityField::Int(value) => Ok(*value),
@@ -70,7 +70,7 @@ impl Fields {
             .unwrap_or(Err(FieldError::NotFound))
     }
 
-    pub fn float(&self, name: impl AsRef<str>) -> Result<f32, FieldError> {
+    pub fn f32(&self, name: impl AsRef<str>) -> Result<f32, FieldError> {
         self.get(name.as_ref())
             .map(|f| match f {
                 LdtkEntityField::Float(value) => Ok(*value),
@@ -88,7 +88,7 @@ impl Fields {
             .unwrap_or(Err(FieldError::NotFound))
     }
 
-    pub fn string(&self, name: impl AsRef<str>) -> Result<&str, FieldError> {
+    pub fn str(&self, name: impl AsRef<str>) -> Result<&str, FieldError> {
         self.get(name.as_ref())
             .map(|f| match f {
                 LdtkEntityField::String(value) => Ok(value.as_ref()),

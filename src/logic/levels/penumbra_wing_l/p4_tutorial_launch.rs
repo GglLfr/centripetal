@@ -5,8 +5,8 @@ use crate::{
     logic::{
         TimeFinished, TimeStun, Timed,
         entities::{
-            Killed,
-            penumbra::{AttractedAction, HomingTarget, LaunchAction, Launched, bullet},
+            Hurt, Killed,
+            penumbra::{AttractedAction, HomingTarget, LaunchAction, bullet},
         },
         levels::penumbra_wing_l::{Instance, RingSpawnEffect, SeleneUi, p3_tutorial_align},
     },
@@ -94,140 +94,135 @@ pub fn init(
             }
 
             // On launch, do some very specific things:
-            commands.entity(selene).observe(
-                move |trigger: Trigger<Launched>,
+            commands.entity(attractor).observe(
+                move |trigger: Trigger<Hurt>,
                       mut ui: ResMut<SeleneUi>,
                       mut commands: Commands,
                       positions: Query<&Position>,
                       mut actions: Query<(&mut ActionState<AttractedAction>, &mut ActionState<LaunchAction>)>|
                       -> Result {
-                    if trigger.at == attractor {
-                        commands.entity(trigger.observer()).despawn();
-                        let [&pos, &attractor_pos] = positions.get_many([trigger.target(), trigger.at])?;
+                    commands.entity(trigger.observer()).despawn();
+                    let [&pos, &attractor_pos] = positions.get_many([selene, attractor])?;
 
-                        // 1: Secretly enable parrying, but temporarily disable launching too.
-                        let (mut attracted_action, mut launch_action) = actions.get_mut(trigger.target())?;
-                        attracted_action.enable_action(&AttractedAction::Parry);
-                        launch_action.disable_action(&LaunchAction);
+                    // 1: Secretly enable parrying, but temporarily disable launching too.
+                    let (mut attracted_action, mut launch_action) = actions.get_mut(selene)?;
+                    attracted_action.enable_action(&AttractedAction::Parry);
+                    launch_action.disable_action(&LaunchAction);
 
-                        // 2: Queue a time stun.
-                        commands.spawn((ChildOf(level_entity), TimeStun::long_smooth()));
+                    // 2: Queue a time stun.
+                    commands.spawn((ChildOf(level_entity), TimeStun::long_smooth()));
 
-                        // 3: Spawn 5 bullets that, when at least one hits Selene, will trigger a "normal" branch.
-                        //    Otherwise, trigger a "special" branch for phase 5.
-                        const BULLET_COUNT: usize = 5;
-                        let bullets: [Entity; BULLET_COUNT] = std::array::from_fn(|i| {
-                            let Rotation { cos, sin } = (*pos - *attractor_pos)
-                                .try_normalize()
-                                .map(|Vec2 { x: cos, y: sin }| Rotation { cos, sin })
-                                .unwrap_or_default()
-                                * Rotation::radians(TAU * i as f32 / BULLET_COUNT as f32);
+                    // 3: Spawn 5 bullets that, when at least one hits Selene, will trigger a "normal" branch.
+                    //    Otherwise, trigger a "special" branch for phase 5.
+                    const BULLET_COUNT: usize = 5;
+                    let bullets: [Entity; BULLET_COUNT] = std::array::from_fn(|i| {
+                        let Rotation { cos, sin } = (*pos - *attractor_pos)
+                            .try_normalize()
+                            .map(|Vec2 { x: cos, y: sin }| Rotation { cos, sin })
+                            .unwrap_or_default()
+                            * Rotation::radians(TAU * i as f32 / BULLET_COUNT as f32);
 
-                            let bullet = commands.spawn_empty().id();
-                            commands.spawn((
-                                ChildOf(level_entity),
-                                Timed::run(
-                                    Duration::from_millis(100 + (i as u64 + 1) * 50),
-                                    move |mut commands: Commands, query: Query<&TutorialLaunch>| {
-                                        let mut bullet = commands.entity(bullet);
-                                        bullet.insert((
-                                            bullet::spiky(level_entity),
-                                            LinearVelocity(vec2(cos * 156., sin * 156.)),
-                                            attractor_pos,
-                                            Rotation { cos, sin },
+                        let bullet = commands.spawn_empty().id();
+                        commands.spawn((
+                            ChildOf(level_entity),
+                            Timed::run(
+                                Duration::from_millis(100 + (i as u64 + 1) * 50),
+                                move |mut commands: Commands, query: Query<&TutorialLaunch>| {
+                                    let mut bullet = commands.entity(bullet);
+                                    bullet.insert((
+                                        bullet::spiky(level_entity),
+                                        LinearVelocity(vec2(cos * 1., sin * 1.)),
+                                        attractor_pos,
+                                        Rotation { cos, sin },
+                                    ));
+
+                                    // Don't home in if one of the bullets already hit.
+                                    if query.get(level_entity).is_ok_and(|tutorial| matches!(tutorial, TutorialLaunch::Special)) {
+                                        bullet.insert(HomingTarget(selene));
+                                    }
+                                },
+                            ),
+                        ));
+                        bullet
+                    });
+
+                    // Given `watch_entity` to all bullets, this observer will despawn once all bullets are gone.
+                    let mut hit_observer = Observer::new(
+                        move |trigger: Trigger<Killed>,
+                              mut commands: Commands,
+                              mut query: Query<&mut TutorialLaunch>,
+                              mut count: Local<usize>|
+                              -> Result {
+                            // This holds true if either the bullet hits Selene or goes out of bounds which can only happen if
+                            // Selene goes out of orbit. The bullet is only considered killed by Selene if she parries it.
+                            if trigger.by != selene {
+                                *query.get_mut(level_entity)? = TutorialLaunch::Normal;
+                                for bullet in bullets {
+                                    commands.entity(bullet).try_remove::<HomingTarget>();
+                                }
+                            }
+
+                            *count += 1;
+                            Ok(())
+                        },
+                    );
+
+                    for bullet in bullets {
+                        hit_observer.watch_entity(bullet);
+                    }
+                    let hit_observer = commands.spawn((ChildOf(level_entity), hit_observer)).id();
+
+                    // 4: Spawn a ring that protect the attractor from being slashed by Selene.
+                    commands.spawn((
+                        ChildOf(level_entity),
+                        Timed::run(Duration::from_millis(1250), move |mut commands: Commands| {
+                            commands
+                                .spawn((ChildOf(level_entity), attractor_trns, RingSpawnEffect { ring_radius }))
+                                .observe(move |_: Trigger<TimeFinished>, mut commands: Commands| {
+                                    commands.entity(ring).queue(resume);
+                                });
+                        }),
+                    ));
+
+                    // 5: Hide the launching UI.
+                    if let Some(ui) = ui.take()
+                        && ui == ui_selene_launch
+                        && let Ok(mut ui) = commands.get_entity(ui)
+                    {
+                        ui.queue(ui_fade_out);
+                    }
+
+                    // 6: Spawn a "Ahh! Away from me!" dialog residing at the bottom.
+                    commands.spawn((
+                        ChildOf(level_entity),
+                        Timed::run(Duration::from_millis(150), move |world: &mut World| -> Result {
+                            BottomDialog::show(
+                                None,
+                                i18n!("tutorial.launch.scream"),
+                                BottomDialog::show_next_after(
+                                    Duration::from_secs(2),
+                                    i18n!("tutorial.launch.realize"),
+                                    move |_: In<Entity>, mut commands: Commands| {
+                                        commands.spawn((
+                                            ChildOf(level_entity),
+                                            Timed::run(Duration::from_secs(2), move |mut commands: Commands| {
+                                                // On a very rare case where the player somehow dodges the bullets for long enough, delay
+                                                // proceeding to the next tutorial phase to avoid a crash. This is a failsafe mechanism.
+                                                if let Ok(mut hit_observer) = commands.get_entity(hit_observer) {
+                                                    hit_observer.observe(move |_: Trigger<OnRemove, Observer>, mut commands: Commands| {
+                                                        commands.entity(level_entity).remove::<TutorialLaunch>();
+                                                    });
+                                                } else {
+                                                    commands.entity(level_entity).remove::<TutorialLaunch>();
+                                                }
+                                            }),
                                         ));
-
-                                        // Don't home in if one of the bullets already hit.
-                                        if query.get(level_entity).is_ok_and(|tutorial| matches!(tutorial, TutorialLaunch::Special)) {
-                                            bullet.insert(HomingTarget(selene));
-                                        }
                                     },
                                 ),
-                            ));
-                            bullet
-                        });
-
-                        let mut hit_observer = Observer::new(
-                            move |trigger: Trigger<Killed>,
-                                  mut commands: Commands,
-                                  mut query: Query<&mut TutorialLaunch>,
-                                  mut count: Local<usize>|
-                                  -> Result {
-                                // This holds true if either the bullet hits Selene or goes out of bounds, which can only happen if
-                                // Selene goes out of orbit. The bullet is only considered killed by Selene if she parries it.
-                                if trigger.by != selene {
-                                    *query.get_mut(level_entity)? = TutorialLaunch::Normal;
-                                    for bullet in bullets {
-                                        commands.entity(bullet).try_remove::<HomingTarget>();
-                                    }
-                                }
-
-                                *count += 1;
-                                if *count == BULLET_COUNT {
-                                    commands.entity(trigger.observer()).despawn();
-                                }
-
-                                Ok(())
-                            },
-                        );
-
-                        for bullet in bullets {
-                            hit_observer.watch_entity(bullet);
-                        }
-                        let hit_observer = commands.spawn((ChildOf(level_entity), hit_observer)).id();
-
-                        // 4: Spawn a ring that protect the attractor from being slashed by Selene.
-                        commands.spawn((
-                            ChildOf(level_entity),
-                            Timed::run(Duration::from_millis(1250), move |mut commands: Commands| {
-                                commands
-                                    .spawn((ChildOf(level_entity), attractor_trns, RingSpawnEffect { ring_radius }))
-                                    .observe(move |_: Trigger<TimeFinished>, mut commands: Commands| {
-                                        commands.entity(ring).queue(resume);
-                                    });
-                            }),
-                        ));
-
-                        // 5: Hide the launching UI.
-                        if let Some(ui) = ui.take()
-                            && ui == ui_selene_launch
-                            && let Ok(mut ui) = commands.get_entity(ui)
-                        {
-                            ui.queue(ui_fade_out);
-                        }
-
-                        // 6: Spawn a "Ahh! Away from me!" dialog residing at the bottom.
-                        commands.spawn((
-                            ChildOf(level_entity),
-                            Timed::run(Duration::from_millis(150), move |world: &mut World| -> Result {
-                                BottomDialog::show(
-                                    None,
-                                    i18n!("tutorial.launch.scream"),
-                                    BottomDialog::show_next_after(
-                                        Duration::from_secs(2),
-                                        i18n!("tutorial.launch.realize"),
-                                        move |_: In<Entity>, mut commands: Commands| {
-                                            commands.spawn((
-                                                ChildOf(level_entity),
-                                                Timed::run(Duration::from_secs(2), move |mut commands: Commands| {
-                                                    // On a very rare case where the player somehow dodges the bullets for long enough, delay
-                                                    // proceeding to the next tutorial phase to avoid a crash.
-                                                    if let Ok(mut hit_observer) = commands.get_entity(hit_observer) {
-                                                        hit_observer.observe(move |_: Trigger<OnRemove, Observer>, mut commands: Commands| {
-                                                            commands.entity(level_entity).remove::<TutorialLaunch>();
-                                                        });
-                                                    } else {
-                                                        commands.entity(level_entity).remove::<TutorialLaunch>();
-                                                    }
-                                                }),
-                                            ));
-                                        },
-                                    ),
-                                )
-                                .apply(world)
-                            }),
-                        ));
-                    }
+                            )
+                            .apply(world)
+                        }),
+                    ));
 
                     Ok(())
                 },

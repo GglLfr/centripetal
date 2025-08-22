@@ -42,7 +42,8 @@ impl Health {
 }
 
 #[derive(Debug, Copy, Clone, Component, Deref)]
-#[component(immutable)]
+#[require(Health(u32::MAX))]
+#[component(immutable, on_insert = on_max_health_insert)]
 pub struct MaxHealth(pub u32);
 impl MaxHealth {
     pub fn new(amount: u32) -> Self {
@@ -51,6 +52,22 @@ impl MaxHealth {
         }
         Self(amount.max(1))
     }
+}
+
+fn on_max_health_insert(mut world: DeferredWorld, HookContext { entity, .. }: HookContext) {
+    world.commands().entity(entity).queue_handled(
+        |mut e: EntityWorldMut| -> Result {
+            let Some(&this) = e.get::<MaxHealth>() else { return Ok(()) };
+            let Some(&current) = e.get::<Health>() else { return Ok(()) };
+
+            if *current > *this {
+                e.insert(Health(*this));
+            }
+
+            Ok(())
+        },
+        warn,
+    );
 }
 
 #[derive(Debug, Copy, Clone, Event)]

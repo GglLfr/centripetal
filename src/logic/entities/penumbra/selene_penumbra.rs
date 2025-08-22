@@ -6,7 +6,7 @@ use crate::{
     logic::{
         CameraTarget, Fields, FromLevelEntity, IsPlayer, Level, LevelUnload, TimeStun, Timed,
         entities::{
-            EntityLayers, Health, Hurt, MaxHealth, TryHurt,
+            EntityLayers, Hurt, MaxHealth, TryHurt,
             penumbra::{
                 AttractedAction, AttractedInitial, AttractedParams, AttractedPrediction, LaunchCharging, LaunchCooldown, LaunchDurations,
                 LaunchTarget, Launched, PenumbraEntity, TryLaunch,
@@ -75,8 +75,7 @@ pub struct SeleneLastParry(pub Duration);
     },
     LaunchDurations([250, 500, 750].into_iter().map(Duration::from_millis).collect()),
     LaunchCooldown(Duration::from_secs(1)),
-    Health::new(10),
-    MaxHealth::new(10),
+    MaxHealth::new(5),
     Collider::circle(5.),
     CollisionLayers = EntityLayers::penumbra_selene(),
     CollisionEventsEnabled,
@@ -296,10 +295,12 @@ pub fn selene_cast_parry(
             continue
         };
 
+        let pos = trns.translation().xy();
         let layer = layers.get(cast.selene).copied().unwrap_or_default();
+
         let mut hits = pipeline.shape_hits(
             &cast.caster,
-            trns.translation().xy(),
+            pos,
             0.,
             Dir2::X,
             u32::MAX,
@@ -313,7 +314,7 @@ pub fn selene_cast_parry(
         );
 
         hits.retain(|&hit| (layers.get(hit.entity).copied().unwrap_or_default().filters & layer.memberships) != 0);
-        hits.sort_unstable_by_key(|hit: &ShapeHitData| FloatOrd(hit.distance));
+        hits.sort_unstable_by_key(|hit: &ShapeHitData| FloatOrd((hit.point1 - pos).length_squared()));
         if let Some(&hit) = hits.first() {
             parry.warn_time = default();
             **last = default();

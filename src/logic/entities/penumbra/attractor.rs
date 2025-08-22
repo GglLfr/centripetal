@@ -6,7 +6,7 @@ use crate::{
     logic::{
         Fields, FromLevelEntity,
         entities::{
-            EntityLayers, TryHurt,
+            EntityLayers, MaxHealth, TryHurt,
             penumbra::{LaunchTarget, PenumbraEntity},
         },
     },
@@ -42,9 +42,10 @@ impl FromLevelEntity for Attractor {
     type Data = ();
 
     fn from_level_entity(mut e: EntityCommands, fields: &Fields, sprites: &mut SystemParamItem<Self::Param>, _: QueryItem<Self::Data>) -> Result {
-        let radius = fields.float("radius")?;
-        let strength = fields.float("strength")?;
-        let _level_target = fields.string("level_target").ok().to_owned();
+        let radius = fields.f32("radius")?;
+        let strength = fields.f32("strength")?;
+        let health = fields.u32("health")?;
+        let _level_target = fields.str("level_target").ok().map(String::from);
 
         e.insert((
             Self {
@@ -52,6 +53,7 @@ impl FromLevelEntity for Attractor {
                 gravity: strength * strength * radius,
                 caster: Collider::circle(radius),
             },
+            MaxHealth::new(health),
             Animation::new(sprites.attractor_regular.clone_weak(), "anim"),
             AnimationMode::Repeat,
         ))
