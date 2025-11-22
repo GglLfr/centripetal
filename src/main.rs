@@ -18,10 +18,13 @@ pub mod prelude {
         collections::BTreeMap,
         f32::consts::{PI, TAU},
         fmt::{self, Debug},
+        fs,
         hash::{Hash, Hasher},
+        io,
         marker::PhantomData,
         mem::{self, MaybeUninit, offset_of},
         ops::Range,
+        path::PathBuf,
         time::Duration,
     };
 
@@ -30,7 +33,12 @@ pub mod prelude {
     pub use bevy::ui_widgets;
     pub use bevy::{
         asset::{
-            AssetLoader, LoadContext, LoadState, RecursiveDependencyLoadState, RenderAssetUsages, UntypedAssetId, io::Reader, load_embedded_asset,
+            AssetLoader, AsyncReadExt as _, LoadContext, LoadState, RecursiveDependencyLoadState, RenderAssetUsages, UntypedAssetId,
+            io::{
+                AssetSourceBuilder, Reader,
+                file::{FileAssetReader, FileAssetWriter},
+            },
+            load_embedded_asset, ron,
         },
         camera::{
             ImageRenderTarget, RenderTarget,
@@ -44,6 +52,7 @@ pub mod prelude {
         ecs::{
             component::Tick,
             entity::{EntityHash, EntityHashMap, MapEntities},
+            entity_disabling::Disabled,
             hierarchy::validate_parent_has_component,
             intern::Interned,
             lifecycle::HookContext,
@@ -52,10 +61,11 @@ pub mod prelude {
             relationship::RelationshipHookMode,
             schedule::ScheduleLabel,
             system::{
-                RunSystemError, RunSystemOnce, SystemMeta, SystemParam, SystemParamItem, SystemParamValidationError, SystemState,
+                BoxedReadOnlySystem, FilteredResourcesParamBuilder, QueryParamBuilder, RunSystemError, RunSystemOnce, SystemMeta, SystemParam,
+                SystemParamItem, SystemParamValidationError, SystemState,
                 lifetimeless::{Read, SRes},
             },
-            world::{DeferredWorld, unsafe_world_cell::UnsafeWorldCell},
+            world::{DeferredWorld, FilteredEntityRef, unsafe_world_cell::UnsafeWorldCell},
         },
         image::{CompressedImageFormats, ImageLoader, ImageLoaderSettings},
         math::{Affine2, FloatOrd},
@@ -68,7 +78,7 @@ pub mod prelude {
             },
         },
         prelude::*,
-        reflect::{FromType, Reflectable, TypeRegistry, erased_serde},
+        reflect::{FromType, Reflectable, TypeRegistry, TypeRegistryArc, erased_serde},
         render::{
             Extract, MainWorld, Render, RenderApp, RenderStartup, RenderSystems,
             render_asset::RenderAssets,
@@ -88,7 +98,7 @@ pub mod prelude {
         sprite::Anchor,
         sprite_render::SpritePipelineKey,
         state::state::FreelyMutableState,
-        tasks::{AsyncComputeTaskPool, ComputeTaskPool, IoTaskPool},
+        tasks::{AsyncComputeTaskPool, ComputeTaskPool, IoTaskPool, Task, futures_lite},
         window::PrimaryWindow,
     };
     pub use bevy_framepace::FramepacePlugin;
@@ -140,9 +150,54 @@ pub enum GameState {
 }
 
 pub fn main() -> AppExit {
+    std::panic::set_hook(Box::new(|info| {
+        let backtrace = format!(
+            "{}\n{}",
+            info.payload_as_str().unwrap_or("Unknown error payload message"),
+            std::backtrace::Backtrace::force_capture()
+        );
+
+        let log_name = match time::UtcOffset::current_local_offset()
+            .ok()
+            .and_then(|offset| time::UtcDateTime::now().checked_to_offset(offset))
+            .and_then(|time| {
+                time.format(&time::macros::format_description!("[year]-[month]-[day]_[hour]-[minute]-[second]"))
+                    .ok()
+            }) {
+            Some(time) => format!("centripetal_crashlog_{time}.log"),
+            None => "centripetal_crash.log".into(),
+        };
+
+        let log_file = std::env::current_dir()
+            .inspect_err(|e| warn!("Couldn't get executable path: {e}"))
+            .ok()
+            .unwrap_or_default()
+            .join(log_name);
+
+        tinyfiledialogs::message_box_ok(
+            "Crash!",
+            &format!(
+                "An unrecoverable error has occured in Centripetal. A crash log has been written at {} which contains the error message and backtrace below.\nPlease report this to https://github.com/GglLfr/centripetal\n\n{backtrace}",
+                log_file.display()
+            ),
+            tinyfiledialogs::MessageBoxIcon::Error,
+        );
+
+        #[cfg(not(feature = "dev"))]
+        if let Err(e) = fs::write(log_file, backtrace) {
+            tinyfiledialogs::message_box_ok(
+                "Worse than crash!",
+                &format!("Couldn't write crash log file: {e}\n\nSure hope you can copy the crashlog text in some other way..."),
+                tinyfiledialogs::MessageBoxIcon::Error,
+            );
+        }
+    }));
+
     App::new()
         .add_plugins((
-            DefaultPlugins.set(ImagePlugin::default_nearest()),
+            DefaultPlugins
+                .set(ImagePlugin::default_nearest())
+                .add_before::<AssetPlugin>(asset::register_user_data_sources),
             #[cfg(feature = "dev")]
             ui_widgets::UiWidgetsPlugins,
             PhysicsPlugins::default().with_length_unit(PIXELS_PER_METER),
@@ -165,7 +220,23 @@ pub fn main() -> AppExit {
             OnExit(GameState::AssetLoading),
             |#[cfg_attr(not(feature = "dev"), expect(unused))] mut commands: Commands| {
                 #[cfg(feature = "dev")]
-                commands.run_system_cached(editor::start);
+                {
+                    use crate::{
+                        saves::SaveCapturer,
+                        world::{Tile, Tilemap},
+                    };
+
+                    let tilemap = commands.spawn(Tilemap::new(uvec2(4, 4))).id();
+                    commands.spawn_batch([
+                        Tile::new(tilemap, uvec2(0, 0), AssetId::default()),
+                        Tile::new(tilemap, uvec2(1, 1), AssetId::default()),
+                        Tile::new(tilemap, uvec2(2, 2), AssetId::default()),
+                    ]);
+
+                    commands.run_system_cached(SaveCapturer::execute);
+                }
+
+                //commands.run_system_cached(editor::start);
             },
         )
         .run()

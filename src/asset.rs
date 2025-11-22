@@ -79,6 +79,34 @@ fn track_asset_loading(progress: ProgressFor<GameState>, mut tracker: ResMut<Ass
     Ok(())
 }
 
+pub(super) fn register_user_data_sources(app: &mut App) {
+    let (pref_dir, data_dir) = directories::ProjectDirs::from("com.github", "GglLfr", "Centripetal")
+        .map(|dirs| (dirs.preference_dir().to_path_buf(), dirs.data_dir().to_path_buf()))
+        .unwrap_or_else(|| {
+            error!("Couldn't get application directories; creating a local folder instead");
+            (PathBuf::from("Centripetal Data/preference"), PathBuf::from("Centripetal Data/data"))
+        });
+
+    if let (Err(e), ..) | (.., Err(e)) = (fs::create_dir_all(&pref_dir), fs::create_dir_all(&data_dir)) {
+        panic!("Couldn't create application directories: {e}");
+    }
+
+    let pref_dir_cloned = pref_dir.clone();
+    let data_dir_cloned = data_dir.clone();
+    app.register_asset_source(
+        "pref",
+        AssetSourceBuilder::default()
+            .with_reader(move || Box::new(FileAssetReader::new(&pref_dir)))
+            .with_writer(move |create_root| Some(Box::new(FileAssetWriter::new(&pref_dir_cloned, create_root)))),
+    )
+    .register_asset_source(
+        "data",
+        AssetSourceBuilder::default()
+            .with_reader(move || Box::new(FileAssetReader::new(&data_dir)))
+            .with_writer(move |create_root| Some(Box::new(FileAssetWriter::new(&data_dir_cloned, create_root)))),
+    );
+}
+
 pub(super) fn plugin(app: &mut App) {
     app.init_resource::<AssetLoadingTracker>()
         .add_systems(OnEnter(GameState::AssetLoading), (CharacterTextures::init, TileTextures::init))

@@ -9,6 +9,50 @@ pub trait Save: Serialize + for<'de> Deserialize<'de> + Reflectable {
     fn loader() -> LoaderWithOutput<Self>;
 }
 
+#[macro_export]
+macro_rules! save {
+    ($this:path as { $version:expr => $repr:ty; $($next_version:expr => $next_repr:ty;)* }) => {
+        impl $crate::saves::Save for $this
+        where
+            Self: ::bevy::reflect::Reflectable,
+            Self: $crate::saves::SaveSpec::<$version, Repr = $repr> $(+ $crate::saves::SaveSpec::<$next_version, Repr = $next_repr>)*,
+            Self: ::serde::ser::Serialize + for<'de> ::serde::de::Deserialize<'de>,
+        {
+            fn saver() -> $crate::saves::SaverWithInput<Self> {
+                save!(saver $this as { $version => $repr; $($next_version => $next_repr;)* })
+            }
+
+            fn loader() -> $crate::saves::LoaderWithOutput<Self> {
+                let loader = $crate::saves::Loader::<Self, $version>::new();
+                $(
+                    let loader = loader.next::<$next_version>(::core::convert::From::from);
+                )*
+                loader.finish()
+            }
+        }
+
+        impl $crate::saves::SaveSpec::<$version> for $this
+        where $repr: ::serde::ser::Serialize + for<'de> ::serde::de::Deserialize<'de>
+        {
+            type Repr = $repr;
+        }
+
+        $(
+            impl $crate::saves::SaveSpec::<$next_version> for $this
+            where $next_repr: ::serde::ser::Serialize + for<'de> ::serde::de::Deserialize<'de>
+            {
+                type Repr = $next_repr;
+            }
+        )*
+    };
+    (saver $this:ty as { $version:expr => $repr:ty; }) => {
+        $crate::saves::Saver::<Self, $version>::new().finish()
+    };
+    (saver $this:ty as { $version:expr => $repr:ty; $($remaining_version:expr => $remaining_repr:ty;)* }) => {
+        save!(saver $this as { $($remaining_version => $remaining_repr;)* })
+    };
+}
+
 pub trait SaveSpec<const VERSION: SaveVersion>: Save + Sized {
     type Repr: Serialize + for<'de> Deserialize<'de>;
 }
@@ -101,8 +145,8 @@ type LoaderFunction<T> = dyn Fn(SaveVersion, &mut dyn erased_serde::Deserializer
 
 #[derive(Clone)]
 pub struct ReflectSave {
-    saver: Arc<dyn Fn(&dyn PartialReflect, &mut dyn erased_serde::SerializeTuple) -> erased_serde::Result<()> + 'static + Send + Sync>,
-    loader: Arc<dyn Fn(&mut dyn erased_serde::Deserializer) -> erased_serde::Result<Box<dyn PartialReflect>> + 'static + Send + Sync>,
+    saver: Arc<dyn Fn(&dyn Reflect, &mut dyn erased_serde::SerializeTuple) -> erased_serde::Result<()> + 'static + Send + Sync>,
+    loader: Arc<dyn Fn(&mut dyn erased_serde::Deserializer) -> erased_serde::Result<Box<dyn Reflect>> + 'static + Send + Sync>,
 }
 
 impl<T: Save> FromType<T> for ReflectSave {
@@ -113,7 +157,7 @@ impl<T: Save> FromType<T> for ReflectSave {
         Self {
             saver: Arc::new(move |repr, ser| {
                 let repr = repr
-                    .try_downcast_ref::<T>()
+                    .downcast_ref::<T>()
                     .ok_or_else(|| <erased_serde::Error as ser::Error>::custom(format!("value expected to be `{}`", type_name::<T>())))?;
 
                 ser.erased_serialize_element(&saver_spec.version).map_err(erased_serde::Error::from)?;
@@ -123,7 +167,7 @@ impl<T: Save> FromType<T> for ReflectSave {
             loader: Arc::new(move |deserializer: &mut dyn erased_serde::Deserializer| {
                 struct Visit<'a, T>(&'a LoaderFunction<T>);
                 impl<'de, T: Reflect> de::Visitor<'de> for Visit<'_, T> {
-                    type Value = Box<dyn PartialReflect>;
+                    type Value = Box<dyn Reflect>;
 
                     fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
                         write!(formatter, "a tuple of save version and raw data")
@@ -132,12 +176,12 @@ impl<T: Save> FromType<T> for ReflectSave {
                     fn visit_seq<A: de::SeqAccess<'de>>(self, mut seq: A) -> Result<Self::Value, A::Error> {
                         struct LoadVersioned<'a, T>(SaveVersion, &'a LoaderFunction<T>);
                         impl<'de, T: Reflect> DeserializeSeed<'de> for LoadVersioned<'_, T> {
-                            type Value = Box<dyn PartialReflect>;
+                            type Value = Box<dyn Reflect>;
 
                             fn deserialize<D: Deserializer<'de>>(self, deserializer: D) -> Result<Self::Value, D::Error> {
                                 let Self(version, loader) = self;
                                 loader(version, &mut <dyn erased_serde::Deserializer>::erase(deserializer))
-                                    .map(|value| Box::new(value) as Box<dyn PartialReflect>)
+                                    .map(|value| Box::new(value) as Box<dyn Reflect>)
                                     .map_err(|e| e.as_de_typed())
                             }
                         }
@@ -156,9 +200,9 @@ impl<T: Save> FromType<T> for ReflectSave {
 }
 
 #[derive(Clone, Copy)]
-pub struct ReflectedSave<'de> {
-    pub save: &'de ReflectSave,
-    pub value: &'de dyn PartialReflect,
+pub struct ReflectedSave<'ser> {
+    pub save: &'ser ReflectSave,
+    pub value: &'ser dyn Reflect,
 }
 
 impl Serialize for ReflectedSave<'_> {
@@ -168,5 +212,18 @@ impl Serialize for ReflectedSave<'_> {
 
         let erased_serde::erase::Serializer::Tuple(ser) = ser else { unreachable!() };
         ser.end()
+    }
+}
+
+#[derive(Clone, Copy)]
+pub struct ReflectedLoad<'de> {
+    pub save: &'de ReflectSave,
+}
+
+impl<'de> DeserializeSeed<'de> for ReflectedLoad<'de> {
+    type Value = Box<dyn Reflect>;
+
+    fn deserialize<D: Deserializer<'de>>(self, deserializer: D) -> Result<Self::Value, D::Error> {
+        (self.save.loader)(&mut <dyn erased_serde::Deserializer>::erase(deserializer)).map_err(|e| e.as_de_typed())
     }
 }

@@ -17,17 +17,23 @@ avian2d = { version = "0.4", default-features = false, features = [
 bevy_framepace = "0.20"
 
 async-channel = "2"
+bincode = { version = "2", default-features = false, features = [
+    "std",
+    "serde",
+] }
 bitflags = "2"
 bytemuck = { version = "1", features = ["derive", "latest_stable_rust"] }
+directories = "6"
 guillotiere = "0.6"
+slab = "0.4"
+serde = { version = "1", features = ["derive"] }
 smallvec = { version = "1", features = [
     "const_generics",
     "const_new",
     "union",
 ] }
+time = { version = "0.3", features = ["formatting", "local-offset", "macros"] }
 vec-belt = "1"
-slab = "0.4"
-serde = { version = "1", features = ["derive"] }
 
 [dependencies.bevy]
 version = "0.17"
@@ -57,6 +63,7 @@ features = [
 
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
 mimalloc-redirect = "*"
+tinyfiledialogs = "3"
 
 [features]
 default = ["dev"]
