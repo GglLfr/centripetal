@@ -15,6 +15,7 @@ pub mod world;
 pub mod prelude {
     pub use std::{
         any::{TypeId, type_name},
+        collections::BTreeMap,
         f32::consts::{PI, TAU},
         fmt::{self, Debug},
         hash::{Hash, Hasher},
@@ -96,7 +97,7 @@ pub mod prelude {
     pub use serde::{
         Deserialize, Deserializer, Serialize, Serializer,
         de::{self, DeserializeSeed},
-        ser::{self, SerializeMap, SerializeSeq, SerializeStruct},
+        ser::{self, SerializeMap, SerializeSeq, SerializeStruct, SerializeTuple},
     };
     pub use slab::Slab;
     pub use smallvec::{SmallVec, smallvec};

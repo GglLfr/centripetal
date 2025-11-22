@@ -33,9 +33,9 @@
 //! ## Serialization
 //!
 //! ```rust
+//! use std::{collections::BTreeMap as Map, io};
+//!
 //! use erased_serde::{Serialize, Serializer};
-//! use std::collections::BTreeMap as Map;
-//! use std::io;
 //!
 //! fn main() {
 //!     // Construct some serializers.
@@ -69,8 +69,9 @@
 //! ## Deserialization
 //!
 //! ```rust
-//! use erased_serde::Deserializer;
 //! use std::collections::BTreeMap as Map;
+//!
+//! use erased_serde::Deserializer;
 //!
 //! fn main() {
 //!     static JSON: &'static [u8] = br#"{"A": 65, "B": 66}"#;
@@ -134,9 +135,14 @@ mod map;
 mod sealed;
 mod ser;
 
-pub use crate::de::{deserialize, Deserializer};
-pub use crate::error::{Error, Result};
-pub use crate::ser::{serialize, Serialize, Serializer};
+pub use crate::{
+    de::{deserialize, Deserializer},
+    error::{Error, Result},
+    ser::{
+        erase, serialize, Serialize, SerializeMap, SerializeSeq, SerializeStruct, SerializeStructVariant, SerializeTuple, SerializeTupleStruct,
+        SerializeTupleVariant, Serializer,
+    },
+};
 
 // Not public API.
 #[doc(hidden)]

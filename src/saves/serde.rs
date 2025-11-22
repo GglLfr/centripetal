@@ -101,18 +101,8 @@ type LoaderFunction<T> = dyn Fn(SaveVersion, &mut dyn erased_serde::Deserializer
 
 #[derive(Clone)]
 pub struct ReflectSave {
-    saver: Arc<dyn Fn(&dyn PartialReflect, &mut dyn erased_serde::Serializer) -> erased_serde::Result<()> + 'static + Send + Sync>,
+    saver: Arc<dyn Fn(&dyn PartialReflect, &mut dyn erased_serde::SerializeTuple) -> erased_serde::Result<()> + 'static + Send + Sync>,
     loader: Arc<dyn Fn(&mut dyn erased_serde::Deserializer) -> erased_serde::Result<Box<dyn PartialReflect>> + 'static + Send + Sync>,
-}
-
-impl ReflectSave {
-    pub fn save<S: Serializer>(&self, value: &dyn PartialReflect, serializer: S) -> Result<(), S::Error> {
-        (self.saver)(value, &mut <dyn erased_serde::Serializer>::erase(serializer)).map_err(|e| ser::Error::custom(format!("{e}")))
-    }
-
-    pub fn load<'de, D: Deserializer<'de>>(&self, deserializer: D) -> Result<Box<dyn PartialReflect>, D::Error> {
-        (self.loader)(&mut <dyn erased_serde::Deserializer>::erase(deserializer)).map_err(|e| de::Error::custom(format!("{e}")))
-    }
 }
 
 impl<T: Save> FromType<T> for ReflectSave {
@@ -121,9 +111,14 @@ impl<T: Save> FromType<T> for ReflectSave {
         let loader_spec = T::loader();
 
         Self {
-            saver: Arc::new(move |repr, serializer| {
-                let repr = repr.try_downcast_ref::<T>().unwrap();
-                erased_serde::Serialize::erased_serialize(&(saver_spec.version, repr), serializer)
+            saver: Arc::new(move |repr, ser| {
+                let repr = repr
+                    .try_downcast_ref::<T>()
+                    .ok_or_else(|| <erased_serde::Error as ser::Error>::custom(format!("value expected to be `{}`", type_name::<T>())))?;
+
+                ser.erased_serialize_element(&saver_spec.version).map_err(erased_serde::Error::from)?;
+                ser.erased_serialize_element(repr).map_err(erased_serde::Error::from)?;
+                Ok(())
             }),
             loader: Arc::new(move |deserializer: &mut dyn erased_serde::Deserializer| {
                 struct Visit<'a, T>(&'a LoaderFunction<T>);
@@ -143,10 +138,7 @@ impl<T: Save> FromType<T> for ReflectSave {
                                 let Self(version, loader) = self;
                                 loader(version, &mut <dyn erased_serde::Deserializer>::erase(deserializer))
                                     .map(|value| Box::new(value) as Box<dyn PartialReflect>)
-                                    // This is really annoying; `erased_serde` has deliberately prevented making users be able to convert from erased
-                                    // error to unerased error, despite having the mechanisms to do so.
-                                    // Who am I to complain, though.
-                                    .map_err(|e| de::Error::custom(format!("{e}")))
+                                    .map_err(|e| e.as_de_typed())
                             }
                         }
 
@@ -165,13 +157,16 @@ impl<T: Save> FromType<T> for ReflectSave {
 
 #[derive(Clone, Copy)]
 pub struct ReflectedSave<'de> {
-    saver: &'de ReflectSave,
-    value: &'de dyn PartialReflect,
+    pub save: &'de ReflectSave,
+    pub value: &'de dyn PartialReflect,
 }
 
 impl Serialize for ReflectedSave<'_> {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        //
-        //self.saver.save(self.value, serializer)
+        let mut ser = erased_serde::erase::Serializer::<S>::Tuple(serializer.serialize_tuple(2)?);
+        (self.save.saver)(self.value, &mut ser).map_err(|e| e.as_ser_typed())?;
+
+        let erased_serde::erase::Serializer::Tuple(ser) = ser else { unreachable!() };
+        ser.end()
     }
 }

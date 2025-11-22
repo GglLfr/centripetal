@@ -70,4 +70,4 @@ dev = [
 ]
 
 [patch.crates-io]
-erased-serde = { path = "vendored/erased-serde" }
+erased-serde = { path = "vendor/erased-serde" }

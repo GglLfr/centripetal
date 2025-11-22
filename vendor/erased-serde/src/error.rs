@@ -1,13 +1,39 @@
-use alloc::borrow::ToOwned;
-use alloc::boxed::Box;
-use alloc::string::{String, ToString};
-use alloc::vec::Vec;
+use alloc::{
+    borrow::ToOwned,
+    boxed::Box,
+    string::{String, ToString},
+    vec::Vec,
+};
 use core::fmt::{self, Debug, Display};
+
 use serde::de::Expected;
 
 /// Error when a `Serializer` or `Deserializer` trait object fails.
 pub struct Error {
     imp: Box<ErrorImpl>,
+}
+
+impl Error {
+    pub fn as_ser_typed<E: serde::ser::Error>(&self) -> E {
+        if let ErrorImpl::Custom(msg) = self.imp.as_ref() {
+            E::custom(msg)
+        } else {
+            E::custom(self)
+        }
+    }
+
+    pub fn as_de_typed<E: serde::de::Error>(&self) -> E {
+        match self.imp.as_ref() {
+            ErrorImpl::Custom(msg) => E::custom(msg),
+            ErrorImpl::InvalidType { unexpected, expected } => E::invalid_type(unexpected.as_serde(), &expected.as_str()),
+            ErrorImpl::InvalidValue { unexpected, expected } => E::invalid_value(unexpected.as_serde(), &expected.as_str()),
+            ErrorImpl::InvalidLength { len, expected } => E::invalid_length(*len, &expected.as_str()),
+            ErrorImpl::UnknownVariant { variant, expected } => E::unknown_variant(variant, expected),
+            ErrorImpl::UnknownField { field, expected } => E::unknown_field(field, expected),
+            ErrorImpl::MissingField { field } => E::missing_field(field),
+            ErrorImpl::DuplicateField { field } => E::duplicate_field(field),
+        }
+    }
 }
 
 /// Result type alias where the error is `erased_serde::Error`.
@@ -18,53 +44,45 @@ pub(crate) fn erase_de<E: serde::de::Error>(e: E) -> Error {
 }
 
 pub(crate) fn unerase_de<E: serde::de::Error>(e: Error) -> E {
-    e.as_serde_de_error()
+    e.as_de_typed()
 }
 
 impl Display for Error {
     fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-        let error = self.as_serde_de_error::<serde::de::value::Error>();
+        let error = self.as_de_typed::<serde::de::value::Error>();
         Display::fmt(&error, formatter)
     }
 }
 
 impl Debug for Error {
     fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-        let error = self.as_serde_de_error::<serde::de::value::Error>();
+        let error = self.as_de_typed::<serde::de::value::Error>();
         Debug::fmt(&error, formatter)
     }
 }
 
 impl serde::ser::StdError for Error {}
 
+impl From<crate::ser::ErrorImpl> for Error {
+    fn from(value: crate::ser::ErrorImpl) -> Self {
+        match value {
+            crate::ser::ErrorImpl::ShortCircuit => panic!("do not return `ShortCircuit` as an error"),
+            crate::ser::ErrorImpl::Custom(msg) => Self {
+                imp: Box::new(ErrorImpl::Custom(*msg)),
+            },
+        }
+    }
+}
+
 enum ErrorImpl {
     Custom(String),
-    InvalidType {
-        unexpected: Unexpected,
-        expected: String,
-    },
-    InvalidValue {
-        unexpected: Unexpected,
-        expected: String,
-    },
-    InvalidLength {
-        len: usize,
-        expected: String,
-    },
-    UnknownVariant {
-        variant: String,
-        expected: &'static [&'static str],
-    },
-    UnknownField {
-        field: String,
-        expected: &'static [&'static str],
-    },
-    MissingField {
-        field: &'static str,
-    },
-    DuplicateField {
-        field: &'static str,
-    },
+    InvalidType { unexpected: Unexpected, expected: String },
+    InvalidValue { unexpected: Unexpected, expected: String },
+    InvalidLength { len: usize, expected: String },
+    UnknownVariant { variant: String, expected: &'static [&'static str] },
+    UnknownField { field: String, expected: &'static [&'static str] },
+    MissingField { field: &'static str },
+    DuplicateField { field: &'static str },
 }
 
 enum Unexpected {
@@ -149,31 +167,6 @@ impl serde::de::Error for Error {
     fn duplicate_field(field: &'static str) -> Self {
         let imp = Box::new(ErrorImpl::DuplicateField { field });
         Error { imp }
-    }
-}
-
-impl Error {
-    fn as_serde_de_error<E: serde::de::Error>(&self) -> E {
-        match self.imp.as_ref() {
-            ErrorImpl::Custom(msg) => E::custom(msg),
-            ErrorImpl::InvalidType {
-                unexpected,
-                expected,
-            } => E::invalid_type(unexpected.as_serde(), &expected.as_str()),
-            ErrorImpl::InvalidValue {
-                unexpected,
-                expected,
-            } => E::invalid_value(unexpected.as_serde(), &expected.as_str()),
-            ErrorImpl::InvalidLength { len, expected } => {
-                E::invalid_length(*len, &expected.as_str())
-            }
-            ErrorImpl::UnknownVariant { variant, expected } => {
-                E::unknown_variant(variant, expected)
-            }
-            ErrorImpl::UnknownField { field, expected } => E::unknown_field(field, expected),
-            ErrorImpl::MissingField { field } => E::missing_field(field),
-            ErrorImpl::DuplicateField { field } => E::duplicate_field(field),
-        }
     }
 }
 

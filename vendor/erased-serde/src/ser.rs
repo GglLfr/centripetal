@@ -1,13 +1,16 @@
-use self::ErrorImpl::ShortCircuit;
-use crate::error::Error;
-use crate::sealed;
-use alloc::boxed::Box;
-use alloc::string::{String, ToString};
-use core::fmt::{self, Debug, Display};
-use serde::ser::{
-    SerializeMap as _, SerializeSeq as _, SerializeStruct as _, SerializeStructVariant as _,
-    SerializeTuple as _, SerializeTupleStruct as _, SerializeTupleVariant as _,
+use alloc::{
+    boxed::Box,
+    string::{String, ToString},
 };
+use core::fmt::{self, Debug, Display};
+
+use serde::ser::{
+    SerializeMap as _, SerializeSeq as _, SerializeStruct as _, SerializeStructVariant as _, SerializeTuple as _, SerializeTupleStruct as _,
+    SerializeTupleVariant as _,
+};
+
+use self::ErrorImpl::ShortCircuit;
+use crate::{error::Error, sealed};
 
 // TRAITS //////////////////////////////////////////////////////////////////////
 
@@ -18,9 +21,9 @@ use serde::ser::{
 /// object.
 ///
 /// ```rust
+/// use std::{collections::BTreeMap as Map, io};
+///
 /// use erased_serde::{Serialize, Serializer};
-/// use std::collections::BTreeMap as Map;
-/// use std::io;
 ///
 /// fn main() {
 ///     // Construct some serializers.
@@ -74,9 +77,9 @@ pub trait Serialize: sealed::serialize::Sealed {
 /// object using `erased_serde::Serializer::erase`.
 ///
 /// ```rust
+/// use std::{collections::BTreeMap as Map, io};
+///
 /// use erased_serde::{Serialize, Serializer};
-/// use std::collections::BTreeMap as Map;
-/// use std::io;
 ///
 /// fn main() {
 ///     // Construct some serializers.
@@ -130,30 +133,12 @@ pub trait Serializer: sealed::serializer::Sealed {
     fn erased_serialize_some(&mut self, value: &dyn Serialize);
     fn erased_serialize_unit(&mut self);
     fn erased_serialize_unit_struct(&mut self, name: &'static str);
-    fn erased_serialize_unit_variant(
-        &mut self,
-        name: &'static str,
-        variant_index: u32,
-        variant: &'static str,
-    );
+    fn erased_serialize_unit_variant(&mut self, name: &'static str, variant_index: u32, variant: &'static str);
     fn erased_serialize_newtype_struct(&mut self, name: &'static str, value: &dyn Serialize);
-    fn erased_serialize_newtype_variant(
-        &mut self,
-        name: &'static str,
-        variant_index: u32,
-        variant: &'static str,
-        value: &dyn Serialize,
-    );
-    fn erased_serialize_seq(
-        &mut self,
-        len: Option<usize>,
-    ) -> Result<&mut dyn SerializeSeq, ErrorImpl>;
+    fn erased_serialize_newtype_variant(&mut self, name: &'static str, variant_index: u32, variant: &'static str, value: &dyn Serialize);
+    fn erased_serialize_seq(&mut self, len: Option<usize>) -> Result<&mut dyn SerializeSeq, ErrorImpl>;
     fn erased_serialize_tuple(&mut self, len: usize) -> Result<&mut dyn SerializeTuple, ErrorImpl>;
-    fn erased_serialize_tuple_struct(
-        &mut self,
-        name: &'static str,
-        len: usize,
-    ) -> Result<&mut dyn SerializeTupleStruct, ErrorImpl>;
+    fn erased_serialize_tuple_struct(&mut self, name: &'static str, len: usize) -> Result<&mut dyn SerializeTupleStruct, ErrorImpl>;
     fn erased_serialize_tuple_variant(
         &mut self,
         name: &'static str,
@@ -161,15 +146,8 @@ pub trait Serializer: sealed::serializer::Sealed {
         variant: &'static str,
         len: usize,
     ) -> Result<&mut dyn SerializeTupleVariant, ErrorImpl>;
-    fn erased_serialize_map(
-        &mut self,
-        len: Option<usize>,
-    ) -> Result<&mut dyn SerializeMap, ErrorImpl>;
-    fn erased_serialize_struct(
-        &mut self,
-        name: &'static str,
-        len: usize,
-    ) -> Result<&mut dyn SerializeStruct, ErrorImpl>;
+    fn erased_serialize_map(&mut self, len: Option<usize>) -> Result<&mut dyn SerializeMap, ErrorImpl>;
+    fn erased_serialize_struct(&mut self, name: &'static str, len: usize) -> Result<&mut dyn SerializeStruct, ErrorImpl>;
     fn erased_serialize_struct_variant(
         &mut self,
         name: &'static str,
@@ -231,8 +209,7 @@ impl dyn Serializer {
 // IMPL ERASED SERDE FOR SERDE /////////////////////////////////////////////////
 
 impl<T> Serialize for T
-where
-    T: ?Sized + serde::Serialize,
+where T: ?Sized + serde::Serialize
 {
     fn erased_serialize(&self, serializer: &mut dyn Serializer) -> Result<(), Error> {
         match self.do_erased_serialize(serializer) {
@@ -249,12 +226,11 @@ where
 
 impl<T> sealed::serialize::Sealed for T where T: ?Sized + serde::Serialize {}
 
-mod erase {
+pub mod erase {
     use core::mem;
 
     pub enum Serializer<S>
-    where
-        S: serde::Serializer,
+    where S: serde::Serializer
     {
         Ready(S),
         Seq(S::SerializeSeq),
@@ -270,8 +246,7 @@ mod erase {
     }
 
     impl<S> Serializer<S>
-    where
-        S: serde::Serializer,
+    where S: serde::Serializer
     {
         pub(crate) fn new(serializer: S) -> Self {
             Serializer::Ready(serializer)
@@ -291,8 +266,7 @@ mod erase {
 }
 
 impl<T> Serializer for erase::Serializer<T>
-where
-    T: serde::Serializer,
+where T: serde::Serializer
 {
     fn erased_serialize_bool(&mut self, v: bool) {
         *self = match self.take_serializer().serialize_bool(v) {
@@ -434,16 +408,8 @@ where
         };
     }
 
-    fn erased_serialize_unit_variant(
-        &mut self,
-        name: &'static str,
-        variant_index: u32,
-        variant: &'static str,
-    ) {
-        *self = match self
-            .take_serializer()
-            .serialize_unit_variant(name, variant_index, variant)
-        {
+    fn erased_serialize_unit_variant(&mut self, name: &'static str, variant_index: u32, variant: &'static str) {
+        *self = match self.take_serializer().serialize_unit_variant(name, variant_index, variant) {
             Ok(ok) => erase::Serializer::Complete(ok),
             Err(err) => erase::Serializer::Error(err),
         };
@@ -456,28 +422,14 @@ where
         };
     }
 
-    fn erased_serialize_newtype_variant(
-        &mut self,
-        name: &'static str,
-        variant_index: u32,
-        variant: &'static str,
-        value: &dyn Serialize,
-    ) {
-        *self = match self.take_serializer().serialize_newtype_variant(
-            name,
-            variant_index,
-            variant,
-            value,
-        ) {
+    fn erased_serialize_newtype_variant(&mut self, name: &'static str, variant_index: u32, variant: &'static str, value: &dyn Serialize) {
+        *self = match self.take_serializer().serialize_newtype_variant(name, variant_index, variant, value) {
             Ok(ok) => erase::Serializer::Complete(ok),
             Err(err) => erase::Serializer::Error(err),
         };
     }
 
-    fn erased_serialize_seq(
-        &mut self,
-        len: Option<usize>,
-    ) -> Result<&mut dyn SerializeSeq, ErrorImpl> {
+    fn erased_serialize_seq(&mut self, len: Option<usize>) -> Result<&mut dyn SerializeSeq, ErrorImpl> {
         match self.take_serializer().serialize_seq(len) {
             Ok(ok) => {
                 *self = erase::Serializer::Seq(ok);
@@ -503,11 +455,7 @@ where
         }
     }
 
-    fn erased_serialize_tuple_struct(
-        &mut self,
-        name: &'static str,
-        len: usize,
-    ) -> Result<&mut dyn SerializeTupleStruct, ErrorImpl> {
+    fn erased_serialize_tuple_struct(&mut self, name: &'static str, len: usize) -> Result<&mut dyn SerializeTupleStruct, ErrorImpl> {
         match self.take_serializer().serialize_tuple_struct(name, len) {
             Ok(ok) => {
                 *self = erase::Serializer::TupleStruct(ok);
@@ -527,10 +475,7 @@ where
         variant: &'static str,
         len: usize,
     ) -> Result<&mut dyn SerializeTupleVariant, ErrorImpl> {
-        match self
-            .take_serializer()
-            .serialize_tuple_variant(name, variant_index, variant, len)
-        {
+        match self.take_serializer().serialize_tuple_variant(name, variant_index, variant, len) {
             Ok(ok) => {
                 *self = erase::Serializer::TupleVariant(ok);
                 Ok(self)
@@ -542,10 +487,7 @@ where
         }
     }
 
-    fn erased_serialize_map(
-        &mut self,
-        len: Option<usize>,
-    ) -> Result<&mut dyn SerializeMap, ErrorImpl> {
+    fn erased_serialize_map(&mut self, len: Option<usize>) -> Result<&mut dyn SerializeMap, ErrorImpl> {
         match self.take_serializer().serialize_map(len) {
             Ok(ok) => {
                 *self = erase::Serializer::Map(ok);
@@ -558,11 +500,7 @@ where
         }
     }
 
-    fn erased_serialize_struct(
-        &mut self,
-        name: &'static str,
-        len: usize,
-    ) -> Result<&mut dyn SerializeStruct, ErrorImpl> {
+    fn erased_serialize_struct(&mut self, name: &'static str, len: usize) -> Result<&mut dyn SerializeStruct, ErrorImpl> {
         match self.take_serializer().serialize_struct(name, len) {
             Ok(ok) => {
                 *self = erase::Serializer::Struct(ok);
@@ -582,10 +520,7 @@ where
         variant: &'static str,
         len: usize,
     ) -> Result<&mut dyn SerializeStructVariant, ErrorImpl> {
-        match self
-            .take_serializer()
-            .serialize_struct_variant(name, variant_index, variant, len)
-        {
+        match self.take_serializer().serialize_struct_variant(name, variant_index, variant, len) {
             Ok(ok) => {
                 *self = erase::Serializer::StructVariant(ok);
                 Ok(self)
@@ -653,9 +588,7 @@ impl serde::ser::Error for ErrorImpl {
 ///
 /// impl<'a> serde::Serialize for dyn Event + 'a {
 ///     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-///     where
-///         S: serde::Serializer,
-///     {
+///     where S: serde::Serializer {
 ///         erased_serde::serialize(self, serializer)
 ///     }
 /// }
@@ -789,9 +722,7 @@ impl<'a> serde::Serializer for MakeSerializer<&'a mut (dyn Serializer + '_)> {
     }
 
     fn serialize_some<T>(self, value: &T) -> Result<Self::Ok, Self::Error>
-    where
-        T: ?Sized + serde::Serialize,
-    {
+    where T: ?Sized + serde::Serialize {
         self.0.erased_serialize_some(&value);
         Ok(())
     }
@@ -806,41 +737,20 @@ impl<'a> serde::Serializer for MakeSerializer<&'a mut (dyn Serializer + '_)> {
         Ok(())
     }
 
-    fn serialize_unit_variant(
-        self,
-        name: &'static str,
-        variant_index: u32,
-        variant: &'static str,
-    ) -> Result<Self::Ok, Self::Error> {
-        self.0
-            .erased_serialize_unit_variant(name, variant_index, variant);
+    fn serialize_unit_variant(self, name: &'static str, variant_index: u32, variant: &'static str) -> Result<Self::Ok, Self::Error> {
+        self.0.erased_serialize_unit_variant(name, variant_index, variant);
         Ok(())
     }
 
-    fn serialize_newtype_struct<T>(
-        self,
-        name: &'static str,
-        value: &T,
-    ) -> Result<Self::Ok, Self::Error>
-    where
-        T: ?Sized + serde::Serialize,
-    {
+    fn serialize_newtype_struct<T>(self, name: &'static str, value: &T) -> Result<Self::Ok, Self::Error>
+    where T: ?Sized + serde::Serialize {
         self.0.erased_serialize_newtype_struct(name, &value);
         Ok(())
     }
 
-    fn serialize_newtype_variant<T>(
-        self,
-        name: &'static str,
-        variant_index: u32,
-        variant: &'static str,
-        value: &T,
-    ) -> Result<Self::Ok, Self::Error>
-    where
-        T: ?Sized + serde::Serialize,
-    {
-        self.0
-            .erased_serialize_newtype_variant(name, variant_index, variant, &value);
+    fn serialize_newtype_variant<T>(self, name: &'static str, variant_index: u32, variant: &'static str, value: &T) -> Result<Self::Ok, Self::Error>
+    where T: ?Sized + serde::Serialize {
+        self.0.erased_serialize_newtype_variant(name, variant_index, variant, &value);
         Ok(())
     }
 
@@ -852,14 +762,8 @@ impl<'a> serde::Serializer for MakeSerializer<&'a mut (dyn Serializer + '_)> {
         self.0.erased_serialize_tuple(len).map(MakeSerializer)
     }
 
-    fn serialize_tuple_struct(
-        self,
-        name: &'static str,
-        len: usize,
-    ) -> Result<Self::SerializeTupleStruct, Self::Error> {
-        self.0
-            .erased_serialize_tuple_struct(name, len)
-            .map(MakeSerializer)
+    fn serialize_tuple_struct(self, name: &'static str, len: usize) -> Result<Self::SerializeTupleStruct, Self::Error> {
+        self.0.erased_serialize_tuple_struct(name, len).map(MakeSerializer)
     }
 
     fn serialize_tuple_variant(
@@ -878,14 +782,8 @@ impl<'a> serde::Serializer for MakeSerializer<&'a mut (dyn Serializer + '_)> {
         self.0.erased_serialize_map(len).map(MakeSerializer)
     }
 
-    fn serialize_struct(
-        self,
-        name: &'static str,
-        len: usize,
-    ) -> Result<Self::SerializeStruct, Self::Error> {
-        self.0
-            .erased_serialize_struct(name, len)
-            .map(MakeSerializer)
+    fn serialize_struct(self, name: &'static str, len: usize) -> Result<Self::SerializeStruct, Self::Error> {
+        self.0.erased_serialize_struct(name, len).map(MakeSerializer)
     }
 
     fn serialize_struct_variant(
@@ -902,9 +800,7 @@ impl<'a> serde::Serializer for MakeSerializer<&'a mut (dyn Serializer + '_)> {
 
     #[cfg(not(feature = "alloc"))]
     fn collect_str<T>(self, value: &T) -> Result<Self::Ok, Self::Error>
-    where
-        T: ?Sized + Display,
-    {
+    where T: ?Sized + Display {
         unreachable!()
     }
 
@@ -919,8 +815,7 @@ pub trait SerializeSeq {
 }
 
 impl<T> SerializeSeq for erase::Serializer<T>
-where
-    T: serde::Serializer,
+where T: serde::Serializer
 {
     fn erased_serialize_element(&mut self, value: &dyn Serialize) -> Result<(), ErrorImpl> {
         let erase::Serializer::Seq(serializer) = self else {
@@ -948,9 +843,7 @@ impl serde::ser::SerializeSeq for MakeSerializer<&mut dyn SerializeSeq> {
     type Error = ErrorImpl;
 
     fn serialize_element<T>(&mut self, value: &T) -> Result<(), Self::Error>
-    where
-        T: ?Sized + serde::Serialize,
-    {
+    where T: ?Sized + serde::Serialize {
         self.0.erased_serialize_element(&value)
     }
 
@@ -966,8 +859,7 @@ pub trait SerializeTuple {
 }
 
 impl<T> SerializeTuple for erase::Serializer<T>
-where
-    T: serde::Serializer,
+where T: serde::Serializer
 {
     fn erased_serialize_element(&mut self, value: &dyn Serialize) -> Result<(), ErrorImpl> {
         let erase::Serializer::Tuple(serializer) = self else {
@@ -995,9 +887,7 @@ impl serde::ser::SerializeTuple for MakeSerializer<&mut dyn SerializeTuple> {
     type Error = ErrorImpl;
 
     fn serialize_element<T>(&mut self, value: &T) -> Result<(), Self::Error>
-    where
-        T: ?Sized + serde::Serialize,
-    {
+    where T: ?Sized + serde::Serialize {
         self.0.erased_serialize_element(&value)
     }
 
@@ -1013,8 +903,7 @@ pub trait SerializeTupleStruct {
 }
 
 impl<T> SerializeTupleStruct for erase::Serializer<T>
-where
-    T: serde::Serializer,
+where T: serde::Serializer
 {
     fn erased_serialize_field(&mut self, value: &dyn Serialize) -> Result<(), ErrorImpl> {
         let erase::Serializer::TupleStruct(serializer) = self else {
@@ -1042,9 +931,7 @@ impl serde::ser::SerializeTupleStruct for MakeSerializer<&mut dyn SerializeTuple
     type Error = ErrorImpl;
 
     fn serialize_field<T>(&mut self, value: &T) -> Result<(), Self::Error>
-    where
-        T: ?Sized + serde::Serialize,
-    {
+    where T: ?Sized + serde::Serialize {
         self.0.erased_serialize_field(&value)
     }
 
@@ -1060,8 +947,7 @@ pub trait SerializeTupleVariant {
 }
 
 impl<T> SerializeTupleVariant for erase::Serializer<T>
-where
-    T: serde::Serializer,
+where T: serde::Serializer
 {
     fn erased_serialize_field(&mut self, value: &dyn Serialize) -> Result<(), ErrorImpl> {
         let erase::Serializer::TupleVariant(serializer) = self else {
@@ -1089,9 +975,7 @@ impl serde::ser::SerializeTupleVariant for MakeSerializer<&mut dyn SerializeTupl
     type Error = ErrorImpl;
 
     fn serialize_field<T>(&mut self, value: &T) -> Result<(), Self::Error>
-    where
-        T: ?Sized + serde::Serialize,
-    {
+    where T: ?Sized + serde::Serialize {
         self.0.erased_serialize_field(&value)
     }
 
@@ -1104,17 +988,12 @@ impl serde::ser::SerializeTupleVariant for MakeSerializer<&mut dyn SerializeTupl
 pub trait SerializeMap {
     fn erased_serialize_key(&mut self, key: &dyn Serialize) -> Result<(), ErrorImpl>;
     fn erased_serialize_value(&mut self, value: &dyn Serialize) -> Result<(), ErrorImpl>;
-    fn erased_serialize_entry(
-        &mut self,
-        key: &dyn Serialize,
-        value: &dyn Serialize,
-    ) -> Result<(), ErrorImpl>;
+    fn erased_serialize_entry(&mut self, key: &dyn Serialize, value: &dyn Serialize) -> Result<(), ErrorImpl>;
     fn erased_end(&mut self);
 }
 
 impl<T> SerializeMap for erase::Serializer<T>
-where
-    T: serde::Serializer,
+where T: serde::Serializer
 {
     fn erased_serialize_key(&mut self, key: &dyn Serialize) -> Result<(), ErrorImpl> {
         let erase::Serializer::Map(serializer) = self else {
@@ -1136,11 +1015,7 @@ where
         })
     }
 
-    fn erased_serialize_entry(
-        &mut self,
-        key: &dyn Serialize,
-        value: &dyn Serialize,
-    ) -> Result<(), ErrorImpl> {
+    fn erased_serialize_entry(&mut self, key: &dyn Serialize, value: &dyn Serialize) -> Result<(), ErrorImpl> {
         let erase::Serializer::Map(serializer) = self else {
             unreachable!();
         };
@@ -1166,16 +1041,12 @@ impl serde::ser::SerializeMap for MakeSerializer<&mut dyn SerializeMap> {
     type Error = ErrorImpl;
 
     fn serialize_key<T>(&mut self, key: &T) -> Result<(), Self::Error>
-    where
-        T: ?Sized + serde::Serialize,
-    {
+    where T: ?Sized + serde::Serialize {
         self.0.erased_serialize_key(&key)
     }
 
     fn serialize_value<T>(&mut self, value: &T) -> Result<(), Self::Error>
-    where
-        T: ?Sized + serde::Serialize,
-    {
+    where T: ?Sized + serde::Serialize {
         self.0.erased_serialize_value(&value)
     }
 
@@ -1194,24 +1065,15 @@ impl serde::ser::SerializeMap for MakeSerializer<&mut dyn SerializeMap> {
 }
 
 pub trait SerializeStruct {
-    fn erased_serialize_field(
-        &mut self,
-        key: &'static str,
-        value: &dyn Serialize,
-    ) -> Result<(), ErrorImpl>;
+    fn erased_serialize_field(&mut self, key: &'static str, value: &dyn Serialize) -> Result<(), ErrorImpl>;
     fn erased_skip_field(&mut self, key: &'static str) -> Result<(), ErrorImpl>;
     fn erased_end(&mut self);
 }
 
 impl<T> SerializeStruct for erase::Serializer<T>
-where
-    T: serde::Serializer,
+where T: serde::Serializer
 {
-    fn erased_serialize_field(
-        &mut self,
-        key: &'static str,
-        value: &dyn Serialize,
-    ) -> Result<(), ErrorImpl> {
+    fn erased_serialize_field(&mut self, key: &'static str, value: &dyn Serialize) -> Result<(), ErrorImpl> {
         let erase::Serializer::Struct(serializer) = self else {
             unreachable!();
         };
@@ -1247,9 +1109,7 @@ impl serde::ser::SerializeStruct for MakeSerializer<&mut dyn SerializeStruct> {
     type Error = ErrorImpl;
 
     fn serialize_field<T>(&mut self, key: &'static str, value: &T) -> Result<(), Self::Error>
-    where
-        T: ?Sized + serde::Serialize,
-    {
+    where T: ?Sized + serde::Serialize {
         self.0.erased_serialize_field(key, &value)
     }
 
@@ -1264,24 +1124,15 @@ impl serde::ser::SerializeStruct for MakeSerializer<&mut dyn SerializeStruct> {
 }
 
 pub trait SerializeStructVariant {
-    fn erased_serialize_field(
-        &mut self,
-        key: &'static str,
-        value: &dyn Serialize,
-    ) -> Result<(), ErrorImpl>;
+    fn erased_serialize_field(&mut self, key: &'static str, value: &dyn Serialize) -> Result<(), ErrorImpl>;
     fn erased_skip_field(&mut self, key: &'static str) -> Result<(), ErrorImpl>;
     fn erased_end(&mut self);
 }
 
 impl<T> SerializeStructVariant for erase::Serializer<T>
-where
-    T: serde::Serializer,
+where T: serde::Serializer
 {
-    fn erased_serialize_field(
-        &mut self,
-        key: &'static str,
-        value: &dyn Serialize,
-    ) -> Result<(), ErrorImpl> {
+    fn erased_serialize_field(&mut self, key: &'static str, value: &dyn Serialize) -> Result<(), ErrorImpl> {
         let erase::Serializer::StructVariant(serializer) = self else {
             unreachable!();
         };
@@ -1317,9 +1168,7 @@ impl serde::ser::SerializeStructVariant for MakeSerializer<&mut dyn SerializeStr
     type Error = ErrorImpl;
 
     fn serialize_field<T>(&mut self, key: &'static str, value: &T) -> Result<(), Self::Error>
-    where
-        T: ?Sized + serde::Serialize,
-    {
+    where T: ?Sized + serde::Serialize {
         self.0.erased_serialize_field(key, &value)
     }
 
@@ -1478,14 +1327,14 @@ deref_erased_serializer!(<T> Serializer for Box<T> where T: ?Sized + Serializer)
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use alloc::{vec, vec::Vec};
+
     use serde_derive::Serialize;
 
+    use super::*;
+
     fn test_json<T>(t: T)
-    where
-        T: serde::Serialize,
-    {
+    where T: serde::Serialize {
         let expected = serde_json::to_vec(&t).unwrap();
 
         // test borrowed trait object
@@ -1558,9 +1407,7 @@ mod tests {
 
         impl serde::Serialize for Kaboom {
             fn serialize<S>(&self, _: S) -> Result<S::Ok, S::Error>
-            where
-                S: serde::Serializer,
-            {
+            where S: serde::Serializer {
                 use serde::ser::Error as _;
 
                 Err(S::Error::custom("kaboom"))
