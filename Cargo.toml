@@ -1,0 +1,73 @@
+[package]
+name = "centripetal"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+avian2d = { version = "0.4", default-features = false, features = [
+    "2d",
+    "bevy_picking",
+    "default-collider",
+    "f32",
+    "parallel",
+    "parry-f32",
+    "xpbd_joints",
+    "simd",
+] }
+bevy_framepace = "0.20"
+
+async-channel = "2"
+bitflags = "2"
+bytemuck = { version = "1", features = ["derive", "latest_stable_rust"] }
+guillotiere = "0.6"
+smallvec = { version = "1", features = [
+    "const_generics",
+    "const_new",
+    "union",
+] }
+vec-belt = "1"
+slab = "0.4"
+serde = { version = "1", features = ["derive"] }
+
+[dependencies.bevy]
+version = "0.17"
+default-features = false
+features = [
+    "std",
+    "async_executor",
+
+    "bevy_core_pipeline",
+    "bevy_log",
+    "bevy_post_process",
+    "bevy_state",
+    "bevy_ui",
+    "bevy_ui_picking_backend",
+    "bevy_ui_render",
+    "bevy_winit",
+
+    "custom_cursor",
+    "multi_threaded",
+    "png",
+    "reflect_auto_register",
+    "serialize",
+    "sysinfo_plugin",
+    "x11",
+    "wayland",
+]
+
+[target.'cfg(not(target_family = "wasm"))'.dependencies]
+mimalloc-redirect = "*"
+
+[features]
+default = ["dev"]
+dev = [
+    "bevy/debug",
+    "bevy/experimental_bevy_feathers",
+    "bevy/embedded_watcher",
+    "bevy/file_watcher",
+    "bevy/hotpatching",
+    "avian2d/debug-plugin",
+]
+
+[patch.crates-io]
+erased-serde = { path = "vendored/erased-serde" }
