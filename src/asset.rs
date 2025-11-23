@@ -1,7 +1,9 @@
+pub use centripetal_macros::MapAssetIds;
+
 use crate::{GameState, ProgressSystems, prelude::*, progress::ProgressFor, render::atlas::AtlasRegion};
 
 macro_rules! define_collection {
-    ($(#[$attr:meta])* $vis:vis $name:ident { $($asset_name:ident: $asset_type:path => $asset_path:expr),* }) => {
+    ($(#[$attr:meta])* $vis:vis $name:ident { $($asset_name:ident: $asset_type:path = $asset_path:expr),* }) => {
         #[derive(Resource, Debug)]
         $(#[$attr])*
         $vis struct $name {
@@ -31,13 +33,13 @@ macro_rules! define_collection {
 
 define_collection! {
     pub CharacterTextures {
-        selene: AtlasRegion => "entities/characters/selene/selene.png"
+        selene: AtlasRegion = "entities/characters/selene/selene.png"
     }
 }
 
 define_collection! {
     pub TileTextures {
-        tmp: AtlasRegion => "entities/characters/selene/selene.png"
+        tmp: AtlasRegion = "entities/characters/selene/selene.png"
     }
 }
 
@@ -79,11 +81,47 @@ fn track_asset_loading(progress: ProgressFor<GameState>, mut tracker: ResMut<Ass
     Ok(())
 }
 
-pub(super) fn register_user_data_sources(app: &mut App) {
+pub trait MapAssetIds: 'static {
+    fn map_asset_ids(&mut self, mapper: &mut dyn AssetIdMapper);
+}
+
+pub trait AssetIdMapper {
+    fn map(&mut self, id: UntypedAssetId) -> UntypedAssetId;
+}
+
+#[derive(Clone, Copy)]
+pub struct ReflectMapAssetIds {
+    map_asset_ids: fn(&mut dyn PartialReflect, &mut dyn AssetIdMapper),
+}
+
+impl ReflectMapAssetIds {
+    pub fn map_asset_ids(&self, target: &mut dyn PartialReflect, mapper: &mut dyn AssetIdMapper) {
+        (self.map_asset_ids)(target, mapper)
+    }
+}
+
+impl<T: MapAssetIds> FromType<T> for ReflectMapAssetIds {
+    fn from_type() -> Self {
+        Self {
+            map_asset_ids: |target, mapper| {
+                let target = target.try_downcast_mut::<T>().expect("Wrong type provided");
+                target.map_asset_ids(mapper);
+            },
+        }
+    }
+}
+
+impl<T: Asset> MapAssetIds for AssetId<T> {
+    fn map_asset_ids(&mut self, mapper: &mut dyn AssetIdMapper) {
+        *self = mapper.map(self.untyped()).typed_debug_checked();
+    }
+}
+
+pub(super) fn register_user_sources(app: &mut App) {
     let (pref_dir, data_dir) = directories::ProjectDirs::from("com.github", "GglLfr", "Centripetal")
         .map(|dirs| (dirs.preference_dir().to_path_buf(), dirs.data_dir().to_path_buf()))
         .unwrap_or_else(|| {
-            error!("Couldn't get application directories; creating a local folder instead");
+            error!("Couldn't get application directories; creating a local folder instead!");
             (PathBuf::from("Centripetal Data/preference"), PathBuf::from("Centripetal Data/data"))
         });
 

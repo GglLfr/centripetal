@@ -197,7 +197,7 @@ pub fn main() -> AppExit {
         .add_plugins((
             DefaultPlugins
                 .set(ImagePlugin::default_nearest())
-                .add_before::<AssetPlugin>(asset::register_user_data_sources),
+                .add_before::<AssetPlugin>(asset::register_user_sources),
             #[cfg(feature = "dev")]
             ui_widgets::UiWidgetsPlugins,
             PhysicsPlugins::default().with_length_unit(PIXELS_PER_METER),

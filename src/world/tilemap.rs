@@ -1,4 +1,5 @@
 use crate::{
+    MapAssetIds, ReflectMapAssetIds,
     math::Transform2d,
     prelude::*,
     render::atlas::AtlasRegion,
@@ -8,14 +9,15 @@ use crate::{
 pub const TILE_PIXEL_SIZE: f32 = 8.;
 pub const TILEMAP_CHUNK_SIZE: u32 = 64;
 
-#[derive(Reflect, Save, Component, MapEntities, Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Reflect, Save, Component, MapAssetIds, MapEntities, Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[component(immutable, on_insert = on_tile_insert, on_replace = on_tile_replace)]
 #[version(0 = Self)]
-#[reflect(Save, Component, MapEntities, Debug, Clone, PartialEq, Hash)]
+#[reflect(Save, Component, MapAssetIds, MapEntities, Debug, Clone, PartialEq, Hash)]
 pub struct Tile {
     #[entities]
     pub tilemap: Entity,
     pub pos: UVec2,
+    #[assets]
     pub region: AssetId<AtlasRegion>,
 }
 
