@@ -266,7 +266,6 @@ fn update_tilemap_chunks(
     tiles: Query<&Tile>,
 ) {
     let regions = regions.into_inner();
-
     let mesh_handle_allocator = &meshes.get_handle_provider();
     let material_handle_allocator = &materials.get_handle_provider();
 

@@ -52,7 +52,7 @@ pub mod prelude {
             tonemapping::{DebandDither, Tonemapping, TonemappingLuts, get_lut_bind_group_layout_entries, get_lut_bindings},
         },
         ecs::{
-            component::Tick,
+            component::{ComponentId, Tick},
             entity::{EntityHash, EntityHashMap, MapEntities},
             entity_disabling::Disabled,
             hierarchy::validate_parent_has_component,
@@ -222,6 +222,7 @@ pub fn main() -> AppExit {
             entities::plugin,
             render::plugin,
             saves::plugin,
+            util::plugin,
             world::plugin,
         ))
         .add_systems(
@@ -229,20 +230,84 @@ pub fn main() -> AppExit {
             |#[cfg_attr(not(feature = "dev"), expect(unused))] mut commands: Commands, textures: Res<TileTextures>| {
                 #[cfg(feature = "dev")]
                 {
-                    use crate::{
-                        saves::SaveCapturer,
-                        world::{Tile, Tilemap},
-                    };
-
-                    let tilemap = commands.spawn(Tilemap::new(uvec2(4, 4))).id();
-                    commands.spawn_batch([
-                        Tile::new(tilemap, uvec2(0, 0), &textures.tmp),
-                        Tile::new(tilemap, uvec2(1, 1), &textures.tmp),
-                        Tile::new(tilemap, uvec2(2, 2), &textures.tmp),
-                        Tile::new(tilemap, uvec2(3, 3), &textures.tmp),
-                    ]);
-
-                    commands.run_system_cached(SaveCapturer::execute);
+                    /*
+                                        (
+                        assets: {
+                            "centripetal::render::atlas::region::AtlasRegion": {
+                                (
+                                    generation: 0,
+                                    index: 0,
+                                ): "entities/characters/selene/selene.png",
+                            },
+                        },
+                        resources: {},
+                        entities: {
+                            4294967197: {
+                                "centripetal::world::tilemap::Tile": (0, (
+                                    tilemap: 4294967201,
+                                    pos: (3, 3),
+                                    region: Index(
+                                        index: (
+                                            generation: 0,
+                                            index: 0,
+                                        ),
+                                        marker: (),
+                                    ),
+                                )),
+                            },
+                            4294967198: {
+                                "centripetal::world::tilemap::Tile": (0, (
+                                    tilemap: 4294967201,
+                                    pos: (2, 2),
+                                    region: Index(
+                                        index: (
+                                            generation: 0,
+                                            index: 0,
+                                        ),
+                                        marker: (),
+                                    ),
+                                )),
+                            },
+                            4294967199: {
+                                "centripetal::world::tilemap::Tile": (0, (
+                                    tilemap: 4294967201,
+                                    pos: (1, 1),
+                                    region: Index(
+                                        index: (
+                                            generation: 0,
+                                            index: 0,
+                                        ),
+                                        marker: (),
+                                    ),
+                                )),
+                            },
+                            4294967200: {
+                                "centripetal::world::tilemap::Tile": (0, (
+                                    tilemap: 4294967201,
+                                    pos: (0, 0),
+                                    region: Index(
+                                        index: (
+                                            generation: 0,
+                                            index: 0,
+                                        ),
+                                        marker: (),
+                                    ),
+                                )),
+                            },
+                            4294967201: {
+                                "centripetal::world::tilemap::Tilemap": (0, (
+                                    dimension: (4, 4),
+                                    tiles: [
+                                        (0, 0, 4294967200),
+                                        (1, 1, 4294967199),
+                                        (2, 2, 4294967198),
+                                        (3, 3, 4294967197),
+                                    ],
+                                )),
+                            },
+                        },
+                    )
+                                         */
                 }
 
                 //commands.run_system_cached(editor::start);
