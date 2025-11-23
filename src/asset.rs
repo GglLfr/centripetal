@@ -11,10 +11,15 @@ macro_rules! define_collection {
         }
 
         impl $name {
-            $vis fn init(mut commands: Commands, server: Res<AssetServer>, mut tracker: ResMut<AssetLoadingTracker>) {
+            $vis fn init(mut commands: Commands, server: Res<AssetServer>, mut known_assets: ResMut<KnownAssets>) {
                 $(
                     let $asset_name = server.load($asset_path);
-                    tracker.loading.push($asset_name.id().untyped());
+                    known_assets.id_to_path.insert($asset_name.id().untyped(), AssetPath::from($asset_path));
+                    if let Some(old_id) = known_assets.path_to_id.insert(AssetPath::from($asset_path), $asset_name.id().untyped())
+                        && old_id != $asset_name.id().untyped()
+                    {
+                        known_assets.id_to_path.remove(&old_id);
+                    }
                 )*
 
                 commands.insert_resource(Self {
@@ -43,45 +48,44 @@ define_collection! {
     }
 }
 
+/// Asset IDS in this collection may be (de)serialized across runs, since they originate from a
+/// defined collection. Be cautious when refactoring asset paths, e.g. moving files around to
+/// another directory, as this will invalidate save files that refer to those paths.
 #[derive(Resource, Debug, Default)]
-pub struct AssetLoadingTracker {
-    loading: Vec<UntypedAssetId>,
-    loaded: u32,
+pub struct KnownAssets {
+    id_to_path: HashMap<UntypedAssetId, AssetPath<'static>>,
+    path_to_id: HashMap<AssetPath<'static>, UntypedAssetId>,
 }
 
-fn track_asset_loading(progress: ProgressFor<GameState>, mut tracker: ResMut<AssetLoadingTracker>, server: Res<AssetServer>) -> Result {
+impl KnownAssets {
+    pub fn id_to_path(&self) -> &HashMap<UntypedAssetId, AssetPath<'static>> {
+        &self.id_to_path
+    }
+
+    pub fn path_to_id(&self) -> &HashMap<AssetPath<'static>, UntypedAssetId> {
+        &self.path_to_id
+    }
+}
+
+fn track_asset_loading(progress: ProgressFor<GameState>, known_assets: Res<KnownAssets>, server: Res<AssetServer>) -> Result {
     let mut current = 0;
-    let mut total = tracker.loaded * 2;
-
-    let mut i = 0;
-    while i < tracker.loading.len() {
-        let mut done = false;
-        let id = tracker.loading[i];
-
+    for &id in known_assets.id_to_path.keys() {
         current += match (server.load_state(id), server.recursive_dependency_load_state(id)) {
             (LoadState::Failed(e), ..) | (.., RecursiveDependencyLoadState::Failed(e)) => Err(e)?,
             (LoadState::NotLoaded, ..) | (.., RecursiveDependencyLoadState::NotLoaded) => Err("Some asset handles got dropped")?,
-            (LoadState::Loaded, RecursiveDependencyLoadState::Loaded) => {
-                done = true;
-                2
-            }
+            (LoadState::Loaded, RecursiveDependencyLoadState::Loaded) => 2,
             (LoadState::Loaded, ..) | (.., RecursiveDependencyLoadState::Loaded) => 1,
             (LoadState::Loading, RecursiveDependencyLoadState::Loading) => 0,
         };
-        total += 2;
-
-        if done {
-            tracker.loading.swap_remove(i);
-        } else {
-            i += 1
-        }
     }
 
-    progress.update([current, total]);
+    progress.update([current, known_assets.id_to_path.len() * 2]);
     Ok(())
 }
 
 pub trait MapAssetIds: 'static {
+    fn visit_asset_ids(&self, visitor: &mut dyn FnMut(UntypedAssetId));
+
     fn map_asset_ids(&mut self, mapper: &mut dyn AssetIdMapper);
 }
 
@@ -91,10 +95,15 @@ pub trait AssetIdMapper {
 
 #[derive(Clone, Copy)]
 pub struct ReflectMapAssetIds {
+    visit_asset_ids: fn(&dyn PartialReflect, &mut dyn FnMut(UntypedAssetId)),
     map_asset_ids: fn(&mut dyn PartialReflect, &mut dyn AssetIdMapper),
 }
 
 impl ReflectMapAssetIds {
+    pub fn visit_asset_ids(&self, target: &dyn PartialReflect, visitor: &mut dyn FnMut(UntypedAssetId)) {
+        (self.visit_asset_ids)(target, visitor)
+    }
+
     pub fn map_asset_ids(&self, target: &mut dyn PartialReflect, mapper: &mut dyn AssetIdMapper) {
         (self.map_asset_ids)(target, mapper)
     }
@@ -103,6 +112,10 @@ impl ReflectMapAssetIds {
 impl<T: MapAssetIds> FromType<T> for ReflectMapAssetIds {
     fn from_type() -> Self {
         Self {
+            visit_asset_ids: |target, visitor| {
+                let target = target.try_downcast_ref::<T>().expect("Wrong type provided");
+                target.visit_asset_ids(visitor);
+            },
             map_asset_ids: |target, mapper| {
                 let target = target.try_downcast_mut::<T>().expect("Wrong type provided");
                 target.map_asset_ids(mapper);
@@ -112,6 +125,10 @@ impl<T: MapAssetIds> FromType<T> for ReflectMapAssetIds {
 }
 
 impl<T: Asset> MapAssetIds for AssetId<T> {
+    fn visit_asset_ids(&self, visitor: &mut dyn FnMut(UntypedAssetId)) {
+        visitor(self.untyped())
+    }
+
     fn map_asset_ids(&mut self, mapper: &mut dyn AssetIdMapper) {
         *self = mapper.map(self.untyped()).typed_debug_checked();
     }
@@ -146,7 +163,7 @@ pub(super) fn register_user_sources(app: &mut App) {
 }
 
 pub(super) fn plugin(app: &mut App) {
-    app.init_resource::<AssetLoadingTracker>()
+    app.init_resource::<KnownAssets>()
         .add_systems(OnEnter(GameState::AssetLoading), (CharacterTextures::init, TileTextures::init))
         .add_systems(
             Update,

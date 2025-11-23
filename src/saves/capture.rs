@@ -1,4 +1,5 @@
 use crate::{
+    KnownAssets, ReflectMapAssetIds,
     prelude::*,
     saves::{ReflectSave, SaveData, SaveDataSerializer},
 };
@@ -13,6 +14,7 @@ pub struct SaveCapturer {
 impl SaveCapturer {
     pub fn execute(world: &mut World) {
         world.resource_scope(|world, this: Mut<Self>| {
+            let id_to_path = world.resource::<KnownAssets>().id_to_path().clone();
             let this = this.into_inner();
             let mut captured_resources = Vec::new();
             let mut captured_components = VecBelt::new(256);
@@ -27,15 +29,35 @@ impl SaveCapturer {
             // Spawn a new task, cancelling previous save tasks.
             let app_registry = world.resource::<AppTypeRegistry>().clone();
             this.ongoing_task = Some(IoTaskPool::get().spawn(async move {
-                let data = SaveData {
-                    resources: captured_resources,
-                    entities: captured_components.clear(|slice| {
-                        let mut tree = BTreeMap::<Entity, Vec<Box<dyn Reflect>>>::new();
-                        for (e, component) in slice {
-                            tree.entry(e).or_default().push(component);
+                let (assets, entities) = captured_components.clear(|slice| {
+                    let mut assets = BTreeMap::<TypeId, BTreeMap<_, _>>::new();
+                    let mut tree = BTreeMap::<Entity, Vec<_>>::new();
+
+                    let registry = &*app_registry.read();
+                    for (e, component) in slice {
+                        if let Some(data) = registry.get_type_data::<ReflectMapAssetIds>(component.reflect_type_info().type_id()) {
+                            data.visit_asset_ids(&*component, &mut |id| {
+                                if let UntypedAssetId::Index { type_id, index } = id {
+                                    let Some(path) = id_to_path.get(&id) else {
+                                        warn!("While trying to save, asset {id} was found to be impossible to be reliably persisted.");
+                                        return
+                                    };
+
+                                    assets.entry(type_id).or_default().insert(index, path.clone());
+                                }
+                            });
                         }
-                        tree
-                    }),
+
+                        tree.entry(e).or_default().push(component);
+                    }
+
+                    (assets, tree)
+                });
+
+                let data = SaveData {
+                    assets,
+                    resources: captured_resources,
+                    entities,
                 };
 
                 futures_lite::future::yield_now().await;
@@ -44,6 +66,7 @@ impl SaveCapturer {
                 let output = {
                     let registry = &*app_registry.read();
                     let serializer = SaveDataSerializer { registry, data: &data };
+
                     ron::ser::to_string_pretty(&serializer, default()).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?
                 };
 

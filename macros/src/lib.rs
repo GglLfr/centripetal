@@ -1,7 +1,7 @@
 use std::mem;
 
 use proc_macro2::TokenStream;
-use quote::quote;
+use quote::{ToTokens, quote};
 use syn::{Data, DeriveInput, Error, Field, Fields, Ident, LitInt, Token, Type, WhereClause, parse::ParseStream, parse_quote, spanned::Spanned};
 
 fn execute(exec: impl FnOnce() -> Result<TokenStream, Error>) -> proc_macro::TokenStream {
@@ -14,98 +14,115 @@ fn execute(exec: impl FnOnce() -> Result<TokenStream, Error>) -> proc_macro::Tok
 #[proc_macro_derive(MapAssetIds, attributes(assets))]
 pub fn derive_map_asset_ids(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     execute(|| {
-        fn destructure_fields(fields: &Fields) -> TokenStream {
-            match fields {
-                Fields::Named(fields) => {
-                    let names = fields.named.iter().flat_map(|f| f.ident.as_ref());
-                    quote! { { #(#names),* } }
-                }
-                Fields::Unnamed(fields) => {
-                    let names = fields
-                        .unnamed
-                        .iter()
-                        .enumerate()
-                        .map(|(i, f)| Ident::new(&format!("field_{i}"), f.span()));
-                    quote! { (#(#names),*) }
-                }
-                Fields::Unit => TokenStream::new(),
-            }
-        }
-
-        fn asset_field(field_index: usize, field: &Field, where_clause: &mut WhereClause) -> Result<Option<TokenStream>, Error> {
-            let mut found = false;
-            for attr in &field.attrs {
-                if attr.path().is_ident("assets") && mem::replace(&mut found, true) {
-                    Err(Error::new_spanned(field, "Duplicated `#[assets]` attribute"))?
-                }
-            }
-
-            Ok(found.then(|| {
-                let ty = &field.ty;
-                where_clause.predicates.push(parse_quote! { #ty: crate::MapAssetIds });
-                match &field.ident {
-                    Some(id) => quote! { #id.map_asset_ids(mapper); },
-                    None => {
-                        let id = Ident::new(&format!("field_{field_index}"), field.span());
-                        quote! { #id.map_asset_ids(mapper); }
+        fn asset_fields<'a>(
+            fields: impl IntoIterator<Item = &'a Field>,
+            where_clause: &mut WhereClause,
+        ) -> impl Iterator<Item = Result<TokenStream, Error>> {
+            fields.into_iter().enumerate().filter_map(|(i, f)| {
+                let mut found = false;
+                for attr in &f.attrs {
+                    if attr.path().is_ident("assets") && mem::replace(&mut found, true) {
+                        return Some(Err(Error::new_spanned(f, "Duplicated `#[assets]` attribute")))
                     }
                 }
-            }))
+
+                found.then(|| {
+                    let ty = &f.ty;
+                    where_clause.predicates.push(parse_quote! { #ty: crate::MapAssetIds });
+
+                    Ok(match &f.ident {
+                        Some(id) => id.to_token_stream(),
+                        None => Ident::new(&format!("field_{i}"), f.span()).to_token_stream(),
+                    })
+                })
+            })
+        }
+
+        fn visit_fields(fields: &Fields, where_clause: &mut WhereClause) -> Result<(TokenStream, Vec<TokenStream>), Error> {
+            let mut field_names = Vec::new();
+            let destructured = match fields {
+                Fields::Named(fields) => {
+                    for f in asset_fields(&fields.named, where_clause) {
+                        field_names.push(f?);
+                    }
+                    quote! { { #(#field_names,)* .. } }
+                }
+                Fields::Unnamed(fields) => {
+                    for f in asset_fields(&fields.unnamed, where_clause) {
+                        field_names.push(f?);
+                    }
+                    quote! { (#(#field_names,)* ..) }
+                }
+                Fields::Unit => TokenStream::new(),
+            };
+
+            Ok((destructured, field_names))
         }
 
         let mut derive = syn::parse::<DeriveInput>(input)?;
         let name = derive.ident;
 
         let where_clause = derive.generics.make_where_clause();
-        let data = match derive.data {
-            Data::Struct(data_struct) => {
-                let destructured = destructure_fields(&data_struct.fields);
-                let mut data = vec![quote! {
-                    let Self #destructured = self;
-                }];
-
-                for (field_index, field) in data_struct.fields.iter().enumerate() {
-                    if let Some(f) = asset_field(field_index, field, where_clause)? {
-                        data.push(f);
-                    }
-                }
-                quote! { #(#data)* }
+        let (visit, map) = match derive.data {
+            Data::Struct(data) => {
+                let (destructure, fields) = visit_fields(&data.fields, where_clause)?;
+                (
+                    quote! {
+                        let Self #destructure = self;
+                        #(#fields.visit_asset_ids(visitor);)*
+                    },
+                    quote! {
+                        let Self #destructure = self;
+                        #(#fields.map_asset_ids(mapper);)*
+                    },
+                )
             }
-            Data::Enum(data_enum) => {
-                let mut data = Vec::new();
-                for variant in data_enum.variants {
-                    let variant_name = variant.ident;
-                    let destructured = destructure_fields(&variant.fields);
+            Data::Enum(data) => {
+                let mut variants = Vec::new();
+                let mut destructures = Vec::new();
+                let mut fields = Vec::new();
 
-                    let mut inner_data = Vec::new();
-                    for (field_index, field) in variant.fields.iter().enumerate() {
-                        if let Some(f) = asset_field(field_index, field, where_clause)? {
-                            inner_data.push(f);
-                        }
-                    }
-
-                    data.push(quote! {
-                        Self::#variant_name #destructured => {
-                            #(#inner_data)*
-                        }
-                    });
+                for variant in data.variants {
+                    let (destructure, field) = visit_fields(&variant.fields, where_clause)?;
+                    variants.push(variant.ident);
+                    destructures.push(destructure);
+                    fields.push(field);
                 }
 
-                quote! {
-                    match self {
-                        #(#data)*
-                    }
-                }
+                (
+                    quote! {
+                        match self {
+                            #(
+                                Self::#variants #destructures => {
+                                    #(#fields.visit_asset_ids(visitor);)*
+                                }
+                            )*
+                        }
+                    },
+                    quote! {
+                        match self {
+                            #(
+                                Self::#variants #destructures => {
+                                    #(#fields.map_asset_ids(visitor);)*
+                                }
+                            )*
+                        }
+                    },
+                )
             }
+
             Data::Union(..) => Err(Error::new_spanned(&name, "Unions are not supported"))?,
         };
 
         let (impl_generics, type_generics, where_clause) = derive.generics.split_for_impl();
         Ok(quote! {
             impl #impl_generics crate::MapAssetIds for #name #type_generics #where_clause {
-                #[allow(unused, reason = "Automatic implementation of `MapAssetIds` enumerates over all fields")]
+                fn visit_asset_ids(&self, visitor: &mut dyn ::core::ops::FnMut(::bevy::asset::UntypedAssetId)) {
+                    #visit
+                }
+
                 fn map_asset_ids(&mut self, mapper: &mut dyn crate::AssetIdMapper) {
-                    #data
+                    #map
                 }
             }
         })

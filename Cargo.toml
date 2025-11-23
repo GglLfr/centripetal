@@ -38,7 +38,6 @@ smallvec = { version = "1", features = [
     "const_new",
     "union",
 ] }
-time = { version = "0.3", features = ["formatting", "local-offset", "macros"] }
 vec-belt = "1"
 
 [dependencies.bevy]
@@ -69,6 +68,7 @@ features = [
 
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
 mimalloc-redirect = "*"
+time = { version = "0.3", features = ["formatting", "local-offset", "macros"] }
 tinyfiledialogs = "3"
 
 [features]

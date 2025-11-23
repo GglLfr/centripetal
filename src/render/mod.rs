@@ -6,7 +6,7 @@ pub mod painter;
 
 use crate::prelude::*;
 
-pub const PIXEL_SIZE: u32 = 3;
+pub const PIXEL_SIZE: u32 = 4;
 pub const PIXELATED_LAYER: RenderLayers = RenderLayers::layer(0);
 pub const MAIN_LAYER: RenderLayers = RenderLayers::layer(1);
 
@@ -33,7 +33,8 @@ fn spawn_cameras(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
             ..default()
         },
         Hdr,
-        Msaa::Off,
+        // Sample count == pixel size ensures clean pixel averaging.
+        Msaa::Sample4,
         PixelatedCamera,
         PIXELATED_LAYER,
     ));

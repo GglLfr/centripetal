@@ -7,6 +7,7 @@ use crate::{
 #[derive(Reflect, Asset, Debug, Default)]
 #[reflect(Debug, Default, FromWorld)]
 pub struct SaveData {
+    pub(super) assets: BTreeMap<TypeId, BTreeMap<AssetIndex, AssetPath<'static>>>,
     #[reflect(ignore)]
     pub(super) resources: Vec<Box<dyn Reflect>>,
     #[reflect(ignore)]
@@ -68,6 +69,28 @@ pub struct SaveDataSerializer<'ser> {
 
 impl Serialize for SaveDataSerializer<'_> {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        struct AssetsSerializer<'ser> {
+            registry: &'ser TypeRegistry,
+            assets: &'ser BTreeMap<TypeId, BTreeMap<AssetIndex, AssetPath<'static>>>,
+        }
+
+        impl Serialize for AssetsSerializer<'_> {
+            fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+                let mut ser = serializer.serialize_map(Some(self.assets.len()))?;
+                for (&type_id, entries) in self.assets {
+                    ser.serialize_entry(
+                        self.registry
+                            .get(type_id)
+                            .ok_or_else(|| ser::Error::custom("missing reflect type registration data"))?
+                            .type_info()
+                            .type_path(),
+                        entries,
+                    )?;
+                }
+                ser.end()
+            }
+        }
+
         struct ArchetypeSerializer<'ser> {
             registry: &'ser TypeRegistry,
             values: &'ser [Box<dyn Reflect>],
@@ -114,7 +137,11 @@ impl Serialize for SaveDataSerializer<'_> {
             }
         }
 
-        let mut ser = serializer.serialize_struct("SaveData", 2)?;
+        let mut ser = serializer.serialize_struct("SaveData", 3)?;
+        ser.serialize_field("assets", &AssetsSerializer {
+            registry: self.registry,
+            assets: &self.data.assets,
+        })?;
         ser.serialize_field("resources", &ArchetypeSerializer {
             registry: self.registry,
             values: &self.data.resources,
@@ -135,7 +162,7 @@ impl<'de> DeserializeSeed<'de> for SaveDataDeserializer<'de> {
     type Value = SaveData;
 
     fn deserialize<D: Deserializer<'de>>(self, deserializer: D) -> Result<Self::Value, D::Error> {
-        deserializer.deserialize_struct("SaveData", &["resources", "entities"], self)
+        deserializer.deserialize_struct("SaveData", &["assets", "resources", "entities"], self)
     }
 }
 
@@ -147,11 +174,39 @@ impl<'de> de::Visitor<'de> for SaveDataDeserializer<'de> {
     }
 
     fn visit_map<A: de::MapAccess<'de>>(self, mut map: A) -> Result<Self::Value, A::Error> {
-        #[derive(Deserialize)]
-        #[serde(rename_all = "lowercase")]
-        enum Field {
-            Resources,
-            Entities,
+        struct AssetsDeserializer<'de> {
+            registry: &'de TypeRegistry,
+        }
+
+        impl<'de> DeserializeSeed<'de> for AssetsDeserializer<'de> {
+            type Value = BTreeMap<TypeId, BTreeMap<AssetIndex, AssetPath<'static>>>;
+
+            fn deserialize<D: Deserializer<'de>>(self, deserializer: D) -> Result<Self::Value, D::Error> {
+                deserializer.deserialize_map(self)
+            }
+        }
+
+        impl<'de> de::Visitor<'de> for AssetsDeserializer<'de> {
+            type Value = BTreeMap<TypeId, BTreeMap<AssetIndex, AssetPath<'static>>>;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                write!(formatter, "a map of full type path and asset index entries")
+            }
+
+            fn visit_map<A: de::MapAccess<'de>>(self, mut map: A) -> Result<Self::Value, A::Error> {
+                let mut output = BTreeMap::new();
+                while let Some((type_path, entries)) = map.next_entry()? {
+                    output.insert(
+                        self.registry
+                            .get_with_type_path(type_path)
+                            .ok_or_else(|| de::Error::invalid_value(de::Unexpected::Str(type_path), &"no type registration found"))?
+                            .type_id(),
+                        entries,
+                    );
+                }
+
+                Ok(output)
+            }
         }
 
         struct ArchetypeDeserializer<'de> {
@@ -175,16 +230,16 @@ impl<'de> de::Visitor<'de> for SaveDataDeserializer<'de> {
 
             fn visit_map<A: de::MapAccess<'de>>(self, mut map: A) -> Result<Self::Value, A::Error> {
                 let mut output = BTreeMap::new();
-                while let Some(path) = map.next_key()? {
+                while let Some(type_path) = map.next_key()? {
                     let save = self
                         .registry
-                        .get_with_type_path(path)
-                        .ok_or_else(|| de::Error::invalid_value(de::Unexpected::Str(path), &"no type registration found"))?
+                        .get_with_type_path(type_path)
+                        .ok_or_else(|| de::Error::invalid_value(de::Unexpected::Str(type_path), &"no type registration found"))?
                         .data::<ReflectSave>()
-                        .ok_or_else(|| de::Error::invalid_value(de::Unexpected::Str(path), &"no `ReflectSave` dat found"))?;
+                        .ok_or_else(|| de::Error::invalid_value(de::Unexpected::Str(type_path), &"no `ReflectSave` dat found"))?;
 
-                    if output.insert(path, map.next_value_seed(ReflectedLoad { save })?).is_some() {
-                        Err(de::Error::custom(format!("duplicated entry `{path}`")))?
+                    if output.insert(type_path, map.next_value_seed(ReflectedLoad { save })?).is_some() {
+                        Err(de::Error::custom(format!("duplicated entry `{type_path}`")))?
                     }
                 }
                 Ok(output.into_values().collect())
@@ -222,11 +277,20 @@ impl<'de> de::Visitor<'de> for SaveDataDeserializer<'de> {
             }
         }
 
+        let mut assets = None;
         let mut resources = None;
         let mut entities = None;
         loop {
             match map.next_key()? {
-                Some(Field::Resources) => {
+                Some("assets") => {
+                    if assets
+                        .replace(map.next_value_seed(AssetsDeserializer { registry: self.registry })?)
+                        .is_some()
+                    {
+                        Err(de::Error::duplicate_field("assets"))?
+                    }
+                }
+                Some("resources") => {
                     if resources
                         .replace(map.next_value_seed(ArchetypeDeserializer { registry: self.registry })?)
                         .is_some()
@@ -234,7 +298,7 @@ impl<'de> de::Visitor<'de> for SaveDataDeserializer<'de> {
                         Err(de::Error::duplicate_field("resources"))?
                     }
                 }
-                Some(Field::Entities) => {
+                Some("entities") => {
                     if entities
                         .replace(map.next_value_seed(EntitiesDeserializer { registry: self.registry })?)
                         .is_some()
@@ -242,8 +306,10 @@ impl<'de> de::Visitor<'de> for SaveDataDeserializer<'de> {
                         Err(de::Error::duplicate_field("entities"))?
                     }
                 }
+                Some(unknown) => Err(de::Error::unknown_field(unknown, &["assets", "resources", "entities"]))?,
                 None => {
                     break Ok(SaveData {
+                        assets: assets.ok_or_else(|| de::Error::missing_field("assets"))?,
                         resources: resources.ok_or_else(|| de::Error::missing_field("resources"))?,
                         entities: entities.ok_or_else(|| de::Error::missing_field("entities"))?,
                     })

@@ -1,8 +1,10 @@
+use bevy::sprite_render::AlphaMode2d;
+
 use crate::{
     MapAssetIds, ReflectMapAssetIds,
     math::Transform2d,
     prelude::*,
-    render::atlas::AtlasRegion,
+    render::{PIXELATED_LAYER, atlas::AtlasRegion},
     saves::{ReflectSave, Save},
 };
 
@@ -48,7 +50,8 @@ fn on_tile_insert(
     }
 
     let &tile = world.get::<Tile>(entity).unwrap();
-    let mut tilemap = world.get_mut::<Tilemap>(tile.tilemap).expect("Missing `Tilemap` component");
+    let tilemap = world.get_mut::<Tilemap>(tile.tilemap).expect("Missing `Tilemap` component").into_inner();
+    tilemap.change_chunk(tile.pos);
 
     let dim = tilemap.dimension;
     if let Some(old_tile) = tilemap
@@ -57,7 +60,6 @@ fn on_tile_insert(
         .unwrap_or_else(|| panic!("`Tile` {} out of bounds of {}", tile.pos, dim))
         .replace(entity)
     {
-        tilemap.change_chunk(tile.pos);
         world.commands().entity(old_tile).try_despawn();
     }
 }
@@ -256,18 +258,19 @@ pub struct TilemapChunks {
 }
 
 fn update_tilemap_chunks(
-    commands: ParallelCommands,
+    mut commands: Commands,
     tilemaps: Query<(&Tilemap, &mut TilemapChunks), Changed<Tilemap>>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<ColorMaterial>>,
     regions: Res<Assets<AtlasRegion>>,
     tiles: Query<&Tile>,
 ) {
-    let commands = &commands;
     let regions = regions.into_inner();
-    let mesh_reserves = &*meshes;
 
-    for (id, mesh) in ComputeTaskPool::get()
+    let mesh_handle_allocator = &meshes.get_handle_provider();
+    let material_handle_allocator = &materials.get_handle_provider();
+
+    for (mesh_id, mesh, material_id, material, chunk_bundle) in ComputeTaskPool::get()
         .scope(|scope| {
             for (tilemap, mut chunks) in tilemaps {
                 if chunks
@@ -276,15 +279,12 @@ fn update_tilemap_chunks(
                     .set_if_neq(tilemap.dimension)
                 {
                     for (.., e) in chunks.chunk_entities.drain() {
-                        commands.command_scope(|mut commands| {
-                            commands.entity(e).despawn();
-                        });
+                        commands.entity(e).despawn();
                     }
                 }
 
                 for chunk_pos in tilemap.iter_changed_chunks() {
-                    let material = materials.add(ColorMaterial::default());
-                    let chunk_entity = commands.command_scope(|mut commands| {
+                    let chunk_entity = {
                         let e = commands
                             .spawn((
                                 Transform2d {
@@ -299,7 +299,7 @@ fn update_tilemap_chunks(
                             commands.entity(old_chunk_entity).despawn();
                         }
                         e
-                    });
+                    };
 
                     scope.spawn(async move {
                         let mut for_image = HashMap::new();
@@ -309,31 +309,23 @@ fn update_tilemap_chunks(
 
                             let [bx, by] = ((pos % TILEMAP_CHUNK_SIZE).as_vec2() * TILE_PIXEL_SIZE).to_array();
                             let [tx, ty] = [bx + TILE_PIXEL_SIZE, by + TILE_PIXEL_SIZE];
-
-                            let (positions, uvs, indices): &mut (Vec<_>, Vec<_>, Vec<_>) = for_image.entry(region.texture.id()).or_default();
-                            positions.extend_from_slice(&[[bx, by, 0.], [tx, by, 0.], [tx, ty, 0.], [bx, ty, 0.]]);
-                            uvs.extend_from_slice(&region.uv_corners().map(|uv| uv.to_array()));
+                            let (positions, uvs, indices): &mut (Vec<_>, Vec<_>, Vec<_>) = &mut for_image.entry(&region.texture).or_default();
 
                             let i = positions.len() as u16;
-                            indices.extend_from_slice(&[i, i + 1, i + 2, i + 2, i + 3, i]);
+                            indices.extend([i, i + 1, i + 2, i + 2, i + 3, i]);
+
+                            positions.extend([[bx, by, 0.], [tx, by, 0.], [tx, ty, 0.], [bx, ty, 0.]]);
+                            uvs.extend(region.uv_corners().map(|uv| uv.to_array()));
                         }
 
                         for_image
                             .into_iter()
-                            .map(move |(.., (positions, uvs, indices))| {
-                                let mesh_handle = mesh_reserves.reserve_handle();
+                            .map(move |(image, (positions, uvs, indices))| {
+                                let mesh_handle = mesh_handle_allocator.reserve_handle().typed();
                                 let mesh_handle_id = mesh_handle.id();
 
-                                commands.command_scope(|mut commands| {
-                                    commands.spawn((
-                                        ChildOf(chunk_entity),
-                                        Transform2d::IDENTITY,
-                                        Visibility::Inherited,
-                                        Aabb::from_min_max(Vec3::ZERO, Vec2::splat(TILEMAP_CHUNK_SIZE as f32).extend(0.)),
-                                        Mesh2d(mesh_handle),
-                                        MeshMaterial2d(material.clone()),
-                                    ));
-                                });
+                                let material_handle = material_handle_allocator.reserve_handle().typed();
+                                let material_handle_id = material_handle.id();
 
                                 (
                                     mesh_handle_id,
@@ -341,6 +333,22 @@ fn update_tilemap_chunks(
                                         .with_inserted_indices(Indices::U16(indices))
                                         .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, VertexAttributeValues::Float32x3(positions))
                                         .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, VertexAttributeValues::Float32x2(uvs)),
+                                    material_handle_id,
+                                    ColorMaterial {
+                                        color: Color::WHITE,
+                                        alpha_mode: AlphaMode2d::Blend,
+                                        uv_transform: Affine2::IDENTITY,
+                                        texture: Some(image.clone()),
+                                    },
+                                    (
+                                        ChildOf(chunk_entity),
+                                        Transform2d::IDENTITY,
+                                        Visibility::Inherited,
+                                        Aabb::from_min_max(Vec3::ZERO, Vec2::splat(TILEMAP_CHUNK_SIZE as f32).extend(0.)),
+                                        Mesh2d(mesh_handle),
+                                        MeshMaterial2d(material_handle),
+                                        PIXELATED_LAYER,
+                                    ),
                                 )
                             })
                             .collect::<Box<_>>()
@@ -351,7 +359,9 @@ fn update_tilemap_chunks(
         .into_iter()
         .flatten()
     {
-        meshes.insert(id, mesh).expect("ID is reserved using `reserve_handle()`");
+        meshes.insert(mesh_id, mesh).expect("ID is reserved using `reserve_handle()`");
+        materials.insert(material_id, material).expect("ID is reserved using `reserve_handle()`");
+        commands.spawn(chunk_bundle);
     }
 }
 

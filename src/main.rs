@@ -33,12 +33,14 @@ pub mod prelude {
     pub use bevy::ui_widgets;
     pub use bevy::{
         asset::{
-            AssetLoader, AsyncReadExt as _, LoadContext, LoadState, RecursiveDependencyLoadState, RenderAssetUsages, UntypedAssetId,
+            AssetIndex, AssetLoader, AssetPath, AsyncReadExt as _, LoadContext, LoadState, RecursiveDependencyLoadState, ReflectAsset,
+            RenderAssetUsages, UntypedAssetId,
             io::{
                 AssetSourceBuilder, Reader,
                 file::{FileAssetReader, FileAssetWriter},
             },
             load_embedded_asset, ron,
+            uuid::Uuid,
         },
         camera::{
             ImageRenderTarget, RenderTarget,
@@ -150,6 +152,7 @@ pub enum GameState {
 }
 
 pub fn main() -> AppExit {
+    #[cfg(not(target_family = "wasm"))]
     std::panic::set_hook(Box::new(|info| {
         let backtrace = format!(
             "{}\n{}",
@@ -184,7 +187,12 @@ pub fn main() -> AppExit {
         );
 
         #[cfg(not(feature = "dev"))]
-        if let Err(e) = fs::write(log_file, backtrace) {
+        if let Err(e) = fs::File::create(log_file).and_then(|mut file| {
+            use std::io::Write;
+
+            file.write_all(backtrace.as_bytes())?;
+            file.sync_all()
+        }) {
             tinyfiledialogs::message_box_ok(
                 "Worse than crash!",
                 &format!("Couldn't write crash log file: {e}\n\nSure hope you can copy the crashlog text in some other way..."),
@@ -218,7 +226,7 @@ pub fn main() -> AppExit {
         ))
         .add_systems(
             OnExit(GameState::AssetLoading),
-            |#[cfg_attr(not(feature = "dev"), expect(unused))] mut commands: Commands| {
+            |#[cfg_attr(not(feature = "dev"), expect(unused))] mut commands: Commands, textures: Res<TileTextures>| {
                 #[cfg(feature = "dev")]
                 {
                     use crate::{
@@ -228,9 +236,10 @@ pub fn main() -> AppExit {
 
                     let tilemap = commands.spawn(Tilemap::new(uvec2(4, 4))).id();
                     commands.spawn_batch([
-                        Tile::new(tilemap, uvec2(0, 0), AssetId::default()),
-                        Tile::new(tilemap, uvec2(1, 1), AssetId::default()),
-                        Tile::new(tilemap, uvec2(2, 2), AssetId::default()),
+                        Tile::new(tilemap, uvec2(0, 0), &textures.tmp),
+                        Tile::new(tilemap, uvec2(1, 1), &textures.tmp),
+                        Tile::new(tilemap, uvec2(2, 2), &textures.tmp),
+                        Tile::new(tilemap, uvec2(3, 3), &textures.tmp),
                     ]);
 
                     commands.run_system_cached(SaveCapturer::execute);
