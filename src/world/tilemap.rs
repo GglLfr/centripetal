@@ -1,10 +1,16 @@
-use crate::{math::Transform2d, prelude::*, render::atlas::AtlasRegion, save, saves::ReflectSave};
+use crate::{
+    math::Transform2d,
+    prelude::*,
+    render::atlas::AtlasRegion,
+    saves::{ReflectSave, Save},
+};
 
 pub const TILE_PIXEL_SIZE: f32 = 8.;
 pub const TILEMAP_CHUNK_SIZE: u32 = 64;
 
-#[derive(Reflect, Component, MapEntities, Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Reflect, Save, Component, MapEntities, Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[component(immutable, on_insert = on_tile_insert, on_replace = on_tile_replace)]
+#[version(0 = Self)]
 #[reflect(Save, Component, MapEntities, Debug, Clone, PartialEq, Hash)]
 pub struct Tile {
     #[entities]
@@ -12,10 +18,6 @@ pub struct Tile {
     pub pos: UVec2,
     pub region: AssetId<AtlasRegion>,
 }
-
-save!(Tile as {
-    0 => Self;
-});
 
 impl Tile {
     pub fn new(tilemap: Entity, pos: UVec2, region: impl Into<AssetId<AtlasRegion>>) -> Self {
@@ -86,9 +88,10 @@ fn on_tile_replace(
     }
 }
 
-#[derive(Reflect, Component, MapEntities, Debug, Clone)]
+#[derive(Reflect, Save, Component, MapEntities, Debug, Clone)]
 #[require(TilemapChunks, Transform2d, Visibility)]
 #[component(on_despawn = on_tilemap_despawn)]
+#[version(0 = Self)]
 #[reflect(Save, Component, MapEntities, Debug, Clone)]
 pub struct Tilemap {
     dimension: UVec2,
@@ -167,10 +170,6 @@ impl<'de> Deserialize<'de> for Tilemap {
         deserializer.deserialize_struct("Tilemap", &["dimension", "tiles"], TilemapVisitor)
     }
 }
-
-save!(Tilemap as {
-    0 => Self;
-});
 
 impl Tilemap {
     pub fn new(dimension: UVec2) -> Self {

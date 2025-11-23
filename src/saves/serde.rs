@@ -1,3 +1,5 @@
+pub use centripetal_macros::Save;
+
 use crate::prelude::*;
 
 /// Do not change this, ever!
@@ -7,50 +9,6 @@ pub trait Save: Serialize + for<'de> Deserialize<'de> + Reflectable {
     fn saver() -> SaverWithInput<Self>;
 
     fn loader() -> LoaderWithOutput<Self>;
-}
-
-#[macro_export]
-macro_rules! save {
-    ($this:path as { $version:expr => $repr:ty; $($next_version:expr => $next_repr:ty;)* }) => {
-        impl $crate::saves::Save for $this
-        where
-            Self: ::bevy::reflect::Reflectable,
-            Self: $crate::saves::SaveSpec::<$version, Repr = $repr> $(+ $crate::saves::SaveSpec::<$next_version, Repr = $next_repr>)*,
-            Self: ::serde::ser::Serialize + for<'de> ::serde::de::Deserialize<'de>,
-        {
-            fn saver() -> $crate::saves::SaverWithInput<Self> {
-                save!(saver $this as { $version => $repr; $($next_version => $next_repr;)* })
-            }
-
-            fn loader() -> $crate::saves::LoaderWithOutput<Self> {
-                let loader = $crate::saves::Loader::<Self, $version>::new();
-                $(
-                    let loader = loader.next::<$next_version>(::core::convert::From::from);
-                )*
-                loader.finish()
-            }
-        }
-
-        impl $crate::saves::SaveSpec::<$version> for $this
-        where $repr: ::serde::ser::Serialize + for<'de> ::serde::de::Deserialize<'de>
-        {
-            type Repr = $repr;
-        }
-
-        $(
-            impl $crate::saves::SaveSpec::<$next_version> for $this
-            where $next_repr: ::serde::ser::Serialize + for<'de> ::serde::de::Deserialize<'de>
-            {
-                type Repr = $next_repr;
-            }
-        )*
-    };
-    (saver $this:ty as { $version:expr => $repr:ty; }) => {
-        $crate::saves::Saver::<Self, $version>::new().finish()
-    };
-    (saver $this:ty as { $version:expr => $repr:ty; $($remaining_version:expr => $remaining_repr:ty;)* }) => {
-        save!(saver $this as { $($remaining_version => $remaining_repr;)* })
-    };
 }
 
 pub trait SaveSpec<const VERSION: SaveVersion>: Save + Sized {

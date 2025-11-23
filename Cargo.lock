@@ -1648,6 +1648,7 @@ dependencies = [
  "bincode",
  "bitflags 2.10.0",
  "bytemuck",
+ "centripetal-macros",
  "directories",
  "guillotiere",
  "mimalloc-redirect",
@@ -1657,6 +1658,15 @@ dependencies = [
  "time",
  "tinyfiledialogs",
  "vec-belt",
+]
+
+[[package]]
+name = "centripetal-macros"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]
