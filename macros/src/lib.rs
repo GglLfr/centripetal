@@ -121,7 +121,7 @@ pub fn derive_map_asset_ids(input: proc_macro::TokenStream) -> proc_macro::Token
                     #visit
                 }
 
-                fn map_asset_ids(&mut self, mapper: &mut dyn crate::AssetIdMapper) {
+                fn map_asset_ids(&mut self, mapper: &mut dyn ::core::ops::FnMut(::bevy::asset::UntypedAssetId) -> ::bevy::asset::UntypedAssetId) {
                     #map
                 }
             }

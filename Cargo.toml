@@ -79,8 +79,15 @@ dev = [
     "bevy/embedded_watcher",
     "bevy/file_watcher",
     "bevy/hotpatching",
+    "bevy/track_location",
     "avian2d/debug-plugin",
 ]
+
+[profile.dev]
+panic = "unwind"
+
+[profile.release]
+panic = "abort"
 
 [patch.crates-io]
 erased-serde = { path = "vendor/erased-serde" }

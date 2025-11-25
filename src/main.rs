@@ -1,5 +1,6 @@
 mod asset;
 mod progress;
+
 pub use asset::*;
 pub use progress::*;
 
@@ -14,7 +15,7 @@ pub mod world;
 
 pub mod prelude {
     pub use std::{
-        any::{TypeId, type_name},
+        any::{Any, TypeId, type_name},
         collections::BTreeMap,
         f32::consts::{PI, TAU},
         fmt::{self, Debug},
@@ -23,8 +24,9 @@ pub mod prelude {
         io,
         marker::PhantomData,
         mem::{self, MaybeUninit, offset_of},
-        ops::Range,
-        path::PathBuf,
+        ops::{Deref, DerefMut, Range},
+        path::{Path, PathBuf},
+        ptr::NonNull,
         time::Duration,
     };
 
@@ -52,9 +54,11 @@ pub mod prelude {
             tonemapping::{DebandDither, Tonemapping, TonemappingLuts, get_lut_bind_group_layout_entries, get_lut_bindings},
         },
         ecs::{
+            change_detection::MaybeLocation,
             component::{ComponentId, Tick},
-            entity::{EntityHash, EntityHashMap, MapEntities},
+            entity::{Entities, EntityHash, EntityHashMap, MapEntities},
             entity_disabling::Disabled,
+            error::{CommandWithEntity, ErrorContext, HandleError},
             hierarchy::validate_parent_has_component,
             intern::Interned,
             lifecycle::HookContext,
@@ -67,7 +71,7 @@ pub mod prelude {
                 SystemParamItem, SystemParamValidationError, SystemState,
                 lifetimeless::{Read, SRes},
             },
-            world::{DeferredWorld, FilteredEntityRef, unsafe_world_cell::UnsafeWorldCell},
+            world::{CommandQueue, DeferredWorld, FilteredEntityRef, unsafe_world_cell::UnsafeWorldCell},
         },
         image::{CompressedImageFormats, ImageLoader, ImageLoaderSettings},
         math::{Affine2, FloatOrd},
@@ -100,7 +104,7 @@ pub mod prelude {
         sprite::Anchor,
         sprite_render::SpritePipelineKey,
         state::state::FreelyMutableState,
-        tasks::{AsyncComputeTaskPool, ComputeTaskPool, IoTaskPool, Task, futures_lite},
+        tasks::{AsyncComputeTaskPool, ComputeTaskPool, ConditionalSendFuture, IoTaskPool, Task, futures_lite},
         window::PrimaryWindow,
     };
     pub use bevy_framepace::FramepacePlugin;
@@ -151,58 +155,61 @@ pub enum GameState {
     Editor,
 }
 
-pub fn main() -> AppExit {
-    #[cfg(not(target_family = "wasm"))]
-    std::panic::set_hook(Box::new(|info| {
-        let backtrace = format!(
-            "{}\n{}",
-            info.payload_as_str().unwrap_or("Unknown error payload message"),
-            std::backtrace::Backtrace::force_capture()
-        );
+fn panic_hook(info: &std::panic::PanicHookInfo) {
+    let backtrace = format!(
+        "{}\n{}",
+        info.payload_as_str().unwrap_or("Unknown error payload message"),
+        std::backtrace::Backtrace::force_capture()
+    );
 
-        let log_name = match time::UtcOffset::current_local_offset()
-            .ok()
-            .and_then(|offset| time::UtcDateTime::now().checked_to_offset(offset))
-            .and_then(|time| {
-                time.format(&time::macros::format_description!("[year]-[month]-[day]_[hour]-[minute]-[second]"))
-                    .ok()
-            }) {
-            Some(time) => format!("centripetal_crashlog_{time}.log"),
-            None => "centripetal_crash.log".into(),
-        };
+    let log_name = match time::UtcOffset::current_local_offset()
+        .ok()
+        .and_then(|offset| time::UtcDateTime::now().checked_to_offset(offset))
+        .and_then(|time| {
+            time.format(&time::macros::format_description!("[year]-[month]-[day]_[hour]-[minute]-[second]"))
+                .ok()
+        }) {
+        Some(time) => format!("centripetal_crashlog_{time}.log"),
+        None => "centripetal_crash.log".into(),
+    };
 
-        let log_file = std::env::current_dir()
-            .inspect_err(|e| warn!("Couldn't get executable path: {e}"))
-            .ok()
-            .unwrap_or_default()
-            .join(log_name);
+    let log_file = std::env::current_dir()
+        .inspect_err(|e| warn!("Couldn't get executable path: {e}"))
+        .ok()
+        .unwrap_or_default()
+        .join(log_name);
 
+    error!("{backtrace}");
+    tinyfiledialogs::message_box_ok(
+        "Crash!",
+        &format!(
+            "An unrecoverable error has occured in Centripetal. A crash log has been written at {} which contains the error message and backtrace below.\nPlease report this to https://github.com/GglLfr/centripetal\n\n{backtrace}",
+            log_file.display()
+        ),
+        tinyfiledialogs::MessageBoxIcon::Error,
+    );
+
+    #[cfg(not(feature = "dev"))]
+    if let Err(e) = fs::File::create(log_file).and_then(|mut file| {
+        use std::io::Write;
+
+        file.write_all(backtrace.as_bytes())?;
+        file.sync_all()
+    }) {
         tinyfiledialogs::message_box_ok(
-            "Crash!",
-            &format!(
-                "An unrecoverable error has occured in Centripetal. A crash log has been written at {} which contains the error message and backtrace below.\nPlease report this to https://github.com/GglLfr/centripetal\n\n{backtrace}",
-                log_file.display()
-            ),
+            "Worse than crash!",
+            &format!("Couldn't write crash log file: {e}\n\nSure hope you can copy the crashlog text in some other way..."),
             tinyfiledialogs::MessageBoxIcon::Error,
         );
+    }
+}
 
-        #[cfg(not(feature = "dev"))]
-        if let Err(e) = fs::File::create(log_file).and_then(|mut file| {
-            use std::io::Write;
-
-            file.write_all(backtrace.as_bytes())?;
-            file.sync_all()
-        }) {
-            tinyfiledialogs::message_box_ok(
-                "Worse than crash!",
-                &format!("Couldn't write crash log file: {e}\n\nSure hope you can copy the crashlog text in some other way..."),
-                tinyfiledialogs::MessageBoxIcon::Error,
-            );
-        }
-    }));
-
+pub fn main() -> AppExit {
+    std::panic::set_hook(Box::new(panic_hook));
     App::new()
         .add_plugins((
+            #[cfg(not(target_family = "wasm"))]
+            print_mimalloc_version,
             DefaultPlugins
                 .set(ImagePlugin::default_nearest())
                 .add_before::<AssetPlugin>(asset::register_user_sources),
@@ -210,8 +217,6 @@ pub fn main() -> AppExit {
             ui_widgets::UiWidgetsPlugins,
             PhysicsPlugins::default().with_length_unit(PIXELS_PER_METER),
             FramepacePlugin,
-            #[cfg(not(target_family = "wasm"))]
-            print_mimalloc_version,
         ))
         .init_state::<GameState>()
         .add_plugins((
@@ -227,90 +232,20 @@ pub fn main() -> AppExit {
         ))
         .add_systems(
             OnExit(GameState::AssetLoading),
-            |#[cfg_attr(not(feature = "dev"), expect(unused))] mut commands: Commands, textures: Res<TileTextures>| {
+            |server: Res<AssetServer>, registry: Res<AppTypeRegistry>, bridge: Res<util::AsyncBridge>| {
                 #[cfg(feature = "dev")]
                 {
-                    /*
-                                        (
-                        assets: {
-                            "centripetal::render::atlas::region::AtlasRegion": {
-                                (
-                                    generation: 0,
-                                    index: 0,
-                                ): "entities/characters/selene/selene.png",
-                            },
-                        },
-                        resources: {},
-                        entities: {
-                            4294967197: {
-                                "centripetal::world::tilemap::Tile": (0, (
-                                    tilemap: 4294967201,
-                                    pos: (3, 3),
-                                    region: Index(
-                                        index: (
-                                            generation: 0,
-                                            index: 0,
-                                        ),
-                                        marker: (),
-                                    ),
-                                )),
-                            },
-                            4294967198: {
-                                "centripetal::world::tilemap::Tile": (0, (
-                                    tilemap: 4294967201,
-                                    pos: (2, 2),
-                                    region: Index(
-                                        index: (
-                                            generation: 0,
-                                            index: 0,
-                                        ),
-                                        marker: (),
-                                    ),
-                                )),
-                            },
-                            4294967199: {
-                                "centripetal::world::tilemap::Tile": (0, (
-                                    tilemap: 4294967201,
-                                    pos: (1, 1),
-                                    region: Index(
-                                        index: (
-                                            generation: 0,
-                                            index: 0,
-                                        ),
-                                        marker: (),
-                                    ),
-                                )),
-                            },
-                            4294967200: {
-                                "centripetal::world::tilemap::Tile": (0, (
-                                    tilemap: 4294967201,
-                                    pos: (0, 0),
-                                    region: Index(
-                                        index: (
-                                            generation: 0,
-                                            index: 0,
-                                        ),
-                                        marker: (),
-                                    ),
-                                )),
-                            },
-                            4294967201: {
-                                "centripetal::world::tilemap::Tilemap": (0, (
-                                    dimension: (4, 4),
-                                    tiles: [
-                                        (0, 0, 4294967200),
-                                        (1, 1, 4294967199),
-                                        (2, 2, 4294967198),
-                                        (3, 3, 4294967197),
-                                    ],
-                                )),
-                            },
-                        },
-                    )
-                                         */
+                    let task = crate::saves::apply_save(server.clone(), registry.clone(), bridge.ctx(), "saves.sav.ron");
+                    AsyncComputeTaskPool::get()
+                        .spawn(async move {
+                            if let Err(e) = task.await {
+                                error!("{e}");
+                            } else {
+                                info!("Spawned!!!");
+                            }
+                        })
+                        .detach();
                 }
-
-                //commands.run_system_cached(editor::start);
             },
         )
         .run()

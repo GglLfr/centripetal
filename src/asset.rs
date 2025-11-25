@@ -14,11 +14,14 @@ macro_rules! define_collection {
             $vis fn init(mut commands: Commands, server: Res<AssetServer>, mut known_assets: ResMut<KnownAssets>) {
                 $(
                     let $asset_name = server.load($asset_path);
-                    known_assets.id_to_path.insert($asset_name.id().untyped(), AssetPath::from($asset_path));
-                    if let Some(old_id) = known_assets.path_to_id.insert(AssetPath::from($asset_path), $asset_name.id().untyped())
-                        && old_id != $asset_name.id().untyped()
                     {
-                        known_assets.id_to_path.remove(&old_id);
+                        let path = AssetPath::from($asset_path);
+                        known_assets.id_to_path.insert($asset_name.id().untyped(), path);
+                        if let Some(old_id) = known_assets.path_to_id.insert(AssetPath::from($asset_path), $asset_name.id().untyped())
+                            && old_id != $asset_name.id().untyped()
+                        {
+                            known_assets.id_to_path.remove(&old_id);
+                        }
                     }
                 )*
 
@@ -86,17 +89,13 @@ fn track_asset_loading(progress: ProgressFor<GameState>, known_assets: Res<Known
 pub trait MapAssetIds: 'static {
     fn visit_asset_ids(&self, visitor: &mut dyn FnMut(UntypedAssetId));
 
-    fn map_asset_ids(&mut self, mapper: &mut dyn AssetIdMapper);
-}
-
-pub trait AssetIdMapper {
-    fn map(&mut self, id: UntypedAssetId) -> UntypedAssetId;
+    fn map_asset_ids(&mut self, mapper: &mut dyn FnMut(UntypedAssetId) -> UntypedAssetId);
 }
 
 #[derive(Clone, Copy)]
 pub struct ReflectMapAssetIds {
     visit_asset_ids: fn(&dyn PartialReflect, &mut dyn FnMut(UntypedAssetId)),
-    map_asset_ids: fn(&mut dyn PartialReflect, &mut dyn AssetIdMapper),
+    map_asset_ids: fn(&mut dyn PartialReflect, &mut dyn FnMut(UntypedAssetId) -> UntypedAssetId),
 }
 
 impl ReflectMapAssetIds {
@@ -104,7 +103,7 @@ impl ReflectMapAssetIds {
         (self.visit_asset_ids)(target, visitor)
     }
 
-    pub fn map_asset_ids(&self, target: &mut dyn PartialReflect, mapper: &mut dyn AssetIdMapper) {
+    pub fn map_asset_ids(&self, target: &mut dyn PartialReflect, mapper: &mut dyn FnMut(UntypedAssetId) -> UntypedAssetId) {
         (self.map_asset_ids)(target, mapper)
     }
 }
@@ -129,8 +128,8 @@ impl<T: Asset> MapAssetIds for AssetId<T> {
         visitor(self.untyped())
     }
 
-    fn map_asset_ids(&mut self, mapper: &mut dyn AssetIdMapper) {
-        *self = mapper.map(self.untyped()).typed_debug_checked();
+    fn map_asset_ids(&mut self, mapper: &mut dyn FnMut(UntypedAssetId) -> UntypedAssetId) {
+        *self = mapper(self.untyped()).typed_debug_checked();
     }
 }
 
@@ -145,6 +144,9 @@ pub(super) fn register_user_sources(app: &mut App) {
     if let (Err(e), ..) | (.., Err(e)) = (fs::create_dir_all(&pref_dir), fs::create_dir_all(&data_dir)) {
         panic!("Couldn't create application directories: {e}");
     }
+
+    info!("Preferences directory: {}", pref_dir.display());
+    info!("Data directory: {}", data_dir.display());
 
     let pref_dir_cloned = pref_dir.clone();
     let data_dir_cloned = data_dir.clone();

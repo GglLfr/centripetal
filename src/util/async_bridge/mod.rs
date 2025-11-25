@@ -1,0 +1,138 @@
+mod command;
+pub use command::*;
+
+use crate::{KnownAssets, prelude::*};
+
+type Channel<T> = (async_channel::Sender<T>, async_channel::Receiver<T>);
+
+#[derive(Resource, Clone)]
+pub struct AsyncBridge {
+    command_channel: Channel<CommandQueue>,
+    asset_channel: Channel<(UntypedHandle, async_channel::Sender<Box<dyn Reflect>>)>,
+    asset_path_channel: Channel<((), async_channel::Sender<HashMap<AssetPath<'static>, UntypedAssetId>>)>,
+    entity_channel: Channel<(u32, async_channel::Sender<SmallVec<[Entity; 1]>>)>,
+}
+
+impl AsyncBridge {
+    pub fn ctx(&self) -> AsyncContext {
+        AsyncContext {
+            command: self.command_channel.0.clone(),
+            asset: AsyncMessager(self.asset_channel.0.clone()),
+            asset_path: AsyncMessager(self.asset_path_channel.0.clone()),
+            entity: AsyncMessager(self.entity_channel.0.clone()),
+        }
+    }
+}
+
+impl Default for AsyncBridge {
+    fn default() -> Self {
+        Self {
+            command_channel: async_channel::unbounded(),
+            asset_channel: async_channel::unbounded(),
+            asset_path_channel: async_channel::unbounded(),
+            entity_channel: async_channel::unbounded(),
+        }
+    }
+}
+
+#[derive(Clone)]
+pub struct AsyncContext {
+    pub command: async_channel::Sender<CommandQueue>,
+    pub asset: AsyncMessager<UntypedHandle, Box<dyn Reflect>>,
+    pub asset_path: AsyncMessager<(), HashMap<AssetPath<'static>, UntypedAssetId>>,
+    pub entity: AsyncMessager<u32, SmallVec<[Entity; 1]>>,
+}
+
+pub struct AsyncMessager<In, Out>(async_channel::Sender<(In, async_channel::Sender<Out>)>);
+impl<In, Out> AsyncMessager<In, Out> {
+    pub async fn send(&self, input: In) -> Result<Out> {
+        let (tx, rx) = async_channel::bounded(1);
+        self.0.send((input, tx)).await.map_err(|_| "Channel closed.")?;
+        Ok(rx.recv().await?)
+    }
+}
+
+impl<In> AsyncMessager<In, Box<dyn Reflect>> {
+    pub async fn send_typed<T: Any>(&self, input: In) -> Result<T> {
+        Ok(*self.send(input).await?.downcast().map_err(|_| "Wrong type.")?)
+    }
+}
+
+impl<Out> AsyncMessager<(), Out> {
+    pub async fn recv(&self) -> Result<Out> {
+        self.send(()).await
+    }
+}
+
+impl<In, Out> Clone for AsyncMessager<In, Out> {
+    fn clone(&self) -> Self {
+        Self(self.0.clone())
+    }
+}
+
+fn execute_async_commands(mut commands: Commands, bridge: Res<AsyncBridge>) {
+    let mut count = 32u32;
+    while let Some(next_count) = count.checked_sub(1)
+        && let Ok(mut queue) = bridge.command_channel.1.try_recv()
+    {
+        count = next_count;
+        commands.append(&mut queue);
+    }
+}
+
+fn execute_async_assets(mut commands: Commands, bridge: Res<AsyncBridge>, registry: Res<AppTypeRegistry>) -> Result {
+    let registry = registry.clone();
+    let mut count = 32u32;
+    while let Some(next_count) = count.checked_sub(1)
+        && let Ok((handle, sender)) = bridge.asset_channel.1.try_recv()
+    {
+        count = next_count;
+        let asset_fns = registry
+            .read()
+            .get_type_data::<ReflectAsset>(handle.type_id())
+            .ok_or("Missing `ReflectAsset`.")?
+            .clone();
+
+        commands.queue(move |world: &mut World| -> Result {
+            let asset = asset_fns.remove(world, handle.id()).ok_or("Missing asset.")?;
+            _ = sender.try_send(asset);
+
+            Ok(())
+        });
+    }
+    Ok(())
+}
+
+fn execute_async_asset_paths(bridge: Res<AsyncBridge>, known_assets: Res<KnownAssets>) {
+    let mut count = 32u32;
+    while let Some(next_count) = count.checked_sub(1)
+        && let Ok(((), sender)) = bridge.asset_path_channel.1.try_recv()
+    {
+        count = next_count;
+        _ = sender.try_send(known_assets.path_to_id().clone());
+    }
+}
+
+fn execute_async_entities(entities: &Entities, bridge: Res<AsyncBridge>) {
+    let mut count = 32u32;
+    while let Some(next_count) = count.checked_sub(1)
+        && let Ok((len, sender)) = bridge.entity_channel.1.try_recv()
+    {
+        count = next_count;
+        let entities = entities.reserve_entities(len).collect();
+
+        _ = sender.try_send(entities);
+    }
+}
+
+pub fn plugin(app: &mut App) {
+    app.init_resource::<AsyncBridge>().add_systems(
+        Update,
+        (
+            execute_async_commands,
+            execute_async_assets,
+            execute_async_asset_paths,
+            execute_async_entities,
+        ),
+    );
+}

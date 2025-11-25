@@ -6,6 +6,7 @@ use crate::{
     prelude::*,
     render::{PIXELATED_LAYER, atlas::AtlasRegion},
     saves::{ReflectSave, Save},
+    util::ecs::ReflectComponentPtr,
 };
 
 pub const TILE_PIXEL_SIZE: f32 = 8.;
@@ -14,7 +15,7 @@ pub const TILEMAP_CHUNK_SIZE: u32 = 64;
 #[derive(Reflect, Save, Component, MapAssetIds, MapEntities, Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[component(immutable, on_insert = on_tile_insert, on_replace = on_tile_replace)]
 #[version(0 = Self)]
-#[reflect(Save, Component, MapAssetIds, MapEntities, Debug, Clone, PartialEq, Hash)]
+#[reflect(Save, Component, ComponentPtr, MapAssetIds, MapEntities, Debug, Clone, PartialEq, Hash)]
 pub struct Tile {
     #[entities]
     pub tilemap: Entity,
@@ -96,7 +97,7 @@ fn on_tile_replace(
 #[require(TilemapChunks, Transform2d, Visibility)]
 #[component(on_despawn = on_tilemap_despawn)]
 #[version(0 = Self)]
-#[reflect(Save, Component, MapEntities, Debug, Clone)]
+#[reflect(Save, Component, ComponentPtr, MapEntities, Debug, Clone)]
 pub struct Tilemap {
     dimension: UVec2,
     #[entities]
@@ -165,6 +166,7 @@ impl<'de> Deserialize<'de> for Tilemap {
                 let width = tilemap.dimension.x as usize;
                 for (x, y, tile) in tiles.ok_or_else(|| de::Error::missing_field("tiles"))? {
                     tilemap.tiles[y as usize * width + x as usize] = Some(tile);
+                    tilemap.changed_chunks.insert(uvec2(x, y) / TILEMAP_CHUNK_SIZE);
                 }
 
                 Ok(tilemap)

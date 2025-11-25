@@ -27,6 +27,10 @@ pub enum SaveDataFormat {
     Binary,
 }
 
+impl SaveDataFormat {
+    pub const EXTENSIONS: &[&str] = &["sav.ron", "save.bin"];
+}
+
 impl AssetLoader for SaveDataLoader {
     type Asset = SaveData;
     type Settings = SaveDataFormat;
@@ -57,7 +61,7 @@ impl AssetLoader for SaveDataLoader {
     }
 
     fn extensions(&self) -> &[&str] {
-        &["sav.ron", "sav.bin"]
+        SaveDataFormat::EXTENSIONS
     }
 }
 
@@ -319,6 +323,15 @@ impl<'de> de::Visitor<'de> for SaveDataDeserializer<'de> {
     }
 }
 
+fn init_save_data_loader(server: Res<AssetServer>, registry: Res<AppTypeRegistry>) {
+    server.register_loader(SaveDataLoader {
+        registry: (**registry).clone(),
+    });
+}
+
 pub(super) fn plugin(app: &mut App) {
-    app.init_asset::<SaveData>().register_asset_reflect::<SaveData>();
+    app.init_asset::<SaveData>()
+        .register_asset_reflect::<SaveData>()
+        .preregister_asset_loader::<SaveDataLoader>(SaveDataFormat::EXTENSIONS)
+        .add_systems(Startup, init_save_data_loader);
 }

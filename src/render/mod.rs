@@ -1,5 +1,5 @@
-mod attributes;
-pub use attributes::*;
+mod attribute;
+pub use attribute::*;
 
 pub mod atlas;
 pub mod painter;
