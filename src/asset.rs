@@ -2,6 +2,9 @@ pub use centripetal_macros::MapAssetIds;
 
 use crate::{GameState, ProgressSystems, prelude::*, progress::ProgressFor, render::atlas::AtlasRegion};
 
+pub const PREF_SOURCE: AssetSourceId<'static> = AssetSourceId::Name(CowArc::Static("pref"));
+pub const DATA_SOURCE: AssetSourceId<'static> = AssetSourceId::Name(CowArc::Static("data"));
+
 macro_rules! define_collection {
     ($(#[$attr:meta])* $vis:vis $name:ident { $($asset_name:ident: $asset_type:path = $asset_path:expr),* }) => {
         #[derive(Resource, Debug)]
@@ -151,13 +154,13 @@ pub(super) fn register_user_sources(app: &mut App) {
     let pref_dir_cloned = pref_dir.clone();
     let data_dir_cloned = data_dir.clone();
     app.register_asset_source(
-        "pref",
+        PREF_SOURCE,
         AssetSourceBuilder::default()
             .with_reader(move || Box::new(FileAssetReader::new(&pref_dir)))
             .with_writer(move |create_root| Some(Box::new(FileAssetWriter::new(&pref_dir_cloned, create_root)))),
     )
     .register_asset_source(
-        "data",
+        DATA_SOURCE,
         AssetSourceBuilder::default()
             .with_reader(move || Box::new(FileAssetReader::new(&data_dir)))
             .with_writer(move |create_root| Some(Box::new(FileAssetWriter::new(&data_dir_cloned, create_root)))),

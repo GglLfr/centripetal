@@ -1642,6 +1642,7 @@ name = "centripetal"
 version = "0.1.0"
 dependencies = [
  "async-channel",
+ "atomicow",
  "avian2d",
  "bevy",
  "bevy_framepace",

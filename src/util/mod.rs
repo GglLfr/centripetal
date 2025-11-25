@@ -1,8 +1,7 @@
-mod async_bridge;
 mod iter;
-pub use async_bridge::*;
 pub use iter::*;
 
+pub mod async_bridge;
 pub mod ecs;
 
 use crate::prelude::*;

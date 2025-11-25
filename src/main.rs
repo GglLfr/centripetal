@@ -30,6 +30,7 @@ pub mod prelude {
         time::Duration,
     };
 
+    pub use atomicow::CowArc;
     pub use avian2d::prelude::*;
     #[cfg(feature = "dev")]
     pub use bevy::ui_widgets;
@@ -38,7 +39,7 @@ pub mod prelude {
             AssetIndex, AssetLoader, AssetPath, AsyncReadExt as _, LoadContext, LoadState, RecursiveDependencyLoadState, ReflectAsset,
             RenderAssetUsages, UntypedAssetId,
             io::{
-                AssetSourceBuilder, Reader,
+                AssetSourceBuilder, AssetSourceId, AssetWriterError, Reader,
                 file::{FileAssetReader, FileAssetWriter},
             },
             load_embedded_asset, ron,
@@ -58,7 +59,7 @@ pub mod prelude {
             component::{ComponentId, Tick},
             entity::{Entities, EntityHash, EntityHashMap, MapEntities},
             entity_disabling::Disabled,
-            error::{CommandWithEntity, ErrorContext, HandleError},
+            error::{CommandWithEntity, ErrorContext, HandleError, error, warn},
             hierarchy::validate_parent_has_component,
             intern::Interned,
             lifecycle::HookContext,
@@ -68,7 +69,7 @@ pub mod prelude {
             schedule::ScheduleLabel,
             system::{
                 BoxedReadOnlySystem, FilteredResourcesParamBuilder, QueryParamBuilder, RunSystemError, RunSystemOnce, SystemMeta, SystemParam,
-                SystemParamItem, SystemParamValidationError, SystemState,
+                SystemParamItem, SystemParamValidationError, SystemState, entity_command,
                 lifetimeless::{Read, SRes},
             },
             world::{CommandQueue, DeferredWorld, FilteredEntityRef, unsafe_world_cell::UnsafeWorldCell},
@@ -155,57 +156,56 @@ pub enum GameState {
     Editor,
 }
 
-fn panic_hook(info: &std::panic::PanicHookInfo) {
-    let backtrace = format!(
-        "{}\n{}",
-        info.payload_as_str().unwrap_or("Unknown error payload message"),
-        std::backtrace::Backtrace::force_capture()
-    );
+pub fn main() -> AppExit {
+    std::panic::set_hook(Box::new(|info| {
+        let backtrace = format!(
+            "{}\n{}",
+            info.payload_as_str().unwrap_or("Unknown error payload message"),
+            std::backtrace::Backtrace::force_capture()
+        );
 
-    let log_name = match time::UtcOffset::current_local_offset()
-        .ok()
-        .and_then(|offset| time::UtcDateTime::now().checked_to_offset(offset))
-        .and_then(|time| {
-            time.format(&time::macros::format_description!("[year]-[month]-[day]_[hour]-[minute]-[second]"))
-                .ok()
-        }) {
-        Some(time) => format!("centripetal_crashlog_{time}.log"),
-        None => "centripetal_crash.log".into(),
-    };
+        let log_name = match time::UtcOffset::current_local_offset()
+            .ok()
+            .and_then(|offset| time::UtcDateTime::now().checked_to_offset(offset))
+            .and_then(|time| {
+                time.format(&time::macros::format_description!("[year]-[month]-[day]_[hour]-[minute]-[second]"))
+                    .ok()
+            }) {
+            Some(time) => format!("centripetal_crashlog_{time}.log"),
+            None => "centripetal_crash.log".into(),
+        };
 
-    let log_file = std::env::current_dir()
-        .inspect_err(|e| warn!("Couldn't get executable path: {e}"))
-        .ok()
-        .unwrap_or_default()
-        .join(log_name);
+        let log_file = std::env::current_dir()
+            .inspect_err(|e| warn!("Couldn't get executable path: {e}"))
+            .ok()
+            .unwrap_or_default()
+            .join(log_name);
 
-    error!("{backtrace}");
-    tinyfiledialogs::message_box_ok(
-        "Crash!",
-        &format!(
-            "An unrecoverable error has occured in Centripetal. A crash log has been written at {} which contains the error message and backtrace below.\nPlease report this to https://github.com/GglLfr/centripetal\n\n{backtrace}",
-            log_file.display()
-        ),
-        tinyfiledialogs::MessageBoxIcon::Error,
-    );
-
-    #[cfg(not(feature = "dev"))]
-    if let Err(e) = fs::File::create(log_file).and_then(|mut file| {
-        use std::io::Write;
-
-        file.write_all(backtrace.as_bytes())?;
-        file.sync_all()
-    }) {
+        error!("{backtrace}");
         tinyfiledialogs::message_box_ok(
-            "Worse than crash!",
-            &format!("Couldn't write crash log file: {e}\n\nSure hope you can copy the crashlog text in some other way..."),
+            "Crash!",
+            &format!(
+                "An unrecoverable error has occured in Centripetal. A crash log has been written at {} which contains the error message and backtrace below.\nPlease report this to https://github.com/GglLfr/centripetal\n\n{backtrace}",
+                log_file.display()
+            ),
             tinyfiledialogs::MessageBoxIcon::Error,
         );
-    }
-}
 
-pub fn main() -> AppExit {
-    std::panic::set_hook(Box::new(panic_hook));
+        #[cfg(not(feature = "dev"))]
+        if let Err(e) = fs::File::create(log_file).and_then(|mut file| {
+            use std::io::Write;
+
+            file.write_all(backtrace.as_bytes())?;
+            file.sync_all()
+        }) {
+            tinyfiledialogs::message_box_ok(
+                "Worse than crash!",
+                &format!("Couldn't write crash log file: {e}\n\nSure hope you can copy the crashlog text in some other way..."),
+                tinyfiledialogs::MessageBoxIcon::Error,
+            );
+        }
+    }));
+
     App::new()
         .add_plugins((
             #[cfg(not(target_family = "wasm"))]
@@ -232,7 +232,7 @@ pub fn main() -> AppExit {
         ))
         .add_systems(
             OnExit(GameState::AssetLoading),
-            |server: Res<AssetServer>, registry: Res<AppTypeRegistry>, bridge: Res<util::AsyncBridge>| {
+            |server: Res<AssetServer>, registry: Res<AppTypeRegistry>, bridge: Res<util::async_bridge::AsyncBridge>| {
                 #[cfg(feature = "dev")]
                 {
                     let task = crate::saves::apply_save(server.clone(), registry.clone(), bridge.ctx(), "saves.sav.ron");
@@ -240,8 +240,6 @@ pub fn main() -> AppExit {
                         .spawn(async move {
                             if let Err(e) = task.await {
                                 error!("{e}");
-                            } else {
-                                info!("Spawned!!!");
                             }
                         })
                         .detach();

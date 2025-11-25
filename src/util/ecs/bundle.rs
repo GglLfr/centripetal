@@ -72,7 +72,7 @@ pub struct PartialBundles {
 }
 
 impl PartialBundles {
-    pub fn add<T: Bundle + BundleFromComponents>(&mut self, registrator: &mut ComponentsRegistrator) {
+    pub fn register<T: Bundle + BundleFromComponents>(&mut self, registrator: &mut ComponentsRegistrator) {
         unsafe fn insert<T: Bundle + BundleFromComponents>(
             entity: &mut EntityWorldMut,
             hook_mode: RelationshipHookMode,

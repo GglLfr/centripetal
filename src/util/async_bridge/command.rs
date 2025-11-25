@@ -1,6 +1,6 @@
 use crate::{
     prelude::*,
-    util::{AsyncContext, ecs::RawBundle},
+    util::{async_bridge::AsyncContext, ecs::RawBundle},
 };
 
 impl AsyncContext {
@@ -93,6 +93,10 @@ impl AsyncEntityCommands<'_> {
     pub fn queue_silenced<C: EntityCommand<T> + CommandWithEntity<M>, T, M>(&mut self, command: C) -> &mut Self {
         self.commands.queue_silenced(command.with_entity(self.entity));
         self
+    }
+
+    pub fn despawn(mut self) {
+        self.queue_handled(entity_command::despawn(), warn);
     }
 
     pub fn insert_raw_bundle(

@@ -1,5 +1,5 @@
 use crate::{
-    KnownAssets, ReflectMapAssetIds,
+    DATA_SOURCE, KnownAssets, ReflectMapAssetIds,
     prelude::*,
     saves::{ReflectSave, SaveData, SaveDataSerializer},
 };
@@ -12,71 +12,101 @@ pub struct SaveCapturer {
 }
 
 impl SaveCapturer {
-    pub fn execute(world: &mut World) {
-        world.resource_scope(|world, this: Mut<Self>| {
-            let id_to_path = world.resource::<KnownAssets>().id_to_path().clone();
-            let this = this.into_inner();
-            let mut captured_resources = Vec::new();
-            let mut captured_components = VecBelt::new(256);
+    pub fn capture(path: impl Into<PathBuf>) -> impl Command {
+        let mut captured_resources = Vec::new();
+        let mut captured_components = VecBelt::new(256);
+        let path = AssetPath::from_path_buf(path.into()).with_source(DATA_SOURCE);
 
-            ComputeTaskPool::get().scope(|scope| {
-                scope.spawn(async { this.resource_capturer.run_readonly(&mut captured_resources, world).unwrap() });
-                for component_capturer in &mut this.component_capturers {
-                    scope.spawn(async { component_capturer.run_readonly(&captured_components, world).unwrap() });
-                }
-            });
+        move |world: &mut World| {
+            world.resource_scope(|world, this: Mut<Self>| {
+                let this = this.into_inner();
+                let id_to_path = world.resource::<KnownAssets>().id_to_path().clone();
+                let registry = world.resource::<AppTypeRegistry>().clone();
+                let server = world.resource::<AssetServer>().clone();
 
-            // Spawn a new task, cancelling previous save tasks.
-            let app_registry = world.resource::<AppTypeRegistry>().clone();
-            this.ongoing_task = Some(IoTaskPool::get().spawn(async move {
-                let (assets, entities) = captured_components.clear(|slice| {
-                    let mut assets = BTreeMap::<TypeId, BTreeMap<_, _>>::new();
-                    let mut tree = BTreeMap::<Entity, Vec<_>>::new();
-
-                    let registry = &*app_registry.read();
-                    for (e, component) in slice {
-                        if let Some(data) = registry.get_type_data::<ReflectMapAssetIds>(component.reflect_type_info().type_id()) {
-                            data.visit_asset_ids(&*component, &mut |id| {
-                                if let UntypedAssetId::Index { type_id, index } = id {
-                                    let Some(path) = id_to_path.get(&id) else {
-                                        warn!("While trying to save, asset {id} was found to be impossible to be reliably persisted.");
-                                        return
-                                    };
-
-                                    assets.entry(type_id).or_default().insert(index, path.clone());
-                                }
-                            });
-                        }
-
-                        tree.entry(e).or_default().push(component);
+                ComputeTaskPool::get().scope(|scope| {
+                    scope.spawn(async { this.resource_capturer.run_readonly(&mut captured_resources, world).unwrap() });
+                    for component_capturer in &mut this.component_capturers {
+                        scope.spawn(async { component_capturer.run_readonly(&captured_components, world).unwrap() });
                     }
-
-                    (assets, tree)
                 });
 
-                let data = SaveData {
-                    assets,
-                    resources: captured_resources,
-                    entities,
-                };
+                // Spawn a new task after ensuring the previous one is finished.
+                info!("Saving world to {}", path.path().display());
+                let previous_task = this.ongoing_task.take();
+                this.ongoing_task = Some(IoTaskPool::get().spawn(async move {
+                    if let Some(task) = previous_task
+                        && let Err(e) = task.await
+                    {
+                        error!("Couldn't save world: {e}")
+                    }
 
-                futures_lite::future::yield_now().await;
+                    let (assets, entities) = captured_components.clear(|slice| {
+                        let mut assets = BTreeMap::<TypeId, BTreeMap<_, _>>::new();
+                        let mut tree = BTreeMap::<Entity, Vec<_>>::new();
 
-                // The RAII guard of the read-write lock needs to not cross `await` boundary, so confine it.
-                let output = {
-                    let registry = &*app_registry.read();
-                    let serializer = SaveDataSerializer { registry, data: &data };
+                        let registry = &*registry.read();
+                        for (e, component) in slice {
+                            if let Some(data) = registry.get_type_data::<ReflectMapAssetIds>(component.reflect_type_info().type_id()) {
+                                data.visit_asset_ids(&*component, &mut |id| {
+                                    if let UntypedAssetId::Index { type_id, index } = id {
+                                        let Some(path) = id_to_path.get(&id) else {
+                                            warn!("While trying to save, asset {id} was found to be impossible to be reliably persisted.");
+                                            return
+                                        };
 
-                    ron::ser::to_string_pretty(&serializer, default()).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?
-                };
+                                        assets.entry(type_id).or_default().insert(index, path.clone());
+                                    }
+                                });
+                            }
 
-                futures_lite::future::yield_now().await;
+                            tree.entry(e).or_default().push(component);
+                        }
 
-                // TODO output to a file.
-                println!("{output}");
-                Ok(())
-            }));
-        })
+                        (assets, tree)
+                    });
+
+                    let data = SaveData {
+                        assets,
+                        resources: captured_resources,
+                        entities,
+                    };
+
+                    futures_lite::future::yield_now().await;
+                    let output = {
+                        let registry = &*registry.read();
+                        let serializer = SaveDataSerializer { registry, data: &data };
+
+                        ron::ser::to_string_pretty(&serializer, default()).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?
+                    };
+
+                    futures_lite::future::yield_now().await;
+                    let writer = server
+                        .get_source(path.source())
+                        .map_err(|e| io::Error::new(io::ErrorKind::NotFound, e))?
+                        .writer()
+                        .map_err(|e| io::Error::new(io::ErrorKind::NotFound, e))?;
+
+                    let fs_path = path.path();
+                    if let Some(parent) = fs_path.parent() {
+                        writer.create_directory(parent).await.map_err(|AssetWriterError::Io(e)| e)?;
+                    }
+                    writer
+                        .write_bytes(path.path(), output.as_bytes())
+                        .await
+                        .map_err(|AssetWriterError::Io(e)| e)?;
+
+                    let backup_path = path.path().with_added_extension("bak");
+                    if let Err(AssetWriterError::Io(e)) = writer.write_bytes(&backup_path, output.as_bytes()).await {
+                        _ = writer.remove(&backup_path).await;
+                        error!("Couldn't save backup file to {}: {e}", backup_path.display());
+                    }
+
+                    info!("Successfully saved the world to {}", path.path().display());
+                    Ok(())
+                }));
+            })
+        }
     }
 }
 

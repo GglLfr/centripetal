@@ -1,4 +1,4 @@
-use crate::{ReflectMapAssetIds, prelude::*, saves::SaveData, util::AsyncContext};
+use crate::{DATA_SOURCE, ReflectMapAssetIds, prelude::*, saves::SaveData, util::async_bridge::AsyncContext};
 
 pub fn apply_save(
     server: AssetServer,
@@ -6,34 +6,33 @@ pub fn apply_save(
     ctx: AsyncContext,
     path: impl AsRef<Path>,
 ) -> impl ConditionalSendFuture<Output = Result<()>> {
-    let path = AssetPath::from_path(path.as_ref()).into_owned().with_source("data");
-    async move {
-        struct EntityMap<'a> {
-            errors: &'a mut Vec<String>,
-            entity_map: &'a mut EntityHashMap<Entity>,
-        }
+    struct EntityMap<'a> {
+        errors: &'a mut Vec<String>,
+        entity_map: &'a mut EntityHashMap<Entity>,
+    }
 
-        impl EntityMapper for EntityMap<'_> {
-            fn get_mapped(&mut self, source: Entity) -> Entity {
-                match self.entity_map.get(&source) {
-                    Some(&target) => target,
-                    None => {
-                        self.errors.push(format!("Unmapped entity {source}: ensure that *every* components that serialize entities are included in the `map_entities()` implementation, or is `#[reflect(ignore)]`-ed."));
-                        Entity::PLACEHOLDER
-                    }
+    impl EntityMapper for EntityMap<'_> {
+        fn get_mapped(&mut self, source: Entity) -> Entity {
+            match self.entity_map.get(&source) {
+                Some(&target) => target,
+                None => {
+                    self.errors.push(format!("Unmapped entity {source}: ensure that *every* components that serialize entities are included in the `map_entities()` implementation, or is `#[reflect(ignore)]`-ed."));
+                    Entity::PLACEHOLDER
                 }
             }
-
-            fn set_mapped(&mut self, source: Entity, target: Entity) {
-                self.entity_map.insert(source, target);
-            }
         }
 
+        fn set_mapped(&mut self, source: Entity, target: Entity) {
+            self.entity_map.insert(source, target);
+        }
+    }
+
+    let handle = server.load::<SaveData>(AssetPath::from_path(path.as_ref()).with_source(DATA_SOURCE));
+    async move {
         let mut errors = Vec::<String>::new();
         let mut file = ctx
             .asset
             .send_typed::<SaveData>({
-                let handle = server.load::<SaveData>(path);
                 server.wait_for_asset(&handle).await?;
                 handle.untyped()
             })
@@ -43,8 +42,8 @@ pub fn apply_save(
         let mut commands = ctx.commands();
 
         let mut entity_map = EntityHashMap::with_capacity(file.entities.len());
-        let new_entities = commands.spawn_many(file.entities.len() as u32).await?.into_iter();
-        for ((&entity, ..), mapped_entity) in file.entities.iter().zip(new_entities) {
+        let new_entities = commands.spawn_many(file.entities.len() as u32).await?;
+        for ((&entity, ..), &mapped_entity) in file.entities.iter().zip(&new_entities) {
             entity_map.insert(entity, mapped_entity);
         }
 
@@ -76,19 +75,11 @@ pub fn apply_save(
                         });
                     }
 
-                    if !errors.is_empty() {
-                        Err(errors.join("\n"))?
-                    }
-
                     if let Some(component_fns) = registry.get_type_data::<ReflectComponent>(component_type_id) {
                         component_fns.map_entities(&mut **component, &mut EntityMap {
                             errors: &mut errors,
                             entity_map: &mut entity_map,
                         });
-                    }
-
-                    if !errors.is_empty() {
-                        Err(errors.join("\n"))?
                     }
                 }
             }
@@ -101,12 +92,21 @@ pub fn apply_save(
             }
         }
 
-        for (e, components) in file.entities {
-            commands
-                .entity(*entity_map.get(&e).expect("Entity map contains everything"))
-                .insert_raw_bundle(components, RelationshipHookMode::RunIfNotLinked);
-        }
+        if !errors.is_empty() {
+            for e in new_entities {
+                commands.entity(e).despawn();
+            }
 
-        commands.submit().await
+            _ = commands.submit().await?;
+            Err(errors.join("\n"))?
+        } else {
+            for (e, components) in file.entities {
+                commands
+                    .entity(*entity_map.get(&e).expect("Entity map contains everything"))
+                    .insert_raw_bundle(components, RelationshipHookMode::RunIfNotLinked);
+            }
+
+            commands.submit().await
+        }
     }
 }
