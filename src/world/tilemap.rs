@@ -219,6 +219,12 @@ impl Tilemap {
         self.changed_chunks.insert(pos / TILEMAP_CHUNK_SIZE);
     }
 
+    pub fn chunk_size_at(&self, pos: UVec2) -> UVec2 {
+        let start = (pos * TILEMAP_CHUNK_SIZE).min(self.dimension);
+        let end = ((pos + 1) * TILEMAP_CHUNK_SIZE).min(self.dimension);
+        end - start
+    }
+
     pub fn iter_changed_chunks(&self) -> impl Iterator<Item = UVec2> + ExactSizeIterator {
         self.changed_chunks.iter().copied()
     }
@@ -252,11 +258,18 @@ fn clear_tilemap_changed_chunks(tilemaps: Query<&mut Tilemap>) {
     }
 }
 
-#[derive(Reflect, Component, Debug, Default, Clone, Serialize, Deserialize)]
+#[derive(Reflect, Component, Debug, Default, Clone)]
 #[reflect(Component, Debug, Default, FromWorld, Clone)]
 pub struct TilemapChunks {
     last_dimension: UVec2,
     chunk_entities: HashMap<UVec2, Entity>,
+}
+
+#[derive(Reflect, Component, Debug, Default, Clone, Copy)]
+#[require(Transform2d, Visibility)]
+#[reflect(Component, Debug, Default, FromWorld, Clone)]
+pub struct TilemapChunk {
+    pub size: UVec2,
 }
 
 fn update_tilemap_chunks(
@@ -288,11 +301,13 @@ fn update_tilemap_chunks(
                     let chunk_entity = {
                         let e = commands
                             .spawn((
+                                TilemapChunk {
+                                    size: tilemap.chunk_size_at(chunk_pos),
+                                },
                                 Transform2d {
-                                    translation: chunk_pos.as_vec2() * TILEMAP_CHUNK_SIZE as f32,
+                                    translation: (chunk_pos.as_vec2() * TILEMAP_CHUNK_SIZE as f32).extend(0.),
                                     ..default()
                                 },
-                                Visibility::Inherited,
                             ))
                             .id();
 
@@ -343,8 +358,6 @@ fn update_tilemap_chunks(
                                     },
                                     (
                                         ChildOf(chunk_entity),
-                                        Transform2d::IDENTITY,
-                                        Visibility::Inherited,
                                         Aabb::from_min_max(Vec3::ZERO, Vec2::splat(TILEMAP_CHUNK_SIZE as f32).extend(0.)),
                                         Mesh2d(mesh_handle),
                                         MeshMaterial2d(material_handle),

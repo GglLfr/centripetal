@@ -1,4 +1,4 @@
-use crate::{GameState, prelude::*};
+use crate::{GameState, prelude::*, world::Tilemap};
 
 pub fn start(mut commands: Commands, mut next_state: ResMut<NextState<GameState>>) {
     next_state.set(GameState::Editor);
@@ -11,6 +11,8 @@ pub fn start(mut commands: Commands, mut next_state: ResMut<NextState<GameState>
         },
         children![],
     ));
+
+    commands.spawn(Tilemap::new(uvec2(128, 128)));
 }
 
 pub fn plugin(app: &mut App) {}

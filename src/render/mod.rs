@@ -33,8 +33,7 @@ fn spawn_cameras(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
             ..default()
         },
         Hdr,
-        // Sample count == pixel size ensures clean pixel averaging.
-        Msaa::Sample4,
+        Msaa::Sample2,
         PixelatedCamera,
         PIXELATED_LAYER,
     ));

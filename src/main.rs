@@ -222,29 +222,16 @@ pub fn main() -> AppExit {
         .add_plugins((
             ProgressPlugin::default().trans(GameState::AssetLoading, GameState::Menu),
             asset::plugin,
-            #[cfg(feature = "dev")]
-            editor::plugin,
             entities::plugin,
             render::plugin,
             saves::plugin,
             util::plugin,
             world::plugin,
+            #[cfg(feature = "dev")]
+            editor::plugin,
         ))
-        .add_systems(
-            OnExit(GameState::AssetLoading),
-            |server: Res<AssetServer>, registry: Res<AppTypeRegistry>, bridge: Res<util::async_bridge::AsyncBridge>| {
-                #[cfg(feature = "dev")]
-                {
-                    let task = crate::saves::apply_save(server.clone(), registry.clone(), bridge.ctx(), "saves.sav.ron");
-                    AsyncComputeTaskPool::get()
-                        .spawn(async move {
-                            if let Err(e) = task.await {
-                                error!("{e}");
-                            }
-                        })
-                        .detach();
-                }
-            },
-        )
+        .add_systems(OnExit(GameState::AssetLoading), |mut commands: Commands| {
+            commands.run_system_cached(editor::start);
+        })
         .run()
 }

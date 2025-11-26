@@ -50,7 +50,7 @@ define_collection! {
 
 define_collection! {
     pub TileTextures {
-        tmp: AtlasRegion = "entities/characters/selene/selene.png"
+        grid: AtlasRegion = "tiles/grid.png"
     }
 }
 

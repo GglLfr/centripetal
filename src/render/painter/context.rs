@@ -45,7 +45,7 @@ impl PainterContext<'_> {
         let size = size.unwrap_or(region.size.as_vec2());
         let uvs = region.uv_corners();
 
-        let bl = -size / 2. + *anchor * size;
+        let bl = -size / 2. - *anchor * size;
         let tr = bl + size;
 
         self.quads.request(self.painter, &region.texture, self.blend, self.layer, [[

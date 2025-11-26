@@ -93,11 +93,12 @@ impl PainterQuads {
             layer: FloatOrd(layer),
         };
 
-        let first = self.quads.append(quads);
+        let first = self.quads.append(quads) * 4;
         painter.requests.append(unsafe {
+            // Generous amount of wrapping operations here to avoid panicking.
             vec_belt::transfer(len, |ptr: *mut (usize, RequestKey)| {
                 for i in 0..len {
-                    ptr.add(i).write((first.unchecked_add(i), key));
+                    ptr.add(i).write((first.wrapping_add(i.wrapping_mul(4)), key));
                 }
             })
         });

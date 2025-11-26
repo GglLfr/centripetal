@@ -16,7 +16,8 @@ fn quat_to_yaw(q: Quat) -> f32 {
 #[require(Transform, GlobalTransform2d)]
 #[reflect(Component, Debug, Default, FromWorld, Clone, PartialEq)]
 pub struct Transform2d {
-    pub translation: Vec2,
+    // The Z component isn't actually used, but it's useful for draw ordering.
+    pub translation: Vec3,
     pub rotation: f32,
     pub scale: Vec2,
 }
@@ -30,7 +31,7 @@ impl Default for Transform2d {
 impl From<Transform> for Transform2d {
     fn from(value: Transform) -> Self {
         Self {
-            translation: value.translation.truncate(),
+            translation: value.translation,
             rotation: quat_to_yaw(value.rotation),
             scale: value.scale.truncate(),
         }
@@ -39,28 +40,40 @@ impl From<Transform> for Transform2d {
 
 impl Transform2d {
     pub const IDENTITY: Self = Self {
-        translation: Vec2::ZERO,
+        translation: Vec3::ZERO,
         rotation: 0.,
         scale: Vec2::ONE,
+    };
+
+    pub const ABOVE: Self = Self {
+        translation: Vec3::new(0., 0., f32::EPSILON),
+        ..Self::IDENTITY
     };
 }
 
 #[derive(Reflect, Component, Default, Debug, Clone, Copy, PartialEq, Deref, DerefMut)]
 #[component(on_insert = validate_parent_has_component::<GlobalTransform>)]
 #[reflect(Component, Debug, Default, FromWorld, Clone, PartialEq)]
-pub struct GlobalTransform2d(pub Affine2);
+pub struct GlobalTransform2d {
+    #[deref]
+    pub affine: Affine2,
+    pub z: f32,
+}
+
 impl GlobalTransform2d {
-    pub const IDENTITY: Self = Self(Affine2::IDENTITY);
+    pub const IDENTITY: Self = Self {
+        affine: Affine2::IDENTITY,
+        z: 0.,
+    };
 }
 
 impl From<GlobalTransform> for GlobalTransform2d {
     fn from(value: GlobalTransform) -> Self {
         let (scale, rotation, translation) = value.to_scale_rotation_translation();
-        Self(Affine2::from_scale_angle_translation(
-            scale.truncate(),
-            quat_to_yaw(rotation),
-            translation.truncate(),
-        ))
+        Self {
+            affine: Affine2::from_scale_angle_translation(scale.truncate(), quat_to_yaw(rotation), translation.truncate()),
+            z: translation.z,
+        }
     }
 }
 
@@ -68,7 +81,7 @@ fn sync_to_local_3d(mut transforms: Query<(&mut Transform, &mut Transform2d)>) {
     transforms.par_iter_mut().for_each(|(dst, mut src)| {
         if src.is_changed() {
             let dst = dst.into_inner();
-            dst.translation = src.translation.extend(dst.translation.z);
+            dst.translation = src.translation;
             dst.rotation = Quat::from_axis_angle(Vec3::Z, src.rotation);
             dst.scale = src.scale.extend(dst.scale.z);
         } else if dst.is_changed() {
