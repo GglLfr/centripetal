@@ -1,7 +1,7 @@
 mod command;
 pub use command::*;
 
-use crate::{KnownAssets, prelude::*};
+use crate::prelude::*;
 
 type Channel<T> = (async_channel::Sender<T>, async_channel::Receiver<T>);
 
@@ -9,7 +9,6 @@ type Channel<T> = (async_channel::Sender<T>, async_channel::Receiver<T>);
 pub struct AsyncBridge {
     command_channel: Channel<CommandQueue>,
     asset_channel: Channel<(UntypedHandle, async_channel::Sender<Box<dyn Reflect>>)>,
-    asset_path_channel: Channel<((), async_channel::Sender<HashMap<AssetPath<'static>, UntypedAssetId>>)>,
     entity_channel: Channel<(u32, async_channel::Sender<SmallVec<[Entity; 1]>>)>,
 }
 
@@ -18,7 +17,6 @@ impl AsyncBridge {
         AsyncContext {
             command: self.command_channel.0.clone(),
             asset: AsyncMessager(self.asset_channel.0.clone()),
-            asset_path: AsyncMessager(self.asset_path_channel.0.clone()),
             entity: AsyncMessager(self.entity_channel.0.clone()),
         }
     }
@@ -29,7 +27,6 @@ impl Default for AsyncBridge {
         Self {
             command_channel: async_channel::unbounded(),
             asset_channel: async_channel::unbounded(),
-            asset_path_channel: async_channel::unbounded(),
             entity_channel: async_channel::unbounded(),
         }
     }
@@ -39,7 +36,6 @@ impl Default for AsyncBridge {
 pub struct AsyncContext {
     pub command: async_channel::Sender<CommandQueue>,
     pub asset: AsyncMessager<UntypedHandle, Box<dyn Reflect>>,
-    pub asset_path: AsyncMessager<(), HashMap<AssetPath<'static>, UntypedAssetId>>,
     pub entity: AsyncMessager<u32, SmallVec<[Entity; 1]>>,
 }
 
@@ -103,16 +99,6 @@ fn execute_async_assets(mut commands: Commands, bridge: Res<AsyncBridge>, regist
     Ok(())
 }
 
-fn execute_async_asset_paths(bridge: Res<AsyncBridge>, known_assets: Res<KnownAssets>) {
-    let mut count = 32u32;
-    while let Some(next_count) = count.checked_sub(1)
-        && let Ok(((), sender)) = bridge.asset_path_channel.1.try_recv()
-    {
-        count = next_count;
-        _ = sender.try_send(known_assets.path_to_id().clone());
-    }
-}
-
 fn execute_async_entities(entities: &Entities, bridge: Res<AsyncBridge>) {
     let mut count = 32u32;
     while let Some(next_count) = count.checked_sub(1)
@@ -126,13 +112,6 @@ fn execute_async_entities(entities: &Entities, bridge: Res<AsyncBridge>) {
 }
 
 pub fn plugin(app: &mut App) {
-    app.init_resource::<AsyncBridge>().add_systems(
-        Update,
-        (
-            execute_async_commands,
-            execute_async_assets,
-            execute_async_asset_paths,
-            execute_async_entities,
-        ),
-    );
+    app.init_resource::<AsyncBridge>()
+        .add_systems(PreUpdate, (execute_async_commands, execute_async_assets, execute_async_entities));
 }

@@ -67,7 +67,7 @@ impl SaveCapturer {
                     });
 
                     let data = SaveData {
-                        assets,
+                        asset_paths: assets,
                         resources: captured_resources,
                         entities,
                     };

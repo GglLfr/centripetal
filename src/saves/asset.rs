@@ -7,11 +7,12 @@ use crate::{
 #[derive(Reflect, Asset, Debug, Default)]
 #[reflect(Debug, Default, FromWorld)]
 pub struct SaveData {
-    pub(super) assets: BTreeMap<TypeId, BTreeMap<AssetIndex, AssetPath<'static>>>,
     #[reflect(ignore)]
-    pub(super) resources: Vec<Box<dyn Reflect>>,
+    pub asset_paths: BTreeMap<TypeId, BTreeMap<AssetIndex, AssetPath<'static>>>,
     #[reflect(ignore)]
-    pub(super) entities: BTreeMap<Entity, Vec<Box<dyn Reflect>>>,
+    pub resources: Vec<Box<dyn Reflect>>,
+    #[reflect(ignore)]
+    pub entities: BTreeMap<Entity, Vec<Box<dyn Reflect>>>,
 }
 
 #[derive(Debug, Clone)]
@@ -144,7 +145,7 @@ impl Serialize for SaveDataSerializer<'_> {
         let mut ser = serializer.serialize_struct("SaveData", 3)?;
         ser.serialize_field("assets", &AssetsSerializer {
             registry: self.registry,
-            assets: &self.data.assets,
+            assets: &self.data.asset_paths,
         })?;
         ser.serialize_field("resources", &ArchetypeSerializer {
             registry: self.registry,
@@ -313,7 +314,7 @@ impl<'de> de::Visitor<'de> for SaveDataDeserializer<'de> {
                 Some(unknown) => Err(de::Error::unknown_field(unknown, &["assets", "resources", "entities"]))?,
                 None => {
                     break Ok(SaveData {
-                        assets: assets.ok_or_else(|| de::Error::missing_field("assets"))?,
+                        asset_paths: assets.ok_or_else(|| de::Error::missing_field("assets"))?,
                         resources: resources.ok_or_else(|| de::Error::missing_field("resources"))?,
                         entities: entities.ok_or_else(|| de::Error::missing_field("entities"))?,
                     })

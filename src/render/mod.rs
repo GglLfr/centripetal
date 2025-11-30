@@ -6,7 +6,6 @@ pub mod painter;
 
 use crate::prelude::*;
 
-pub const PIXEL_SIZE: u32 = 4;
 pub const PIXELATED_LAYER: RenderLayers = RenderLayers::layer(0);
 pub const MAIN_LAYER: RenderLayers = RenderLayers::layer(1);
 
@@ -32,8 +31,12 @@ fn spawn_cameras(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
             clear_color: ClearColorConfig::Custom(Color::NONE),
             ..default()
         },
+        Projection::Orthographic(OrthographicProjection {
+            scale: 0.5,
+            ..OrthographicProjection::default_2d()
+        }),
         Hdr,
-        Msaa::Sample2,
+        Msaa::Off,
         PixelatedCamera,
         PIXELATED_LAYER,
     ));
@@ -53,8 +56,8 @@ fn update_canvas(
         && let Some(canvas_image) = images.get_mut_untracked(handle)
     {
         let size = Extent3d {
-            width: (window.physical_width() / PIXEL_SIZE).max(2),
-            height: (window.physical_height() / PIXEL_SIZE).max(2),
+            width: (window.physical_width() / 2).max(2),
+            height: (window.physical_height() / 2).max(2),
             depth_or_array_layers: 1,
         };
 
@@ -67,13 +70,14 @@ fn update_canvas(
     let trns = **main_camera;
     **pixelated_canvas = Transform {
         translation: trns.translation.with_z(0.),
-        scale: trns.scale * PIXEL_SIZE as f32,
+        scale: trns.scale * 2.,
         ..trns
     };
 }
 
 pub fn plugin(app: &mut App) {
     app.add_plugins((atlas::plugin, painter::plugin))
+        .add_input_context::<PixelatedCamera>()
         .add_systems(Startup, spawn_cameras)
         .add_systems(Update, update_canvas);
 }

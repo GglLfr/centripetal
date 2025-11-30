@@ -42,13 +42,13 @@ impl PainterContext<'_> {
             return
         };
 
-        let size = size.unwrap_or(region.size.as_vec2());
+        let size = size.unwrap_or(region.rect.size().as_vec2());
         let uvs = region.uv_corners();
 
         let bl = -size / 2. - *anchor * size;
         let tr = bl + size;
 
-        self.quads.request(self.painter, &region.texture, self.blend, self.layer, [[
+        self.quads.request(self.painter, &region.page.texture, self.blend, self.layer, [[
             Vertex::new(trns.transform_point2(bl), self.color, uvs[0]),
             Vertex::new(trns.transform_point2(vec2(tr.x, bl.y)), self.color, uvs[1]),
             Vertex::new(trns.transform_point2(tr), self.color, uvs[2]),

@@ -12,17 +12,17 @@ pub struct AtlasRegion {
 #[derive(Clone)]
 pub struct AtlasRegionLoader {
     requester: AtlasRequester,
-    image_loader: ImageLoader,
 }
 
 impl AssetLoader for AtlasRegionLoader {
     type Asset = AtlasRegion;
-    type Settings = ImageLoaderSettings;
+    type Settings = ();
     type Error = BevyError;
 
-    async fn load(&self, reader: &mut dyn Reader, settings: &Self::Settings, load_context: &mut LoadContext<'_>) -> Result<Self::Asset, Self::Error> {
-        let image = self.image_loader.load(reader, settings, load_context).await?;
-        let info = self.requester.request(image).await?;
+    async fn load(&self, _: &mut dyn Reader, _: &Self::Settings, load_context: &mut LoadContext<'_>) -> Result<Self::Asset, Self::Error> {
+        let path = load_context.asset_path().clone();
+        let image = load_context.loader().immediate().load(path).await?;
+        let info = self.requester.request(image.take()).await?;
         Ok(AtlasRegion { info })
     }
 
@@ -31,10 +31,9 @@ impl AssetLoader for AtlasRegionLoader {
     }
 }
 
-fn init_atlas_region_loader(server: Res<AssetServer>, device: Res<RenderDevice>, requesters: Res<AtlasRequesters>) {
+fn init_atlas_region_loader(server: Res<AssetServer>, requesters: Res<AtlasRequesters>) {
     server.register_loader(AtlasRegionLoader {
         requester: requesters.new_sender(),
-        image_loader: ImageLoader::new(CompressedImageFormats::from_features(device.features())),
     });
 }
 

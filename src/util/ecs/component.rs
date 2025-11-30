@@ -26,9 +26,7 @@ impl<T: Component + Reflect> FromType<T> for ReflectComponentPtr {
         Self(ReflectComponentPtrFns {
             into_owned_ptr: |value| value.try_downcast::<T>().map(|value| Box::into_raw(value).cast()),
             insert_from_ptr: |ptr, entity, hook_mode| {
-                let component = *unsafe { Box::from_raw(ptr.cast::<T>()) };
-                info!("Inserting {:?} to {}", &component as &dyn Reflect, entity.id());
-                entity.insert_with_relationship_hook_mode(component, hook_mode);
+                entity.insert_with_relationship_hook_mode(*unsafe { Box::from_raw(ptr.cast::<T>()) }, hook_mode);
             },
             drop_ptr: |ptr| drop(unsafe { Box::from_raw(ptr.cast::<T>()) }),
             drop_uninit_ptr: |ptr| drop(unsafe { Box::from_raw(ptr.cast::<MaybeUninit<T>>()) }),

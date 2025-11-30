@@ -1,7 +1,5 @@
-use bevy::sprite_render::AlphaMode2d;
-
 use crate::{
-    MapAssetIds, ReflectMapAssetIds,
+    GameState, MapAssetIds, ReflectMapAssetIds,
     math::Transform2d,
     prelude::*,
     render::{PIXELATED_LAYER, atlas::AtlasRegion},
@@ -190,6 +188,12 @@ impl Tilemap {
         self.dimension
     }
 
+    /// Only use this method if manually building a `Tilemap`, as this can easily break tile-to-map
+    /// relationship integrity really easily.
+    pub fn tile_mut(&mut self, pos: UVec2) -> Option<&mut Option<Entity>> {
+        self.tiles.get_mut(pos.y as usize * self.dimension.x as usize + pos.x as usize)
+    }
+
     pub fn clear(&mut self, commands: &mut Commands) {
         for tile in &mut self.tiles {
             if let Some(entity) = tile.take() {
@@ -274,7 +278,7 @@ pub struct TilemapChunk {
 
 fn update_tilemap_chunks(
     mut commands: Commands,
-    tilemaps: Query<(&Tilemap, &mut TilemapChunks), Changed<Tilemap>>,
+    tilemaps: Query<(Entity, &Tilemap, &mut TilemapChunks), Changed<Tilemap>>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<ColorMaterial>>,
     regions: Res<Assets<AtlasRegion>>,
@@ -286,7 +290,7 @@ fn update_tilemap_chunks(
 
     for (mesh_id, mesh, material_id, material, chunk_bundle) in ComputeTaskPool::get()
         .scope(|scope| {
-            for (tilemap, mut chunks) in tilemaps {
+            for (tilemap_entity, tilemap, mut chunks) in tilemaps {
                 if chunks
                     .reborrow()
                     .map_unchanged(|chunk| &mut chunk.last_dimension)
@@ -301,6 +305,7 @@ fn update_tilemap_chunks(
                     let chunk_entity = {
                         let e = commands
                             .spawn((
+                                ChildOf(tilemap_entity),
                                 TilemapChunk {
                                     size: tilemap.chunk_size_at(chunk_pos),
                                 },
@@ -325,7 +330,7 @@ fn update_tilemap_chunks(
 
                             let [bx, by] = ((pos % TILEMAP_CHUNK_SIZE).as_vec2() * TILE_PIXEL_SIZE).to_array();
                             let [tx, ty] = [bx + TILE_PIXEL_SIZE, by + TILE_PIXEL_SIZE];
-                            let (positions, uvs, indices): &mut (Vec<_>, Vec<_>, Vec<_>) = &mut for_image.entry(&region.texture).or_default();
+                            let (positions, uvs, indices): &mut (Vec<_>, Vec<_>, Vec<_>) = &mut for_image.entry(&region.page.texture).or_default();
 
                             let i = positions.len() as u16;
                             indices.extend([i, i + 1, i + 2, i + 2, i + 3, i]);
@@ -391,6 +396,8 @@ pub(super) fn plugin(app: &mut App) {
             update_tilemap_chunks,
             clear_tilemap_changed_chunks.in_set(TilemapSystems::ClearChangedChunks),
         )
-            .chain(),
+            .chain()
+            // TODO use computed state for `InGame`.
+            .run_if(in_state(GameState::InGame { paused: false })),
     );
 }

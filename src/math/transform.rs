@@ -1,4 +1,4 @@
-use crate::prelude::*;
+use crate::{prelude::*, util::ecs::ReflectComponentPtr};
 
 fn quat_to_yaw(q: Quat) -> f32 {
     let rx = q.mul_vec3(Vec3::X);
@@ -14,7 +14,7 @@ fn quat_to_yaw(q: Quat) -> f32 {
 
 #[derive(Reflect, Component, Debug, Clone, Copy, PartialEq)]
 #[require(Transform, GlobalTransform2d)]
-#[reflect(Component, Debug, Default, FromWorld, Clone, PartialEq)]
+#[reflect(Component, ComponentPtr, Debug, Default, FromWorld, Clone, PartialEq)]
 pub struct Transform2d {
     // The Z component isn't actually used, but it's useful for draw ordering.
     pub translation: Vec3,
@@ -53,7 +53,7 @@ impl Transform2d {
 
 #[derive(Reflect, Component, Default, Debug, Clone, Copy, PartialEq, Deref, DerefMut)]
 #[component(on_insert = validate_parent_has_component::<GlobalTransform>)]
-#[reflect(Component, Debug, Default, FromWorld, Clone, PartialEq)]
+#[reflect(Component, ComponentPtr, Debug, Default, FromWorld, Clone, PartialEq)]
 pub struct GlobalTransform2d {
     #[deref]
     pub affine: Affine2,

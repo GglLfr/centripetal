@@ -9,37 +9,40 @@ pub struct AtlasPages {
 
 pub struct AtlasPage {
     packer: SimpleAtlasAllocator,
-    texture: Handle<Image>,
-    layout: Handle<TextureAtlasLayout>,
+    info: PageInfo,
 }
 
 impl Debug for AtlasPage {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("AtlasPage")
-            .field("texture", &self.texture)
-            .field("layout", &self.layout)
-            .finish_non_exhaustive()
+        f.debug_struct("AtlasPage").field("texture", &self.info.texture).finish_non_exhaustive()
     }
 }
 
 #[derive(Reflect, Debug, Default, Clone)]
 #[reflect(Debug, Default, FromWorld, Clone)]
-pub struct AtlasInfo {
+pub struct PageInfo {
     pub texture: Handle<Image>,
-    pub layout: Handle<TextureAtlasLayout>,
-    pub layout_index: usize,
-    pub uvs: [Vec2; 2],
-    pub size: UVec2,
+    pub texture_size: UVec2,
+}
+
+#[derive(Reflect, Debug, Default, Clone)]
+#[reflect(Debug, Default, FromWorld, Clone)]
+pub struct AtlasInfo {
+    pub page: PageInfo,
+    pub rect: URect,
 }
 
 impl AtlasInfo {
-    pub fn uv_corners(&self) -> [Vec2; 4] {
+    pub fn uvs(&self) -> [Vec2; 2] {
         [
-            vec2(self.uvs[0].x, self.uvs[1].y),
-            vec2(self.uvs[1].x, self.uvs[1].y),
-            vec2(self.uvs[1].x, self.uvs[0].y),
-            vec2(self.uvs[0].x, self.uvs[0].y),
+            self.rect.min.as_vec2() / self.page.texture_size.as_vec2(),
+            self.rect.max.as_vec2() / self.page.texture_size.as_vec2(),
         ]
+    }
+
+    pub fn uv_corners(&self) -> [Vec2; 4] {
+        let [uv0, uv1] = self.uvs();
+        [vec2(uv0.x, uv1.y), vec2(uv1.x, uv1.y), vec2(uv1.x, uv0.y), vec2(uv0.x, uv0.y)]
     }
 }
 
@@ -82,7 +85,6 @@ fn handle_atlas_requests(
     requesters: Res<AtlasRequesters>,
     device: Res<RenderDevice>,
     mut images: ResMut<Assets<Image>>,
-    mut layouts: ResMut<Assets<TextureAtlasLayout>>,
 ) -> Result {
     let max_size = device.limits().max_texture_dimension_2d.min(8192);
     'request: while let Ok((image, mut payload_sender)) = requesters.receiver.try_recv() {
@@ -95,40 +97,26 @@ fn handle_atlas_requests(
             Err("Image must have existing Rgba8UnormSrgb data")?
         };
 
-        let mut try_pack =
-            |layouts: &mut Assets<TextureAtlasLayout>, page: &mut AtlasPage, data: Vec<u8>, payload_sender: async_channel::Sender<AtlasInfo>| {
-                if let Some(Box2D { min, max }) = page.packer.allocate(size2(size.x as i32 + 2, size.y as i32 + 2)) {
-                    let rect = URect {
-                        min: uvec2(min.x as u32 + 1, min.y as u32 + 1),
-                        max: uvec2(max.x as u32 - 1, max.y as u32 - 1),
-                    };
+        let mut try_pack = |page: &mut AtlasPage, data: Vec<u8>, payload_sender: async_channel::Sender<AtlasInfo>| {
+            if let Some(Box2D { min, max }) = page.packer.allocate(size2(size.x as i32 + 2, size.y as i32 + 2)) {
+                let rect = URect {
+                    min: uvec2(min.x as u32 + 1, min.y as u32 + 1),
+                    max: uvec2(max.x as u32 - 1, max.y as u32 - 1),
+                };
 
-                    let layout_index = layouts.get_mut(&page.layout).expect("Atlas page layout is removed").add_texture(rect);
-                    let texture = page.texture.clone();
-                    let layout = page.layout.clone();
-
-                    requests.0.push((page.texture.id(), data, rect));
-                    AsyncComputeTaskPool::get()
-                        .spawn(async move {
-                            _ = payload_sender
-                                .send(AtlasInfo {
-                                    texture,
-                                    layout,
-                                    layout_index,
-                                    uvs: [rect.min.as_vec2() / max_size as f32, rect.max.as_vec2() / max_size as f32],
-                                    size,
-                                })
-                                .await
-                        })
-                        .detach();
-                    Ok(())
-                } else {
-                    Err((data, payload_sender))
-                }
-            };
+                let page_info = page.info.clone();
+                requests.0.push((page.info.texture.id(), data, rect));
+                AsyncComputeTaskPool::get()
+                    .spawn(async move { _ = payload_sender.send(AtlasInfo { page: page_info, rect }).await })
+                    .detach();
+                Ok(())
+            } else {
+                Err((data, payload_sender))
+            }
+        };
 
         for page in &mut atlas.pages {
-            match try_pack(&mut layouts, page, data, payload_sender) {
+            match try_pack(page, data, payload_sender) {
                 Ok(()) => continue 'request,
                 Err((failed_data, failed_sender)) => {
                     data = failed_data;
@@ -139,21 +127,23 @@ fn handle_atlas_requests(
 
         let mut new_page = AtlasPage {
             packer: SimpleAtlasAllocator::new(size2(max_size as i32, max_size as i32)),
-            texture: images.add(Image::new_fill(
-                Extent3d {
-                    width: max_size,
-                    height: max_size,
-                    depth_or_array_layers: 1,
-                },
-                TextureDimension::D2,
-                &[0, 0, 0, 0],
-                TextureFormat::Rgba8UnormSrgb,
-                RenderAssetUsages::RENDER_WORLD,
-            )),
-            layout: layouts.add(TextureAtlasLayout { size, textures: Vec::new() }),
+            info: PageInfo {
+                texture: images.add(Image::new_fill(
+                    Extent3d {
+                        width: max_size,
+                        height: max_size,
+                        depth_or_array_layers: 1,
+                    },
+                    TextureDimension::D2,
+                    &[0, 0, 0, 0],
+                    TextureFormat::Rgba8UnormSrgb,
+                    RenderAssetUsages::RENDER_WORLD,
+                )),
+                texture_size: UVec2::splat(max_size),
+            },
         };
 
-        try_pack(&mut layouts, &mut new_page, data, payload_sender).expect("Atlas page should be big enough");
+        try_pack(&mut new_page, data, payload_sender).expect("Atlas page should be big enough");
         atlas.pages.push(new_page);
     }
 

@@ -1,16 +1,12 @@
-#[cfg(feature = "dev")]
-mod editor;
+mod asset;
 mod tilemap;
-#[cfg(feature = "dev")]
-pub use editor::*;
+mod tileset;
+pub use asset::*;
 pub use tilemap::*;
+pub use tileset::*;
 
 use crate::prelude::*;
 
 pub fn plugin(app: &mut App) {
-    app.add_plugins((
-        tilemap::plugin,
-        #[cfg(feature = "dev")]
-        editor::plugin,
-    ));
+    app.add_plugins((asset::plugin, tilemap::plugin, tileset::plugin));
 }

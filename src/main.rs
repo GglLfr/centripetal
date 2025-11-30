@@ -1,11 +1,11 @@
 mod asset;
+mod control;
 mod progress;
 
 pub use asset::*;
+pub use control::*;
 pub use progress::*;
 
-#[cfg(feature = "dev")]
-pub mod editor;
 pub mod entities;
 pub mod math;
 pub mod render;
@@ -32,18 +32,16 @@ pub mod prelude {
 
     pub use atomicow::CowArc;
     pub use avian2d::prelude::*;
-    #[cfg(feature = "dev")]
-    pub use bevy::ui_widgets;
     pub use bevy::{
         asset::{
             AssetIndex, AssetLoader, AssetPath, AsyncReadExt as _, LoadContext, LoadState, RecursiveDependencyLoadState, ReflectAsset,
-            RenderAssetUsages, UntypedAssetId,
+            RenderAssetUsages, UntypedAssetId, VisitAssetDependencies,
             io::{
                 AssetSourceBuilder, AssetSourceId, AssetWriterError, Reader,
                 file::{FileAssetReader, FileAssetWriter},
             },
             load_embedded_asset, ron,
-            uuid::Uuid,
+            uuid::{Uuid, uuid},
         },
         camera::{
             ImageRenderTarget, RenderTarget,
@@ -57,7 +55,7 @@ pub mod prelude {
         ecs::{
             change_detection::MaybeLocation,
             component::{ComponentId, Tick},
-            entity::{Entities, EntityHash, EntityHashMap, MapEntities},
+            entity::{Entities, EntityGeneration, EntityHash, EntityHashMap, EntityRow, MapEntities},
             entity_disabling::Disabled,
             error::{CommandWithEntity, ErrorContext, HandleError, error, warn},
             hierarchy::validate_parent_has_component,
@@ -74,7 +72,7 @@ pub mod prelude {
             },
             world::{CommandQueue, DeferredWorld, FilteredEntityRef, unsafe_world_cell::UnsafeWorldCell},
         },
-        image::{CompressedImageFormats, ImageLoader, ImageLoaderSettings},
+        image::ImageLoader,
         math::{Affine2, FloatOrd},
         mesh::{Indices, MeshVertexAttribute, VertexAttributeValues, VertexBufferLayout},
         platform::{
@@ -103,10 +101,15 @@ pub mod prelude {
         },
         shader::ShaderDefVal,
         sprite::Anchor,
-        sprite_render::SpritePipelineKey,
+        sprite_render::{AlphaMode2d, SpritePipelineKey},
         state::state::FreelyMutableState,
         tasks::{AsyncComputeTaskPool, ComputeTaskPool, ConditionalSendFuture, IoTaskPool, Task, futures_lite},
         window::PrimaryWindow,
+    };
+    pub use bevy_enhanced_input::{
+        action::events::Cancel,
+        condition::{press::Press, release::Release},
+        prelude::*,
     };
     pub use bevy_framepace::FramepacePlugin;
     pub use bitflags::{bitflags, bitflags_match};
@@ -149,11 +152,10 @@ pub enum GameState {
     #[default]
     AssetLoading,
     Menu,
+    Loading,
     InGame {
         paused: bool,
     },
-    #[cfg(feature = "dev")]
-    Editor,
 }
 
 pub fn main() -> AppExit {
@@ -182,14 +184,13 @@ pub fn main() -> AppExit {
             .join(log_name);
 
         error!("{backtrace}");
-        tinyfiledialogs::message_box_ok(
+        tfd::MessageBox::new(
             "Crash!",
             &format!(
                 "An unrecoverable error has occured in Centripetal. A crash log has been written at {} which contains the error message and backtrace below.\nPlease report this to https://github.com/GglLfr/centripetal\n\n{backtrace}",
-                log_file.display()
+                log_file.display(),
             ),
-            tinyfiledialogs::MessageBoxIcon::Error,
-        );
+        ).with_icon(tfd::MessageBoxIcon::Error).run_modal();
 
         #[cfg(not(feature = "dev"))]
         if let Err(e) = fs::File::create(log_file).and_then(|mut file| {
@@ -198,11 +199,12 @@ pub fn main() -> AppExit {
             file.write_all(backtrace.as_bytes())?;
             file.sync_all()
         }) {
-            tinyfiledialogs::message_box_ok(
+            tfd::MessageBox::new(
                 "Worse than crash!",
                 &format!("Couldn't write crash log file: {e}\n\nSure hope you can copy the crashlog text in some other way..."),
-                tinyfiledialogs::MessageBoxIcon::Error,
-            );
+            )
+            .with_icon(tfd::MessageBoxIcon::Error)
+            .run_modal();
         }
     }));
 
@@ -213,9 +215,8 @@ pub fn main() -> AppExit {
             DefaultPlugins
                 .set(ImagePlugin::default_nearest())
                 .add_before::<AssetPlugin>(asset::register_user_sources),
-            #[cfg(feature = "dev")]
-            ui_widgets::UiWidgetsPlugins,
             PhysicsPlugins::default().with_length_unit(PIXELS_PER_METER),
+            EnhancedInputPlugin,
             FramepacePlugin,
         ))
         .init_state::<GameState>()
@@ -223,15 +224,47 @@ pub fn main() -> AppExit {
             ProgressPlugin::default().trans(GameState::AssetLoading, GameState::Menu),
             asset::plugin,
             entities::plugin,
+            math::plugin,
             render::plugin,
             saves::plugin,
             util::plugin,
             world::plugin,
-            #[cfg(feature = "dev")]
-            editor::plugin,
         ))
-        .add_systems(OnExit(GameState::AssetLoading), |mut commands: Commands| {
-            commands.run_system_cached(editor::start);
-        })
+        .add_systems(
+            Update,
+            (|mut next_state: ResMut<NextState<GameState>>,
+              bridge: Res<util::async_bridge::AsyncBridge>,
+              server: Res<AssetServer>,
+              registry: Res<AppTypeRegistry>,
+              levels: Res<world::LevelCollectionRef>,
+              mut task: Local<Option<Result<Task<Result>, ()>>>| {
+                let task = task.get_or_insert_with(|| {
+                    let server = server.clone();
+                    let registry = registry.clone();
+                    let handle = server.load::<world::Level>(levels.level_path(uuid!("2f2d60a2-ac70-11f0-b346-717b7a2dc7bf")).unwrap());
+                    let ctx = bridge.ctx();
+
+                    Ok(IoTaskPool::get().spawn(async move {
+                        server.wait_for_asset(&handle).await?;
+                        let level = ctx.asset.send_typed::<world::Level>(handle.untyped()).await?;
+                        saves::apply_save(server, registry, ctx, level.data).await
+                    }))
+                });
+
+                if let Ok(task_state) = task
+                    && let Some(result) = bevy::tasks::futures::check_ready(task_state)
+                {
+                    *task = Err(());
+                    match result {
+                        Ok(()) => {
+                            info!("Done!");
+                            next_state.set(GameState::InGame { paused: false })
+                        }
+                        Err(e) => error!("{e}"),
+                    }
+                }
+            })
+            .run_if(in_state(GameState::Menu)),
+        )
         .run()
 }

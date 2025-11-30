@@ -4,6 +4,7 @@ use bevy::{
 };
 
 use crate::{
+    math::Transform2d,
     prelude::*,
     util::ecs::{ReflectComponentPtr, ReflectComponentPtrFns},
 };
@@ -150,8 +151,10 @@ impl PartialBundles {
 }
 
 impl FromWorld for PartialBundles {
-    fn from_world(#[expect(unused, reason = "No built-in partial bundles yet")] world: &mut World) -> Self {
-        let this = Self { info: default() };
+    fn from_world(world: &mut World) -> Self {
+        let mut this = Self { info: default() };
+        let regist = &mut world.components_registrator();
+        this.register::<(Transform, Transform2d)>(regist);
         this
     }
 }

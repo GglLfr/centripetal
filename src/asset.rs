@@ -54,9 +54,6 @@ define_collection! {
     }
 }
 
-/// Asset IDS in this collection may be (de)serialized across runs, since they originate from a
-/// defined collection. Be cautious when refactoring asset paths, e.g. moving files around to
-/// another directory, as this will invalidate save files that refer to those paths.
 #[derive(Resource, Debug, Default)]
 pub struct KnownAssets {
     id_to_path: HashMap<UntypedAssetId, AssetPath<'static>>,
