@@ -39,10 +39,10 @@ fn spawn_cameras(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
             clear_color: ClearColorConfig::Custom(Color::NONE),
             ..default()
         },
-        Projection::Orthographic(OrthographicProjection {
+        /*Projection::Orthographic(OrthographicProjection {
             scale: 0.5,
             ..OrthographicProjection::default_2d()
-        }),
+        }),*/
         Hdr,
         Msaa::Off,
         PixelatedCamera::default(),
@@ -70,8 +70,8 @@ fn update_canvas(
         && let Some(canvas_image) = images.get_mut_untracked(handle)
     {
         let size = Extent3d {
-            width: (window.physical_width() / 2).max(2),
-            height: (window.physical_height() / 2).max(2),
+            width: (window.physical_width() / 4).max(2),
+            height: (window.physical_height() / 4).max(2),
             depth_or_array_layers: 1,
         };
 
@@ -84,7 +84,7 @@ fn update_canvas(
     let trns = **main_camera;
     **pixelated_canvas = Transform {
         translation: trns.translation.with_z(0.),
-        scale: trns.scale * 2.,
+        scale: trns.scale * 4.,
         ..trns
     };
 }
