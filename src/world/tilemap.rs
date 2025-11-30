@@ -2,7 +2,7 @@ use crate::{
     GameState, MapAssetIds, ReflectMapAssetIds,
     math::Transform2d,
     prelude::*,
-    render::{PIXELATED_LAYER, atlas::AtlasRegion},
+    render::{PIXELATED_LAYER, PixelatedCamera, atlas::AtlasRegion},
     saves::{ReflectSave, Save},
     util::ecs::ReflectComponentPtr,
 };
@@ -92,7 +92,7 @@ fn on_tile_replace(
 }
 
 #[derive(Reflect, Save, Component, MapEntities, Debug, Clone)]
-#[require(TilemapChunks, Transform2d, Visibility)]
+#[require(TilemapChunks, TilemapParallax, Transform2d, Visibility)]
 #[component(on_despawn = on_tilemap_despawn)]
 #[version(0 = Self)]
 #[reflect(Save, Component, ComponentPtr, MapEntities, Debug, Clone)]
@@ -363,7 +363,7 @@ fn update_tilemap_chunks(
                                     },
                                     (
                                         ChildOf(chunk_entity),
-                                        Aabb::from_min_max(Vec3::ZERO, Vec2::splat(TILEMAP_CHUNK_SIZE as f32).extend(0.)),
+                                        Aabb::from_min_max(Vec3::ZERO, Vec2::splat(TILEMAP_CHUNK_SIZE as f32 * TILE_PIXEL_SIZE as f32).extend(0.)),
                                         Mesh2d(mesh_handle),
                                         MeshMaterial2d(material_handle),
                                         PIXELATED_LAYER,
@@ -384,6 +384,40 @@ fn update_tilemap_chunks(
     }
 }
 
+#[derive(Reflect, Save, Component, Debug, Clone, Copy, Serialize, Deserialize)]
+#[require(Transform2d)]
+#[version(0 = Self)]
+#[reflect(Save, Component, ComponentPtr, Debug, Default, FromWorld, Clone)]
+pub struct TilemapParallax {
+    pub factor: Vec2,
+    pub scale: bool,
+}
+
+impl Default for TilemapParallax {
+    fn default() -> Self {
+        Self {
+            factor: Vec2::ZERO,
+            scale: false,
+        }
+    }
+}
+
+fn update_tilemap_parallax(
+    tilemaps: Query<(&mut Transform2d, &Tilemap, &TilemapParallax), Without<PixelatedCamera>>,
+    camera: Single<&PixelatedCamera>,
+) {
+    let camera_pos = camera.pos;
+    for (mut trns, tilemap, &parallax) in tilemaps {
+        let center = tilemap.dimension.as_vec2() / 2.;
+        let dst = camera_pos - center;
+        trns.set_if_neq(Transform2d {
+            translation: (dst * parallax.factor).round().extend(trns.translation.z),
+            rotation: 0.,
+            scale: if parallax.scale { Vec2::ONE - parallax.factor } else { Vec2::ONE },
+        });
+    }
+}
+
 #[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum TilemapSystems {
     ClearChangedChunks,
@@ -393,11 +427,14 @@ pub(super) fn plugin(app: &mut App) {
     app.add_systems(
         PostUpdate,
         (
-            update_tilemap_chunks,
-            clear_tilemap_changed_chunks.in_set(TilemapSystems::ClearChangedChunks),
-        )
-            .chain()
-            // TODO use computed state for `InGame`.
-            .run_if(in_state(GameState::InGame { paused: false })),
+            (
+                update_tilemap_chunks,
+                clear_tilemap_changed_chunks.in_set(TilemapSystems::ClearChangedChunks),
+            )
+                .chain()
+                // TODO use computed state for `InGame`.
+                .run_if(in_state(GameState::InGame { paused: false })),
+            update_tilemap_parallax.before(TransformSystems::Propagate),
+        ),
     );
 }

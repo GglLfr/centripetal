@@ -4,7 +4,7 @@ use crate::{
     prelude::*,
     saves::SaveData,
     util::IteratorExt,
-    world::{Tile, Tilemap, TilesetImage},
+    world::{Tile, Tilemap, TilemapParallax, TilesetImage},
 };
 
 #[derive(Reflect, Resource, Debug, Clone, Deref)]
@@ -14,6 +14,7 @@ pub struct LevelCollectionRef(Arc<LevelCollection>);
 #[derive(Reflect, Debug)]
 #[reflect(Debug)]
 pub struct LevelCollection {
+    layers: HashMap<u32, Layer>,
     tilesets: HashMap<u32, Tileset>,
     level_paths: HashMap<Uuid, AssetPath<'static>>,
 }
@@ -37,6 +38,13 @@ impl VisitAssetDependencies for LevelCollection {
 #[serde(rename_all = "lowercase")]
 pub enum TileProperty {
     Emissive,
+}
+
+#[derive(Reflect, Debug)]
+#[reflect(Debug)]
+pub struct Layer {
+    parallax: Vec2,
+    parallax_scale: bool,
 }
 
 #[derive(Reflect, Debug)]
@@ -70,7 +78,16 @@ impl AssetLoader for LevelCollectionLoader {
 
         #[derive(Deserialize)]
         struct DefsRepr {
+            layers: Vec<LayerRepr>,
             tilesets: Vec<TilesetRepr>,
+        }
+
+        #[derive(Deserialize)]
+        struct LayerRepr {
+            uid: u32,
+            parallaxFactorX: f32,
+            parallaxFactorY: f32,
+            parallaxScaling: bool,
         }
 
         #[derive(Deserialize)]
@@ -101,6 +118,17 @@ impl AssetLoader for LevelCollectionLoader {
 
         let repr = serde_json::from_slice::<Repr>(&bytes)?;
         Ok(LevelCollection {
+            layers: repr
+                .defs
+                .layers
+                .into_iter()
+                .map(|layer| {
+                    (layer.uid, Layer {
+                        parallax: vec2(layer.parallaxFactorX, layer.parallaxFactorY),
+                        parallax_scale: layer.parallaxScaling,
+                    })
+                })
+                .collect(),
             tilesets: repr.defs.tilesets.into_iter().try_map_into_default(|tileset| {
                 let grid_size = tileset.tileGridSize;
                 let tileset_path = load_context.asset_path().resolve_embed(&tileset.relPath)?;
@@ -161,8 +189,7 @@ impl AssetLoader for LevelLoader {
             __cWid: u32,
             __cHei: u32,
             __gridSize: u32,
-            __pxTotalOffsetX: u32,
-            __pxTotalOffsetY: u32,
+            layerDefUid: u32,
             #[serde(flatten)]
             data: LayerDataRepr,
         }
@@ -198,7 +225,13 @@ impl AssetLoader for LevelLoader {
             None => Err("Too many entities"),
         };
 
-        for (i, layer) in repr.layerInstances.into_iter().enumerate() {
+        for (i, layer) in repr.layerInstances.into_iter().rev().enumerate() {
+            let layer_def = self
+                .collection
+                .layers
+                .get(&layer.layerDefUid)
+                .ok_or_else(|| format!("Missing layer definition `{}`", layer.layerDefUid))?;
+
             match layer.data {
                 LayerDataRepr::Tiles { __tilesetDefUid, gridTiles } => {
                     let tileset = self
@@ -247,8 +280,12 @@ impl AssetLoader for LevelLoader {
 
                     data.entities.insert(tilemap_entity, vec![
                         Box::new(tilemap),
+                        Box::new(TilemapParallax {
+                            factor: layer_def.parallax,
+                            scale: layer_def.parallax_scale,
+                        }),
                         Box::new(Transform2d {
-                            translation: vec3(layer.__pxTotalOffsetX as f32, layer.__pxTotalOffsetY as f32, i as f32 * 0.1),
+                            translation: vec3(0., 0., i as f32 * 0.1),
                             ..default()
                         }),
                     ]);
