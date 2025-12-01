@@ -27,6 +27,7 @@ pub mod prelude {
         ops::{Deref, DerefMut, Range},
         path::{Path, PathBuf},
         ptr::NonNull,
+        str::FromStr,
         time::Duration,
     };
 
@@ -53,9 +54,10 @@ pub mod prelude {
             tonemapping::{DebandDither, Tonemapping, TonemappingLuts, get_lut_bind_group_layout_entries, get_lut_bindings},
         },
         ecs::{
+            bundle::InsertMode,
             change_detection::MaybeLocation,
             component::{ComponentId, Tick},
-            entity::{Entities, EntityGeneration, EntityHash, EntityHashMap, EntityRow, MapEntities},
+            entity::{Entities, EntityHash, EntityHashMap, MapEntities},
             entity_disabling::Disabled,
             error::{CommandWithEntity, ErrorContext, HandleError, error, warn},
             hierarchy::validate_parent_has_component,
@@ -103,7 +105,7 @@ pub mod prelude {
         sprite::Anchor,
         sprite_render::{AlphaMode2d, SpritePipelineKey},
         state::state::FreelyMutableState,
-        tasks::{AsyncComputeTaskPool, ComputeTaskPool, ConditionalSendFuture, IoTaskPool, Task, futures_lite},
+        tasks::{AsyncComputeTaskPool, ComputeTaskPool, ConditionalSendFuture, IoTaskPool, Task, futures::check_ready, futures_lite},
         window::PrimaryWindow,
     };
     pub use bevy_enhanced_input::{
@@ -152,7 +154,7 @@ pub enum GameState {
     #[default]
     AssetLoading,
     Menu,
-    Loading,
+    LevelLoading,
     InGame {
         paused: bool,
     },
@@ -221,7 +223,9 @@ pub fn main() -> AppExit {
         ))
         .init_state::<GameState>()
         .add_plugins((
-            ProgressPlugin::default().trans(GameState::AssetLoading, GameState::Menu),
+            ProgressPlugin::default()
+                .trans(GameState::AssetLoading, GameState::Menu)
+                .trans(GameState::LevelLoading, GameState::InGame { paused: false }),
             asset::plugin,
             entities::plugin,
             math::plugin,
@@ -230,41 +234,8 @@ pub fn main() -> AppExit {
             util::plugin,
             world::plugin,
         ))
-        .add_systems(
-            Update,
-            (|mut next_state: ResMut<NextState<GameState>>,
-              bridge: Res<util::async_bridge::AsyncBridge>,
-              server: Res<AssetServer>,
-              registry: Res<AppTypeRegistry>,
-              levels: Res<world::LevelCollectionRef>,
-              mut task: Local<Option<Result<Task<Result>, ()>>>| {
-                let task = task.get_or_insert_with(|| {
-                    let server = server.clone();
-                    let registry = registry.clone();
-                    let handle = server.load::<world::Level>(levels.level_path(uuid!("2f2d60a2-ac70-11f0-b346-717b7a2dc7bf")).unwrap());
-                    let ctx = bridge.ctx();
-
-                    Ok(IoTaskPool::get().spawn(async move {
-                        server.wait_for_asset(&handle).await?;
-                        let level = ctx.asset.send_typed::<world::Level>(handle.untyped()).await?;
-                        saves::apply_save(server, registry, ctx, level.data).await
-                    }))
-                });
-
-                if let Ok(task_state) = task
-                    && let Some(result) = bevy::tasks::futures::check_ready(task_state)
-                {
-                    *task = Err(());
-                    match result {
-                        Ok(()) => {
-                            info!("Done!");
-                            next_state.set(GameState::InGame { paused: false })
-                        }
-                        Err(e) => error!("{e}"),
-                    }
-                }
-            })
-            .run_if(in_state(GameState::Menu)),
-        )
+        .add_systems(OnExit(GameState::AssetLoading), |mut load_level: ResMut<world::LoadLevel>| {
+            load_level.load("eastern_beacon");
+        })
         .run()
 }

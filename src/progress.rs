@@ -77,13 +77,17 @@ pub struct Progress {
 impl Progress {
     pub const INVALID: Self = Progress { current: 0, total: 0 };
 
+    pub fn new(current: u32, total: u32) -> Self {
+        Self { current, total }
+    }
+
     #[inline(always)]
-    const fn from_bits(bits: u64) -> Self {
+    pub const fn from_bits(bits: u64) -> Self {
         unsafe { mem::transmute(bits) }
     }
 
     #[inline(always)]
-    const fn to_bits(self) -> u64 {
+    pub const fn to_bits(self) -> u64 {
         unsafe { mem::transmute(self) }
     }
 }

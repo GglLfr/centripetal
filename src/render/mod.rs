@@ -39,10 +39,6 @@ fn spawn_cameras(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
             clear_color: ClearColorConfig::Custom(Color::NONE),
             ..default()
         },
-        /*Projection::Orthographic(OrthographicProjection {
-            scale: 0.5,
-            ..OrthographicProjection::default_2d()
-        }),*/
         Hdr,
         Msaa::Off,
         PixelatedCamera::default(),

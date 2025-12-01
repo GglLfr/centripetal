@@ -42,6 +42,13 @@ impl AsyncCommands<'_> {
         Ok(self.entity(entity))
     }
 
+    pub async fn spawn(&mut self, bundle: impl Bundle) -> Result<AsyncEntityCommands<'_>> {
+        let entity = self.ctx.entity.send(1).await?[0];
+        let mut entity_commands = self.entity(entity);
+        entity_commands.insert(bundle);
+        Ok(entity_commands)
+    }
+
     pub async fn spawn_many(&self, count: u32) -> Result<SmallVec<[Entity; 1]>> {
         self.ctx.entity.send(count).await
     }
@@ -99,13 +106,16 @@ impl AsyncEntityCommands<'_> {
         self.queue_handled(entity_command::despawn(), warn);
     }
 
+    pub fn insert(&mut self, bundle: impl Bundle) -> &mut Self {
+        self.queue(entity_command::insert(bundle, InsertMode::Replace))
+    }
+
     pub fn insert_raw_bundle(
         &mut self,
         components_iter: impl IntoIterator<Item = Box<dyn Reflect>> + 'static + Send + Sync,
         hook_mode: RelationshipHookMode,
     ) -> &mut Self {
-        self.queue(RawBundle::insert(components_iter, hook_mode));
-        self
+        self.queue(RawBundle::insert(components_iter, hook_mode))
     }
 }
 
