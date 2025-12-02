@@ -25,7 +25,7 @@ impl LoadLevel {
     }
 }
 
-#[derive(Component, Debug, Deref, DerefMut)]
+#[derive(Debug)]
 pub struct EntityFields {
     pub map: HashMap<String, EntityField>,
 }
@@ -42,10 +42,23 @@ pub enum EntityField {
     Entity { entity: Uuid, layer: Uuid, level: Uuid, world: Uuid },
 }
 
-#[derive(Message, Debug, Clone)]
+#[derive(Message, Debug)]
 pub struct EntityCreate {
-    pub entity: Entity,
     pub identifier: String,
+    pub entity: Entity,
+    pub fields: EntityFields,
+    pub bounds: Rect,
+    pub tile_pos: UVec2,
+}
+
+pub trait MessageReaderEntityExt {
+    fn created(&mut self, id: &str) -> impl Iterator<Item = &EntityCreate>;
+}
+
+impl<'w, 's> MessageReaderEntityExt for MessageReader<'w, 's, EntityCreate> {
+    fn created(&mut self, id: &str) -> impl Iterator<Item = &EntityCreate> {
+        self.read().filter(move |msg| msg.identifier == id)
+    }
 }
 
 #[derive(Resource)]
@@ -152,6 +165,11 @@ fn load_level_task(
     #[expect(non_snake_case, reason = "LDtk naming scheme")]
     struct EntityInstanceRepr {
         __identifier: String,
+        __grid: [u32; 2],
+        px: [u32; 2],
+        __pivot: [f32; 2],
+        width: u32,
+        height: u32,
         fieldInstances: Vec<FieldInstanceRepr>,
     }
 
@@ -196,36 +214,44 @@ fn load_level_task(
                 LayerDataRepr::Entities { entityInstances } => {
                     let entities = commands.spawn_many(entityInstances.len() as u32).await?;
                     for (instance, entity) in entityInstances.into_iter().zip(entities) {
+                        let size = uvec2(instance.width, instance.height).as_vec2();
+                        let bounds_start = uvec2(instance.px[0], layer.__cHei * layer.__gridSize - instance.px[1]).as_vec2()
+                            - vec2(instance.__pivot[0], 1. - instance.__pivot[1]) * size;
+
                         output.entity_creation.push(EntityCreate {
                             entity,
                             identifier: instance.__identifier,
-                        });
+                            fields: EntityFields {
+                                map: instance.fieldInstances.into_iter().try_flat_map_into_default(|field| {
+                                    Ok::<_, BevyError>(match field.__type.as_str() {
+                                        "Int" => field.__value.as_i64().map(EntityField::Int),
+                                        "Float" => field.__value.as_f64().map(EntityField::Float),
+                                        "String" => field.__value.as_str().map(|s| EntityField::String(s.into())),
+                                        "FilePath" => field.__value.as_str().map(|s| EntityField::Path(s.into())),
+                                        // TODO GridPoint, Tileset, Entity
+                                        other => {
+                                            if let Some(enum_name) = other.strip_prefix("LocalEnum.") {
+                                                let &enum_ctor = collection
+                                                    .enums
+                                                    .by_name
+                                                    .get(enum_name)
+                                                    .ok_or_else(|| format!("Enum `{enum_name}` doesn't exist"))?;
 
-                        commands.entity(entity).insert(EntityFields {
-                            map: instance.fieldInstances.into_iter().try_flat_map_into_default(|field| {
-                                Ok::<_, BevyError>(match field.__type.as_str() {
-                                    "Int" => field.__value.as_i64().map(EntityField::Int),
-                                    "Float" => field.__value.as_f64().map(EntityField::Float),
-                                    "String" => field.__value.as_str().map(|s| EntityField::String(s.into())),
-                                    "FilePath" => field.__value.as_str().map(|s| EntityField::Path(s.into())),
-                                    // TODO GridPoint, Tileset, Entity
-                                    other => {
-                                        if let Some(enum_name) = other.strip_prefix("LocalEnum.") {
-                                            let &enum_ctor = collection
-                                                .enums
-                                                .by_name
-                                                .get(enum_name)
-                                                .ok_or_else(|| format!("Enum `{enum_name}` doesn't exist"))?;
-
-                                            let enum_variant = field.__value.as_str().ok_or("Expected string")?;
-                                            Some(enum_ctor(enum_variant).map(EntityField::Enum)?)
-                                        } else {
-                                            Err(format!("Unknown field type `{other}`"))?
+                                                let enum_variant = field.__value.as_str().ok_or("Expected string")?;
+                                                Some(enum_ctor(enum_variant).map(EntityField::Enum)?)
+                                            } else {
+                                                Err(format!("Unknown field type `{other}`"))?
+                                            }
                                         }
-                                    }
-                                })
-                                .map(|opt| opt.map(|f| (field.__identifier, f)))
-                            })?,
+                                    })
+                                    .map(|opt| opt.map(|f| (field.__identifier, f)))
+                                })?,
+                            },
+                            bounds: Rect {
+                                min: bounds_start,
+                                max: bounds_start + size,
+                            },
+                            tile_pos: uvec2(instance.__grid[0], layer.__cHei - instance.__grid[1]),
                         });
                     }
                 }
@@ -283,13 +309,9 @@ pub(super) fn plugin(app: &mut App) {
             Update,
             (LevelSystems::Load, LevelSystems::SpawnEntities)
                 .chain()
+                .before(ProgressSystems::UpdateTransitions)
                 .run_if(in_state(GameState::LevelLoading)),
         )
-        .add_systems(
-            PreUpdate,
-            load_level_transition
-                .run_if(not(in_state(GameState::LevelLoading)))
-                .before(ProgressSystems::UpdateTransitions),
-        )
+        .add_systems(PreUpdate, load_level_transition.run_if(not(in_state(GameState::LevelLoading))))
         .add_systems(Update, load_level.in_set(LevelSystems::Load));
 }

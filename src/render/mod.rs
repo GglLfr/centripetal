@@ -4,18 +4,25 @@ pub use attribute::*;
 pub mod atlas;
 pub mod painter;
 
-use crate::{Movement, prelude::*};
+use crate::{Movement, math::Transform2d, prelude::*};
 
-pub const PIXELATED_LAYER: RenderLayers = RenderLayers::layer(0);
-pub const MAIN_LAYER: RenderLayers = RenderLayers::layer(1);
+pub const MAIN_LAYER: RenderLayers = RenderLayers::layer(0);
+pub const OUTPUT_LAYER: RenderLayers = RenderLayers::layer(1);
+
+#[derive(Component, Reflect, Debug, Default, Clone, Copy)]
+#[require(Transform2d)]
+#[reflect(Debug, Default, FromWorld, Clone)]
+pub struct CameraTarget {
+    pub priority: i32,
+}
 
 #[derive(Component, Reflect, Debug, Default, Clone, Copy)]
 #[reflect(Component, Debug, Default, FromWorld, Clone)]
-pub struct PixelatedCamera {
+pub struct MainCamera {
     pub pos: Vec2,
 }
 
-impl PixelatedCamera {
+impl MainCamera {
     pub fn snapped_pos(self) -> Vec2 {
         self.pos.round()
     }
@@ -23,7 +30,7 @@ impl PixelatedCamera {
 
 #[derive(Component, Reflect, Debug, Default, Clone, Copy)]
 #[reflect(Component, Debug, Default, FromWorld, Clone)]
-pub struct MainCamera;
+pub struct OutputCamera;
 
 #[derive(Component, Reflect, Debug, Default, Clone, Copy)]
 #[reflect(Component, Debug, Default, FromWorld, Clone)]
@@ -41,16 +48,16 @@ fn spawn_cameras(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
         },
         Hdr,
         Msaa::Off,
-        PixelatedCamera::default(),
-        PIXELATED_LAYER,
-        actions!(PixelatedCamera[(Action::<Movement>::new(), Bindings::spawn((Cardinal::wasd_keys(), Axial::left_stick())),)]),
+        MainCamera::default(),
+        MAIN_LAYER,
+        actions!(MainCamera[(Action::<Movement>::new(), Bindings::spawn((Cardinal::wasd_keys(), Axial::left_stick())),)]),
     ));
 
-    commands.spawn((Camera2d, Hdr, IsDefaultUiCamera, MainCamera, MAIN_LAYER));
-    commands.spawn((Sprite::from_image(image), PixelatedCanvas, MAIN_LAYER));
+    commands.spawn((Camera2d, Hdr, IsDefaultUiCamera, OutputCamera, OUTPUT_LAYER));
+    commands.spawn((Sprite::from_image(image), PixelatedCanvas, OUTPUT_LAYER));
 }
 
-fn on_camera_move(movement: On<Fire<Movement>>, time: Res<Time>, mut trns: Query<&mut PixelatedCamera>) {
+fn on_camera_move(movement: On<Fire<Movement>>, time: Res<Time>, mut trns: Query<&mut MainCamera>) {
     let Ok(mut camera) = trns.get_mut(movement.context) else { return };
     camera.pos += time.delta_secs() * 90. * movement.value;
 }
@@ -58,8 +65,8 @@ fn on_camera_move(movement: On<Fire<Movement>>, time: Res<Time>, mut trns: Query
 fn update_canvas(
     window: Single<&Window, With<PrimaryWindow>>,
     mut images: ResMut<Assets<Image>>,
-    pixelated_camera: Single<&Camera, With<PixelatedCamera>>,
-    main_camera: Single<&Transform, (With<MainCamera>, Without<PixelatedCanvas>)>,
+    pixelated_camera: Single<&Camera, With<MainCamera>>,
+    main_camera: Single<&Transform, (With<OutputCamera>, Without<PixelatedCanvas>)>,
     mut pixelated_canvas: Single<&mut Transform, With<PixelatedCanvas>>,
 ) {
     if let RenderTarget::Image(ImageRenderTarget { handle, .. }) = &pixelated_camera.target
@@ -85,16 +92,38 @@ fn update_canvas(
     };
 }
 
-fn snap_camera(trns: Single<(&PixelatedCamera, &mut Transform)>) {
-    let (&camera, mut trns) = trns.into_inner();
+fn move_camera_to_target(
+    targets: Query<(Entity, &CameraTarget)>,
+    transforms: Query<(&Transform2d, Option<&ChildOf>)>,
+    mut camera_trns: Single<&mut MainCamera>,
+) {
+    let Some(target) = targets.into_iter().max_by_key(|(.., target)| target.priority).map(|(entity, ..)| entity) else { return };
+    let Ok((trns, mut child_of)) = transforms.get(target) else { return };
+
+    let mut trns = *trns;
+    while let Some(is_child_of) = child_of
+        && let Ok((parent_trns, parent_child_of)) = transforms.get(is_child_of.parent())
+    {
+        trns = *parent_trns * trns;
+        child_of = parent_child_of;
+    }
+
+    camera_trns.pos = trns.translation.truncate();
+}
+
+fn snap_camera(camera_trns: Single<(&MainCamera, &mut Transform)>) {
+    let (&camera, mut trns) = camera_trns.into_inner();
     trns.translation = camera.snapped_pos().extend(trns.translation.z);
 }
 
 pub fn plugin(app: &mut App) {
     app.add_plugins((atlas::plugin, painter::plugin))
-        .add_input_context::<PixelatedCamera>()
+        .add_input_context::<MainCamera>()
         .add_systems(Startup, spawn_cameras)
         .add_systems(Update, update_canvas)
-        .add_systems(PostUpdate, snap_camera.before(TransformSystems::Propagate))
+        .add_systems(
+            PostUpdate,
+            (move_camera_to_target, snap_camera).chain().before(TransformSystems::Propagate),
+        )
         .add_observer(on_camera_move);
 }

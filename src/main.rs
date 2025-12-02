@@ -24,7 +24,7 @@ pub mod prelude {
         io,
         marker::PhantomData,
         mem::{self, MaybeUninit, offset_of},
-        ops::{Deref, DerefMut, Range},
+        ops::{Deref, DerefMut, Mul, Range},
         path::{Path, PathBuf},
         ptr::NonNull,
         str::FromStr,

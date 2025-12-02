@@ -1,14 +1,28 @@
 use crate::{prelude::*, util::ecs::ReflectComponentPtr};
 
-fn quat_to_yaw(q: Quat) -> f32 {
+fn quat_to_yaw(q: Quat) -> Rot2 {
     let rx = q.mul_vec3(Vec3::X);
-    let proj_len2 = rx.x * rx.x + rx.y * rx.y;
+    let len2 = rx.x * rx.x + rx.y * rx.y;
 
-    if proj_len2 > 1e-8 {
-        rx.y.atan2(rx.x)
+    if len2 > 1e-8 {
+        let len = len2.sqrt().recip();
+        Rot2 {
+            cos: rx.x * len,
+            sin: rx.y * len,
+        }
     } else {
         let ry = q.mul_vec3(Vec3::Y);
-        if (ry.x * ry.x + ry.y * ry.y) > 1e-8 { ry.y.atan2(ry.x) } else { 0. }
+        let len2 = ry.x * ry.x + ry.y * ry.y;
+
+        if len2 > 1e-8 {
+            let len = len2.sqrt().recip();
+            Rot2 {
+                cos: ry.x * len,
+                sin: ry.y * len,
+            }
+        } else {
+            Rot2::IDENTITY
+        }
     }
 }
 
@@ -18,13 +32,26 @@ fn quat_to_yaw(q: Quat) -> f32 {
 pub struct Transform2d {
     // The Z component isn't actually used, but it's useful for draw ordering.
     pub translation: Vec3,
-    pub rotation: f32,
+    pub rotation: Rot2,
     pub scale: Vec2,
 }
 
 impl Default for Transform2d {
     fn default() -> Self {
         Self::IDENTITY
+    }
+}
+
+impl Mul for Transform2d {
+    type Output = Self;
+
+    fn mul(self, rhs: Self) -> Self::Output {
+        let z = self.translation.z + rhs.translation.z;
+        Self {
+            translation: (self.translation.truncate() + self.rotation * self.scale * rhs.translation.truncate()).extend(z),
+            rotation: self.rotation * rhs.rotation,
+            scale: self.scale * rhs.scale,
+        }
     }
 }
 
@@ -41,7 +68,7 @@ impl From<Transform> for Transform2d {
 impl Transform2d {
     pub const IDENTITY: Self = Self {
         translation: Vec3::ZERO,
-        rotation: 0.,
+        rotation: Rot2::IDENTITY,
         scale: Vec2::ONE,
     };
 
@@ -49,6 +76,24 @@ impl Transform2d {
         translation: Vec3::new(0., 0., f32::EPSILON),
         ..Self::IDENTITY
     };
+
+    pub const fn from_xy(x: f32, y: f32) -> Self {
+        Self::from_xyz(x, y, 0.)
+    }
+
+    pub const fn from_xyz(x: f32, y: f32, z: f32) -> Self {
+        Self {
+            translation: vec3(x, y, z),
+            ..Self::IDENTITY
+        }
+    }
+
+    pub const fn from_translation(translation: Vec3) -> Self {
+        Self {
+            translation,
+            ..Self::IDENTITY
+        }
+    }
 }
 
 #[derive(Reflect, Component, Default, Debug, Clone, Copy, PartialEq, Deref, DerefMut)]
@@ -70,8 +115,18 @@ impl GlobalTransform2d {
 impl From<GlobalTransform> for GlobalTransform2d {
     fn from(value: GlobalTransform) -> Self {
         let (scale, rotation, translation) = value.to_scale_rotation_translation();
+        Self::from_scale_rotation_translation(scale.truncate(), quat_to_yaw(rotation), translation)
+    }
+}
+
+impl GlobalTransform2d {
+    pub fn from_scale_rotation_translation(scale: Vec2, Rot2 { cos, sin }: Rot2, translation: Vec3) -> Self {
+        let rotation = Mat2::from_cols(vec2(cos, sin), vec2(-sin, cos));
         Self {
-            affine: Affine2::from_scale_angle_translation(scale.truncate(), quat_to_yaw(rotation), translation.truncate()),
+            affine: Affine2 {
+                matrix2: Mat2::from_cols(rotation.x_axis * scale.x, rotation.y_axis * scale.y),
+                translation: translation.truncate(),
+            },
             z: translation.z,
         }
     }
@@ -82,7 +137,7 @@ fn sync_to_local_3d(mut transforms: Query<(&mut Transform, &mut Transform2d)>) {
         if src.is_changed() {
             let dst = dst.into_inner();
             dst.translation = src.translation;
-            dst.rotation = Quat::from_axis_angle(Vec3::Z, src.rotation);
+            dst.rotation = Quat::from_axis_angle(Vec3::Z, src.rotation.as_radians());
             dst.scale = src.scale.extend(dst.scale.z);
         } else if dst.is_changed() {
             *src = (*dst).into();

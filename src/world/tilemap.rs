@@ -2,7 +2,7 @@ use crate::{
     GameState, MapAssetIds, ReflectMapAssetIds,
     math::Transform2d,
     prelude::*,
-    render::{PIXELATED_LAYER, PixelatedCamera, atlas::AtlasRegion},
+    render::{MAIN_LAYER, MainCamera, atlas::AtlasRegion},
     saves::{ReflectSave, Save},
     util::ecs::ReflectComponentPtr,
 };
@@ -366,7 +366,7 @@ fn update_tilemap_chunks(
                                         Aabb::from_min_max(Vec3::ZERO, Vec2::splat(TILEMAP_CHUNK_SIZE as f32 * TILE_PIXEL_SIZE as f32).extend(0.)),
                                         Mesh2d(mesh_handle),
                                         MeshMaterial2d(material_handle),
-                                        PIXELATED_LAYER,
+                                        MAIN_LAYER,
                                     ),
                                 )
                             })
@@ -402,17 +402,14 @@ impl Default for TilemapParallax {
     }
 }
 
-fn update_tilemap_parallax(
-    tilemaps: Query<(&mut Transform2d, &Tilemap, &TilemapParallax), Without<PixelatedCamera>>,
-    camera: Single<&PixelatedCamera>,
-) {
+fn update_tilemap_parallax(tilemaps: Query<(&mut Transform2d, &Tilemap, &TilemapParallax), Without<MainCamera>>, camera: Single<&MainCamera>) {
     let camera_pos = camera.pos;
     for (mut trns, tilemap, &parallax) in tilemaps {
         let center = tilemap.dimension.as_vec2() / 2.;
         let dst = camera_pos - center;
         trns.set_if_neq(Transform2d {
             translation: (dst * parallax.factor).round().extend(trns.translation.z),
-            rotation: 0.,
+            rotation: Rot2::IDENTITY,
             scale: if parallax.scale { Vec2::ONE - parallax.factor } else { Vec2::ONE },
         });
     }

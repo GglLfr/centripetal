@@ -1,16 +1,19 @@
 use crate::{
+    math::Transform2d,
     prelude::*,
-    world::{EntityCreate, LevelSystems},
+    render::{CameraTarget, MAIN_LAYER, painter::Painter},
+    world::{EntityCreate, LevelSystems, MessageReaderEntityExt},
 };
 
 #[derive(Component, Debug)]
+#[require(CameraTarget, Painter, RenderLayers = MAIN_LAYER)]
 pub struct Selene;
 
 fn on_selene_spawn(mut commands: Commands, mut messages: MessageReader<EntityCreate>) {
-    if let Some(EntityCreate { entity, identifier }) = messages.read().last()
-        && identifier == "selene"
-    {
-        info!("Spawned Selene at {}", commands.entity(*entity).insert(Selene).id());
+    for &EntityCreate { entity, bounds, .. } in messages.created("selene") {
+        commands
+            .entity(entity)
+            .insert((Selene, Transform2d::from_translation(bounds.center().extend(0.))));
     }
 }
 
