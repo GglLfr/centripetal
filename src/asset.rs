@@ -1,6 +1,6 @@
 pub use centripetal_macros::MapAssetIds;
 
-use crate::{GameState, ProgressSystems, prelude::*, progress::ProgressFor, render::atlas::AtlasRegion};
+use crate::{GameState, ProgressSystems, prelude::*, progress::ProgressFor, render::animation::AnimationSheet};
 
 pub const PREF_SOURCE: AssetSourceId<'static> = AssetSourceId::Name(CowArc::Static("pref"));
 pub const DATA_SOURCE: AssetSourceId<'static> = AssetSourceId::Name(CowArc::Static("data"));
@@ -44,13 +44,7 @@ macro_rules! define_collection {
 
 define_collection! {
     pub CharacterTextures {
-        selene: AtlasRegion = "entities/characters/selene/selene.png"
-    }
-}
-
-define_collection! {
-    pub TileTextures {
-        grid: AtlasRegion = "tiles/grid.png"
+        selene: AnimationSheet = "entities/characters/selene/selene.json"
     }
 }
 
@@ -166,7 +160,7 @@ pub(super) fn register_user_sources(app: &mut App) {
 
 pub(super) fn plugin(app: &mut App) {
     app.init_resource::<KnownAssets>()
-        .add_systems(OnEnter(GameState::AssetLoading), (CharacterTextures::init, TileTextures::init))
+        .add_systems(OnEnter(GameState::AssetLoading), CharacterTextures::init)
         .add_systems(
             Update,
             track_asset_loading

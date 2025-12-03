@@ -1,19 +1,30 @@
 use crate::{
+    CharacterTextures,
     math::Transform2d,
     prelude::*,
-    render::{CameraTarget, MAIN_LAYER, painter::Painter},
+    render::{
+        CameraTarget, MAIN_LAYER,
+        animation::{Animation, AnimationTag},
+    },
     world::{EntityCreate, LevelSystems, MessageReaderEntityExt},
 };
 
 #[derive(Component, Debug)]
-#[require(CameraTarget, Painter, RenderLayers = MAIN_LAYER)]
+#[require(CameraTarget, RenderLayers = MAIN_LAYER)]
 pub struct Selene;
 
-fn on_selene_spawn(mut commands: Commands, mut messages: MessageReader<EntityCreate>) {
+impl Selene {
+    pub const IDLE: &'static str = "idle";
+}
+
+fn on_selene_spawn(mut commands: Commands, mut messages: MessageReader<EntityCreate>, textures: Res<CharacterTextures>) {
     for &EntityCreate { entity, bounds, .. } in messages.created("selene") {
-        commands
-            .entity(entity)
-            .insert((Selene, Transform2d::from_translation(bounds.center().extend(0.))));
+        commands.entity(entity).insert((
+            Selene,
+            Animation::from(&textures.selene),
+            AnimationTag::new(Selene::IDLE),
+            Transform2d::from_translation(bounds.center().extend(1.)),
+        ));
     }
 }
 

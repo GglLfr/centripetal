@@ -16,6 +16,7 @@ pub mod world;
 pub mod prelude {
     pub use std::{
         any::{Any, TypeId, type_name},
+        borrow::Cow,
         collections::BTreeMap,
         f32::consts::{PI, TAU},
         fmt::{self, Debug},
@@ -24,7 +25,7 @@ pub mod prelude {
         io,
         marker::PhantomData,
         mem::{self, MaybeUninit, offset_of},
-        ops::{Deref, DerefMut, Mul, Range},
+        ops::{Deref, DerefMut, Mul, Range, RangeInclusive},
         path::{Path, PathBuf},
         ptr::NonNull,
         str::FromStr,
@@ -35,7 +36,7 @@ pub mod prelude {
     pub use avian2d::prelude::*;
     pub use bevy::{
         asset::{
-            AssetIndex, AssetLoader, AssetPath, AsyncReadExt as _, LoadContext, LoadState, RecursiveDependencyLoadState, ReflectAsset,
+            AsAssetId, AssetIndex, AssetLoader, AssetPath, AsyncReadExt as _, LoadContext, LoadState, RecursiveDependencyLoadState, ReflectAsset,
             RenderAssetUsages, UntypedAssetId, VisitAssetDependencies,
             io::{
                 AssetSourceBuilder, AssetSourceId, AssetWriterError, Reader,
@@ -74,7 +75,7 @@ pub mod prelude {
             },
             world::{CommandQueue, DeferredWorld, FilteredEntityRef, unsafe_world_cell::UnsafeWorldCell},
         },
-        image::ImageLoader,
+        image::{ImageLoader, ImageLoaderSettings},
         math::{Affine2, FloatOrd},
         mesh::{Indices, MeshVertexAttribute, VertexAttributeValues, VertexBufferLayout},
         platform::{
@@ -106,6 +107,7 @@ pub mod prelude {
         sprite_render::{AlphaMode2d, SpritePipelineKey},
         state::state::FreelyMutableState,
         tasks::{AsyncComputeTaskPool, ComputeTaskPool, ConditionalSendFuture, IoTaskPool, Task, futures::check_ready, futures_lite},
+        utils::Parallel,
         window::PrimaryWindow,
     };
     pub use bevy_enhanced_input::{

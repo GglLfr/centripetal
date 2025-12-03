@@ -7,8 +7,8 @@ pub trait IteratorExt: Iterator {
     where
         Self: Sized,
     {
-        // TODO: When `extend_one` (#72631) is stabilized, reserve elements in `collection` with
-        //       `size_hint()`'s lower bound.
+        // BLOCK: When `extend_one` (#72631) is stabilized, reserve elements in `collection` with
+        //        `size_hint()`'s lower bound.
         for item in self {
             let item = mapper(item)?;
             collection.extend([item]);

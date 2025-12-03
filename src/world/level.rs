@@ -269,7 +269,7 @@ fn load_level_task(
                         let tileset_pos = uvec2(tile.t % tileset.cell_size.x, tile.t / tileset.cell_size.x);
                         commands.entity(tile_entity).insert(Tile::new(
                             tilemap_entity,
-                            uvec2(tile.px[0] / layer.__gridSize, layer.__cHei - tile.px[1] / layer.__gridSize),
+                            uvec2(tile.px[0] / layer.__gridSize, layer.__cHei - tile.px[1] / layer.__gridSize - 1),
                             tileset
                                 .tiles
                                 .get(&tileset_pos)

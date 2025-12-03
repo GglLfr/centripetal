@@ -43,16 +43,18 @@ impl PainterContext<'_> {
         };
 
         let size = size.unwrap_or(region.rect.size().as_vec2());
-        let uvs = region.uv_corners();
+        let half_size = size / 2.;
+        let center = -*anchor * size;
+        let [uv0, uv1, uv2, uv3] = region.uv_corners();
 
-        let bl = -size / 2. - *anchor * size;
-        let tr = bl + size;
+        let bl = center - half_size;
+        let tr = center + half_size;
 
         self.quads.request(self.painter, &region.page.texture, self.blend, self.layer, [[
-            Vertex::new(trns.transform_point2(bl), self.color, uvs[0]),
-            Vertex::new(trns.transform_point2(vec2(tr.x, bl.y)), self.color, uvs[1]),
-            Vertex::new(trns.transform_point2(tr), self.color, uvs[2]),
-            Vertex::new(trns.transform_point2(vec2(bl.x, tr.y)), self.color, uvs[3]),
+            Vertex::new(trns.transform_point2(vec2(bl.x, bl.y)), self.color, uv0),
+            Vertex::new(trns.transform_point2(vec2(tr.x, bl.y)), self.color, uv1),
+            Vertex::new(trns.transform_point2(vec2(tr.x, tr.y)), self.color, uv2),
+            Vertex::new(trns.transform_point2(vec2(bl.x, tr.y)), self.color, uv3),
         ]]);
     }
 }

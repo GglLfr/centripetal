@@ -1,6 +1,7 @@
 mod attribute;
 pub use attribute::*;
 
+pub mod animation;
 pub mod atlas;
 pub mod painter;
 
@@ -117,7 +118,7 @@ fn snap_camera(camera_trns: Single<(&MainCamera, &mut Transform)>) {
 }
 
 pub fn plugin(app: &mut App) {
-    app.add_plugins((atlas::plugin, painter::plugin))
+    app.add_plugins((animation::plugin, atlas::plugin, painter::plugin))
         .add_input_context::<MainCamera>()
         .add_systems(Startup, spawn_cameras)
         .add_systems(Update, update_canvas)

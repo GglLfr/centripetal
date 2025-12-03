@@ -25,9 +25,10 @@ pub struct PageInfo {
     pub texture_size: UVec2,
 }
 
-#[derive(Reflect, Debug, Default, Clone)]
+#[derive(Reflect, Debug, Default, Clone, Deref, DerefMut)]
 #[reflect(Debug, Default, FromWorld, Clone)]
 pub struct AtlasInfo {
+    #[deref]
     pub page: PageInfo,
     pub rect: URect,
 }

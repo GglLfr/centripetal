@@ -21,7 +21,15 @@ impl AssetLoader for AtlasRegionLoader {
 
     async fn load(&self, _: &mut dyn Reader, _: &Self::Settings, load_context: &mut LoadContext<'_>) -> Result<Self::Asset, Self::Error> {
         let path = load_context.asset_path().clone();
-        let image = load_context.loader().immediate().load(path).await?;
+        let image = load_context
+            .loader()
+            .immediate()
+            .with_settings(|settings: &mut ImageLoaderSettings| {
+                settings.texture_format = Some(TextureFormat::Rgba8UnormSrgb);
+                settings.is_srgb = true;
+            })
+            .load(path)
+            .await?;
         let info = self.requester.request(image.take()).await?;
         Ok(AtlasRegion { info })
     }
