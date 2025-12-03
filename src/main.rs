@@ -225,12 +225,14 @@ pub fn main() -> AppExit {
             EnhancedInputPlugin,
             FramepacePlugin,
         ))
+        .insert_resource(Gravity(Vec2::NEG_Y * 9.81 * PIXELS_PER_METER))
         .init_state::<GameState>()
         .add_plugins((
             ProgressPlugin::default()
                 .trans(GameState::AssetLoading, GameState::Menu)
                 .trans(GameState::LevelLoading, GameState::InGame { paused: false }),
             asset::plugin,
+            control::plugin,
             entities::plugin,
             math::plugin,
             render::plugin,

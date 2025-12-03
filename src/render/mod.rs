@@ -114,17 +114,22 @@ fn move_camera_to_target(
 
 fn snap_camera(camera_trns: Single<(&MainCamera, &mut Transform)>) {
     let (&camera, mut trns) = camera_trns.into_inner();
-    trns.translation = camera.snapped_pos().extend(trns.translation.z);
+    trns.translation = camera.pos.extend(trns.translation.z);
 }
 
 pub fn plugin(app: &mut App) {
+    use bevy::transform::systems::*;
+
     app.add_plugins((animation::plugin, atlas::plugin, painter::plugin))
         .add_input_context::<MainCamera>()
         .add_systems(Startup, spawn_cameras)
         .add_systems(Update, update_canvas)
         .add_systems(
             PostUpdate,
-            (move_camera_to_target, snap_camera).chain().before(TransformSystems::Propagate),
+            (move_camera_to_target, snap_camera)
+                .chain()
+                .before(mark_dirty_trees)
+                .in_set(TransformSystems::Propagate),
         )
         .add_observer(on_camera_move);
 }

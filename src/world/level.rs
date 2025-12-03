@@ -278,11 +278,12 @@ fn load_level_task(
                     let tilemap_entity = entities.next().expect("Non-zero integer was provided; the entity must exist");
                     commands.entity(tilemap_entity).insert(Tilemap::new(uvec2(layer.__cWid, layer.__cHei)));
 
-                    // TODO Decouple and optimize.
+                    // TODO Decouple.
                     let collision_properties = tileset
                         .properties
                         .get(TileProperty::Collision.as_dyn())
                         .ok_or("`tiles_main` must use a tileset with collisions");
+                    let mut voxels = Vec::new();
 
                     for (tile, tile_entity) in gridTiles.into_iter().zip(entities) {
                         let tileset_pos = uvec2(tile.t % tileset.cell_size.x, tile.t / tileset.cell_size.x);
@@ -298,27 +299,33 @@ fn load_level_task(
                         ));
 
                         if layer.__identifier == "tiles_main" && collision_properties?.contains(&tile.t) {
-                            commands.entity(tile_entity).insert((
-                                Transform::from_translation(
-                                    ((tile_pos * layer.__gridSize).as_vec2() + Vec2::splat(layer.__gridSize as f32 / 2.)).extend(0.),
-                                ),
-                                Collider::rectangle(layer.__gridSize as f32, layer.__gridSize as f32),
-                                #[cfg(feature = "dev")]
-                                DebugRender::none(),
-                            ));
+                            voxels.push(tile_pos.as_ivec2());
                         }
                     }
 
-                    commands.entity(tilemap_entity).insert((
-                        TilemapParallax {
-                            factor: layer_def.parallax,
-                            scale: layer_def.parallax_scale,
-                        },
-                        Transform2d {
-                            translation: vec3(0., 0., i as f32 * 0.1),
-                            ..default()
-                        },
-                    ));
+                    if layer.__identifier == "tiles_main" {
+                        commands.entity(tilemap_entity).insert((
+                            Transform2d {
+                                translation: vec3(0., 0., i as f32 * 0.1),
+                                ..default()
+                            },
+                            RigidBody::Static,
+                            Collider::voxels(UVec2::splat(layer.__gridSize).as_vec2(), &voxels),
+                            #[cfg(feature = "dev")]
+                            DebugRender::none(),
+                        ));
+                    } else {
+                        commands.entity(tilemap_entity).insert((
+                            TilemapParallax {
+                                factor: layer_def.parallax,
+                                scale: layer_def.parallax_scale,
+                            },
+                            Transform2d {
+                                translation: vec3(0., 0., i as f32 * 0.1),
+                                ..default()
+                            },
+                        ));
+                    }
                 }
             }
         }

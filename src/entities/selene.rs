@@ -1,5 +1,5 @@
 use crate::{
-    CharacterTextures,
+    CharacterTextures, GroundedController, Movement,
     math::Transform2d,
     prelude::*,
     render::{
@@ -21,9 +21,19 @@ fn on_selene_spawn(mut commands: Commands, mut messages: MessageReader<EntityCre
     for &EntityCreate { entity, bounds, .. } in messages.created("selene") {
         commands.entity(entity).insert((
             Selene,
+            Transform2d::from_translation(bounds.center().extend(1.)),
             Animation::from(&textures.selene),
             AnimationTag::new(Selene::IDLE),
-            Transform2d::from_translation(bounds.center().extend(1.)),
+            GroundedController {},
+            actions!(GroundedController[(Action::<Movement>::new(), Bindings::spawn(Cardinal::arrows()),)]),
+            children![(
+                Transform::from_xyz(0., 12. - bounds.half_size().y, 0.),
+                Collider::rectangle(4., 24.),
+                #[cfg(feature = "dev")]
+                DebugRender::none(),
+            )],
+            #[cfg(feature = "dev")]
+            DebugRender::none(),
         ));
     }
 }
