@@ -79,7 +79,7 @@ pub mod prelude {
         math::{Affine2, FloatOrd},
         mesh::{Indices, MeshVertexAttribute, VertexAttributeValues, VertexBufferLayout},
         platform::{
-            collections::{HashMap, HashSet},
+            collections::{Equivalent, HashMap, HashSet},
             sync::{
                 Arc,
                 atomic::{AtomicU64, Ordering},
@@ -220,6 +220,8 @@ pub fn main() -> AppExit {
                 .set(ImagePlugin::default_nearest())
                 .add_before::<AssetPlugin>(asset::register_user_sources),
             PhysicsPlugins::default().with_length_unit(PIXELS_PER_METER),
+            #[cfg(feature = "dev")]
+            PhysicsDebugPlugin::default(),
             EnhancedInputPlugin,
             FramepacePlugin,
         ))

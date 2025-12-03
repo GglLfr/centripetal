@@ -17,6 +17,11 @@ pub trait WorldEnum: 'static + PartialReflect + sealed::Sealed {
     fn eq(&self, other: &dyn WorldEnum) -> bool;
 
     fn hash(&self, state: &mut dyn Hasher);
+
+    fn as_dyn(&self) -> &dyn WorldEnum
+    where Self: Sized {
+        self
+    }
 }
 
 impl<T: 'static + PartialReflect + Hash + PartialEq + Eq> WorldEnum for T {
@@ -122,7 +127,7 @@ pub struct Tileset {
     pub region: Handle<AtlasRegion>,
     pub tiles: HashMap<UVec2, Handle<AtlasRegion>>,
     #[reflect(ignore)]
-    pub properties: HashMap<Box<dyn WorldEnum>, Vec<u32>>,
+    pub properties: HashMap<Box<dyn WorldEnum>, HashSet<u32>>,
     pub cell_size: UVec2,
     pub grid_size: u32,
 }
@@ -268,7 +273,7 @@ impl AssetLoader for LevelCollectionLoader {
                         .and_then(|enum_name| enums.by_name.get(enum_name))
                         .ok_or_else(|| format!("Missing enum {enum_index}"))?;
 
-                    Ok::<_, BevyError>((enum_ctor(&tag.enumValueId)?, tag.tileIds))
+                    Ok::<_, BevyError>((enum_ctor(&tag.enumValueId)?, tag.tileIds.into_iter().collect()))
                 })?,
                 cell_size: uvec2(tileset.__cWid, tileset.__cHei),
                 grid_size,

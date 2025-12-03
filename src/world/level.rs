@@ -8,8 +8,20 @@ use crate::{
 
 #[derive(Reflect, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[reflect(Debug, Clone, PartialEq, Hash)]
 pub enum TileProperty {
     Emissive,
+    Collision,
+}
+
+#[derive(Reflect, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[reflect(Debug, Clone, PartialEq, Hash)]
+pub enum TileCollision {
+    Full,
+    TopLeft,
+    TopRight,
+    BottomRight,
+    BottomLeft,
 }
 
 #[derive(Resource, Default)]
@@ -140,6 +152,7 @@ fn load_level_task(
     #[derive(Deserialize)]
     #[expect(non_snake_case, reason = "LDtk naming scheme")]
     struct LayerInstanceRepr {
+        __identifier: String,
         __cWid: u32,
         __cHei: u32,
         __gridSize: u32,
@@ -265,16 +278,35 @@ fn load_level_task(
                     let tilemap_entity = entities.next().expect("Non-zero integer was provided; the entity must exist");
                     commands.entity(tilemap_entity).insert(Tilemap::new(uvec2(layer.__cWid, layer.__cHei)));
 
+                    // TODO Decouple and optimize.
+                    let collision_properties = tileset
+                        .properties
+                        .get(TileProperty::Collision.as_dyn())
+                        .ok_or("`tiles_main` must use a tileset with collisions");
+
                     for (tile, tile_entity) in gridTiles.into_iter().zip(entities) {
                         let tileset_pos = uvec2(tile.t % tileset.cell_size.x, tile.t / tileset.cell_size.x);
+                        let tile_pos = uvec2(tile.px[0] / layer.__gridSize, layer.__cHei - tile.px[1] / layer.__gridSize - 1);
+
                         commands.entity(tile_entity).insert(Tile::new(
                             tilemap_entity,
-                            uvec2(tile.px[0] / layer.__gridSize, layer.__cHei - tile.px[1] / layer.__gridSize - 1),
+                            tile_pos,
                             tileset
                                 .tiles
                                 .get(&tileset_pos)
                                 .ok_or_else(|| format!("No tileset tile defined at ({tileset_pos})"))?,
                         ));
+
+                        if layer.__identifier == "tiles_main" && collision_properties?.contains(&tile.t) {
+                            commands.entity(tile_entity).insert((
+                                Transform::from_translation(
+                                    ((tile_pos * layer.__gridSize).as_vec2() + Vec2::splat(layer.__gridSize as f32 / 2.)).extend(0.),
+                                ),
+                                Collider::rectangle(layer.__gridSize as f32, layer.__gridSize as f32),
+                                #[cfg(feature = "dev")]
+                                DebugRender::none(),
+                            ));
+                        }
                     }
 
                     commands.entity(tilemap_entity).insert((

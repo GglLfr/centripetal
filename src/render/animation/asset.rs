@@ -61,7 +61,6 @@ impl AssetLoader for AnimationSheetLoader {
             frameTags: Vec<FrameTagRepr>,
         }
 
-        // "name": "idle", "from": 0, "to": 0, "direction": "forward", "color": "#000000ff"
         #[derive(Deserialize)]
         struct FrameTagRepr {
             name: String,
