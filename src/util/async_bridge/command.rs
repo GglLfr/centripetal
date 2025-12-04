@@ -126,11 +126,10 @@ impl Drop for AsyncCommands<'_> {
             && let Queue::Owned(ref mut queue) = self.queue
             && !queue.is_empty()
         {
-            warn!(
-                "{}`AsyncCommands` dropped without calling `submit()` first; trying to send the leftovers in a non-blocking way",
+            error!(
+                "{}`AsyncCommands` dropped without calling `submit()` first",
                 MaybeLocation::caller().map(|loc| format!("{loc}: ")).unwrap_or_default()
             );
-            _ = self.ctx.command.try_send(mem::take(&mut self.queue));
         }
     }
 }

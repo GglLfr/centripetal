@@ -3,7 +3,7 @@ use crate::{
     math::Transform2d,
     prelude::*,
     util::{IteratorExt, async_bridge::AsyncBridge},
-    world::{LevelCollectionRef, Tile, Tilemap, TilemapParallax, WorldEnum},
+    world::{LevelCollectionRef, TILE_PIXEL_SIZE, Tile, Tilemap, TilemapParallax, WorldEnum},
 };
 
 #[derive(Reflect, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
@@ -14,15 +14,15 @@ pub enum TileProperty {
     Collision,
 }
 
-#[derive(Reflect, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
-#[reflect(Debug, Clone, PartialEq, Hash)]
-pub enum TileCollision {
-    Full,
-    TopLeft,
-    TopRight,
-    BottomRight,
-    BottomLeft,
+#[derive(Component, Debug, Deref, DerefMut)]
+#[component(immutable)]
+pub struct TilemapProperties {
+    pub tiles: HashMap<TileProperty, HashSet<u32>>,
 }
+
+#[derive(Component, Debug, Clone, Copy, Deref, DerefMut)]
+#[component(immutable)]
+pub struct TileId(pub u32);
 
 #[derive(Resource, Default)]
 pub enum LoadLevel {
@@ -48,7 +48,7 @@ pub enum EntityField {
     Float(f64),
     String(String),
     Path(PathBuf),
-    Enum(Box<dyn WorldEnum>),
+    Enum(Arc<dyn WorldEnum>),
     GridPoint(UVec2),
     Tileset { id: u32, rect: URect },
     Entity { entity: Uuid, layer: Uuid, level: Uuid, world: Uuid },
@@ -67,9 +67,53 @@ pub trait MessageReaderEntityExt {
     fn created(&mut self, id: &str) -> impl Iterator<Item = &EntityCreate>;
 }
 
-impl<'w, 's> MessageReaderEntityExt for MessageReader<'w, 's, EntityCreate> {
+impl MessageReaderEntityExt for MessageReader<'_, '_, EntityCreate> {
     fn created(&mut self, id: &str) -> impl Iterator<Item = &EntityCreate> {
         self.read().filter(move |msg| msg.identifier == id)
+    }
+}
+
+#[derive(Message, Debug)]
+pub enum LayerCreate {
+    Entities { identifier: String, entities: Vec<Entity> },
+    Tiles { entity: Entity, kind: TileLayerKind },
+}
+
+/// Tile layer identifier, defined in reverse order as specified in the LDtkl file.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum TileLayerKind {
+    /// `tiles_back`, should not create colliders.
+    Back,
+    /// `tiles_main`, should create colliders.
+    Main,
+    /// `tiles_front`, should not create colliders.
+    Front,
+}
+
+pub trait MessageReaderLayerExt {
+    fn tiles(&mut self, tile_kind: TileLayerKind) -> Option<Entity>;
+
+    fn tiles_back(&mut self) -> Option<Entity> {
+        self.tiles(TileLayerKind::Back)
+    }
+
+    fn tiles_main(&mut self) -> Option<Entity> {
+        self.tiles(TileLayerKind::Main)
+    }
+
+    fn tiles_front(&mut self) -> Option<Entity> {
+        self.tiles(TileLayerKind::Front)
+    }
+}
+
+impl MessageReaderLayerExt for MessageReader<'_, '_, LayerCreate> {
+    fn tiles(&mut self, tile_kind: TileLayerKind) -> Option<Entity> {
+        self.read()
+            .filter_map(|layer| match layer {
+                &LayerCreate::Tiles { entity, kind } if kind == tile_kind => Some(entity),
+                _ => None,
+            })
+            .last()
     }
 }
 
@@ -92,7 +136,8 @@ fn load_level(
     server: Res<AssetServer>,
     mut load_level: ResMut<LoadLevelProgress>,
     collection: Res<LevelCollectionRef>,
-    mut entity_creation_messages: MessageWriter<EntityCreate>,
+    mut entity_creation_writer: MessageWriter<EntityCreate>,
+    mut layer_creation_writer: MessageWriter<LayerCreate>,
     bridge: Res<AsyncBridge>,
 ) -> Result {
     let LoadLevelProgress::Running(started, task) = (match &mut *load_level {
@@ -116,7 +161,8 @@ fn load_level(
         Some(Ok(output)) => {
             info!("Level loading done! Took {}ms.", (time.elapsed() - *started).as_secs_f32() * 1_000.);
 
-            entity_creation_messages.write_batch(output.entity_creation);
+            entity_creation_writer.write_batch(output.entity_creation);
+            layer_creation_writer.write_batch(output.layer_creation);
             *load_level = LoadLevelProgress::Done;
             progress.update(true);
             Ok(())
@@ -135,6 +181,7 @@ fn load_level(
 #[derive(Default)]
 struct LoadLevelOutput {
     entity_creation: Vec<EntityCreate>,
+    layer_creation: Vec<LayerCreate>,
 }
 
 fn load_level_task(
@@ -217,7 +264,12 @@ fn load_level_task(
         let repr = serde_json::from_slice::<Repr>(&bytes)?;
         let mut commands = ctx.commands();
 
+        let mut used_names = HashSet::new();
         for (i, layer) in repr.layerInstances.into_iter().rev().enumerate() {
+            if !used_names.insert(layer.__identifier.clone()) {
+                Err(format!("Duplicate layer {}", layer.__identifier))?
+            }
+
             let layer_def = collection
                 .layers
                 .get(&layer.layerDefUid)
@@ -226,6 +278,11 @@ fn load_level_task(
             match layer.data {
                 LayerDataRepr::Entities { entityInstances } => {
                     let entities = commands.spawn_many(entityInstances.len() as u32).await?;
+                    output.layer_creation.push(LayerCreate::Entities {
+                        identifier: layer.__identifier,
+                        entities: entities.as_slice().into(),
+                    });
+
                     for (instance, entity) in entityInstances.into_iter().zip(entities) {
                         let size = uvec2(instance.width, instance.height).as_vec2();
                         let bounds_start = uvec2(instance.px[0], layer.__cHei * layer.__gridSize - instance.px[1]).as_vec2()
@@ -276,62 +333,106 @@ fn load_level_task(
                     let mut entities = commands.spawn_many(gridTiles.len() as u32 + 1).await?.into_iter();
 
                     let tilemap_entity = entities.next().expect("Non-zero integer was provided; the entity must exist");
-                    commands.entity(tilemap_entity).insert(Tilemap::new(uvec2(layer.__cWid, layer.__cHei)));
+                    commands
+                        .entity(tilemap_entity)
+                        .insert((Tilemap::new(uvec2(layer.__cWid, layer.__cHei)), TilemapProperties {
+                            tiles: tileset.properties.iter().try_map_into_default(|(key, value)| {
+                                Ok::<_, BevyError>((
+                                    *(key.as_ref() as &dyn PartialReflect)
+                                        .try_downcast_ref()
+                                        .ok_or("Tile layers must use tilesets with `tile_properties` enum")?,
+                                    value.clone(),
+                                ))
+                            })?,
+                        }));
 
-                    // TODO Decouple.
-                    let collision_properties = tileset
-                        .properties
-                        .get(TileProperty::Collision.as_dyn())
-                        .ok_or("`tiles_main` must use a tileset with collisions");
-                    let mut voxels = Vec::new();
+                    let kind = match layer.__identifier.as_str() {
+                        "tiles_back" => TileLayerKind::Back,
+                        "tiles_main" => TileLayerKind::Main,
+                        "tiles_front" => TileLayerKind::Front,
+                        unknown => Err(format!("Unknown tile layer `{unknown}`"))?,
+                    };
+                    output.layer_creation.push(LayerCreate::Tiles {
+                        entity: tilemap_entity,
+                        kind,
+                    });
 
                     for (tile, tile_entity) in gridTiles.into_iter().zip(entities) {
                         let tileset_pos = uvec2(tile.t % tileset.cell_size.x, tile.t / tileset.cell_size.x);
                         let tile_pos = uvec2(tile.px[0] / layer.__gridSize, layer.__cHei - tile.px[1] / layer.__gridSize - 1);
 
-                        commands.entity(tile_entity).insert(Tile::new(
-                            tilemap_entity,
-                            tile_pos,
-                            tileset
-                                .tiles
-                                .get(&tileset_pos)
-                                .ok_or_else(|| format!("No tileset tile defined at ({tileset_pos})"))?,
+                        commands.entity(tile_entity).insert((
+                            Tile::new(
+                                tilemap_entity,
+                                tile_pos,
+                                tileset
+                                    .tiles
+                                    .get(&tileset_pos)
+                                    .ok_or_else(|| format!("No tileset tile defined at ({tileset_pos})"))?,
+                            ),
+                            TileId(tile.t),
                         ));
-
-                        if layer.__identifier == "tiles_main" && collision_properties?.contains(&tile.t) {
-                            voxels.push(tile_pos.as_ivec2());
-                        }
                     }
 
-                    if layer.__identifier == "tiles_main" {
-                        commands.entity(tilemap_entity).insert((
-                            Transform2d {
-                                translation: vec3(0., 0., i as f32 * 0.1),
-                                ..default()
-                            },
-                            RigidBody::Static,
-                            Collider::voxels(UVec2::splat(layer.__gridSize).as_vec2(), &voxels),
-                            #[cfg(feature = "dev")]
-                            DebugRender::none(),
-                        ));
-                    } else {
-                        commands.entity(tilemap_entity).insert((
-                            TilemapParallax {
+                    commands.entity(tilemap_entity).insert((
+                        Transform2d {
+                            translation: vec3(0., 0., i as f32 * 0.1),
+                            ..default()
+                        },
+                        match kind {
+                            TileLayerKind::Main => {
+                                info!("{tilemap_entity}");
+                                if layer_def.parallax != Vec2::ZERO {
+                                    Err("`tiles_main` must not have parallax effects!")?
+                                }
+
+                                TilemapParallax {
+                                    factor: Vec2::ZERO,
+                                    scale: false,
+                                }
+                            }
+                            _ => TilemapParallax {
                                 factor: layer_def.parallax,
                                 scale: layer_def.parallax_scale,
                             },
-                            Transform2d {
-                                translation: vec3(0., 0., i as f32 * 0.1),
-                                ..default()
-                            },
-                        ));
-                    }
+                        },
+                    ));
                 }
             }
         }
 
         commands.submit().await?;
         Ok(output)
+    }
+}
+
+fn tiles_main_created(
+    mut commands: Commands,
+    mut tiles: MessageReader<LayerCreate>,
+    tilemap_query: Query<(&Tilemap, &TilemapProperties)>,
+    tile_query: Query<&TileId>,
+) {
+    if let Some(e) = tiles.tiles_main()
+        && let Ok((tilemap, properties)) = tilemap_query.get(e)
+        && let Some(collisions) = properties.get(&TileProperty::Collision)
+    {
+        commands.entity(e).insert((
+            RigidBody::Static,
+            Collider::voxels(
+                Vec2::splat(TILE_PIXEL_SIZE),
+                &*tilemap
+                    .iter_tiles()
+                    .flat_map(|(pos, tile)| {
+                        tile_query
+                            .get(tile)
+                            .is_ok_and(|&tile| collisions.contains(&*tile))
+                            .then_some(pos.as_ivec2())
+                    })
+                    .collect::<Box<_>>(),
+            ),
+            #[cfg(feature = "dev")]
+            DebugRender::none(),
+        ));
     }
 }
 
@@ -344,6 +445,7 @@ pub enum LevelSystems {
 pub(super) fn plugin(app: &mut App) {
     app.init_resource::<LoadLevel>()
         .add_message::<EntityCreate>()
+        .add_message::<LayerCreate>()
         .configure_sets(
             Update,
             (LevelSystems::Load, LevelSystems::SpawnEntities)
@@ -352,5 +454,11 @@ pub(super) fn plugin(app: &mut App) {
                 .run_if(in_state(GameState::LevelLoading)),
         )
         .add_systems(PreUpdate, load_level_transition.run_if(not(in_state(GameState::LevelLoading))))
-        .add_systems(Update, load_level.in_set(LevelSystems::Load));
+        .add_systems(
+            Update,
+            (
+                load_level.in_set(LevelSystems::Load),
+                tiles_main_created.in_set(LevelSystems::SpawnEntities),
+            ),
+        );
 }

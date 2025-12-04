@@ -7,7 +7,7 @@ type Channel<T> = (async_channel::Sender<T>, async_channel::Receiver<T>);
 
 #[derive(Resource, Clone)]
 pub struct AsyncBridge {
-    command_channel: Channel<CommandQueue>,
+    command_channel: Channel<(CommandQueue, async_channel::Sender<()>)>,
     asset_channel: Channel<(UntypedHandle, async_channel::Sender<Box<dyn Reflect>>)>,
     entity_channel: Channel<(u32, async_channel::Sender<SmallVec<[Entity; 1]>>)>,
 }
@@ -15,7 +15,7 @@ pub struct AsyncBridge {
 impl AsyncBridge {
     pub fn ctx(&self) -> AsyncContext {
         AsyncContext {
-            command: self.command_channel.0.clone(),
+            command: AsyncMessager(self.command_channel.0.clone()),
             asset: AsyncMessager(self.asset_channel.0.clone()),
             entity: AsyncMessager(self.entity_channel.0.clone()),
         }
@@ -34,7 +34,7 @@ impl Default for AsyncBridge {
 
 #[derive(Clone)]
 pub struct AsyncContext {
-    pub command: async_channel::Sender<CommandQueue>,
+    pub command: AsyncMessager<CommandQueue, ()>,
     pub asset: AsyncMessager<UntypedHandle, Box<dyn Reflect>>,
     pub entity: AsyncMessager<u32, SmallVec<[Entity; 1]>>,
 }
@@ -69,9 +69,11 @@ impl<In, Out> Clone for AsyncMessager<In, Out> {
 fn execute_async_commands(mut commands: Commands, bridge: Res<AsyncBridge>) {
     let mut count = 128u32;
     while let Some(next_count) = count.checked_sub(1)
-        && let Ok(mut queue) = bridge.command_channel.1.try_recv()
+        && let Ok((mut queue, done)) = bridge.command_channel.1.try_recv()
     {
         count = next_count;
+
+        queue.push(move |_: &mut World| _ = done.try_send(()));
         commands.append(&mut queue);
     }
 }

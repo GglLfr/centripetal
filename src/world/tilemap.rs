@@ -188,12 +188,6 @@ impl Tilemap {
         self.dimension
     }
 
-    /// Only use this method if manually building a `Tilemap`, as this can easily break tile-to-map
-    /// relationship integrity really easily.
-    pub fn tile_mut(&mut self, pos: UVec2) -> Option<&mut Option<Entity>> {
-        self.tiles.get_mut(pos.y as usize * self.dimension.x as usize + pos.x as usize)
-    }
-
     pub fn clear(&mut self, commands: &mut Commands) {
         for tile in &mut self.tiles {
             if let Some(entity) = tile.take() {
@@ -227,6 +221,13 @@ impl Tilemap {
         let start = (pos * TILEMAP_CHUNK_SIZE).min(self.dimension);
         let end = ((pos + 1) * TILEMAP_CHUNK_SIZE).min(self.dimension);
         end - start
+    }
+
+    pub fn iter_tiles(&self) -> impl Iterator<Item = (UVec2, Entity)> {
+        let width = self.dimension.x;
+        let height = self.dimension.y;
+
+        (0..height).flat_map(move |y| (0..width).filter_map(move |x| Some((uvec2(x, y), self.tiles[y as usize * width as usize + x as usize]?))))
     }
 
     pub fn iter_changed_chunks(&self) -> impl Iterator<Item = UVec2> + ExactSizeIterator {

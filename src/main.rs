@@ -221,7 +221,22 @@ pub fn main() -> AppExit {
                 .add_before::<AssetPlugin>(asset::register_user_sources),
             PhysicsPlugins::default().with_length_unit(PIXELS_PER_METER),
             #[cfg(feature = "dev")]
-            PhysicsDebugPlugin::default(),
+            |app: &mut App| {
+                use render::MAIN_LAYER;
+
+                app.add_plugins(PhysicsDebugPlugin::default())
+                    .insert_gizmo_config(PhysicsGizmos::default(), GizmoConfig {
+                        enabled: true,
+                        line: GizmoLineConfig {
+                            width: 1.,
+                            perspective: false,
+                            style: GizmoLineStyle::Solid,
+                            joints: GizmoLineJoint::None,
+                        },
+                        depth_bias: -1.,
+                        render_layers: MAIN_LAYER,
+                    });
+            },
             EnhancedInputPlugin,
             FramepacePlugin,
         ))

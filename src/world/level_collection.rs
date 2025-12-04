@@ -58,7 +58,7 @@ impl Eq for dyn WorldEnum {}
 
 #[derive(Default, Debug, Clone)]
 pub struct WorldEnums {
-    pub by_name: HashMap<String, fn(&str) -> Result<Box<dyn WorldEnum>>>,
+    pub by_name: HashMap<String, fn(&str) -> Result<Arc<dyn WorldEnum>>>,
     pub by_index: HashMap<u32, String>,
 }
 
@@ -85,7 +85,7 @@ impl WorldEnums {
                 }
             }
 
-            Ok(Box::new(
+            Ok(Arc::new(
                 T::deserialize(de::value::StrDeserializer::new(variant)).map_err(|ErrorWrapper(e)| e)?,
             ))
         });
@@ -127,7 +127,7 @@ pub struct Tileset {
     pub region: Handle<AtlasRegion>,
     pub tiles: HashMap<UVec2, Handle<AtlasRegion>>,
     #[reflect(ignore)]
-    pub properties: HashMap<Box<dyn WorldEnum>, HashSet<u32>>,
+    pub properties: HashMap<Arc<dyn WorldEnum>, HashSet<u32>>,
     pub cell_size: UVec2,
     pub grid_size: u32,
 }
