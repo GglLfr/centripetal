@@ -1,11 +1,9 @@
 mod asset;
-mod control;
 mod progress;
-
 pub use asset::*;
-pub use control::*;
 pub use progress::*;
 
+pub mod control;
 pub mod entities;
 pub mod math;
 pub mod render;

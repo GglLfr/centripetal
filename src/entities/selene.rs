@@ -1,17 +1,18 @@
 use crate::{
-    CharacterTextures, GroundedController, Movement,
+    CharacterTextures,
+    control::{GroundController, Movement},
     math::Transform2d,
     prelude::*,
     render::{
         CameraTarget, MAIN_LAYER,
-        animation::{Animation, AnimationTag},
+        animation::{Animation, AnimationRepeat, AnimationTag},
+        painter::PaintOffset,
     },
     world::{EntityCreate, LevelSystems, MessageReaderEntityExt},
 };
 
 #[derive(Component, Debug)]
 #[component(storage = "SparseSet")]
-#[require(CameraTarget, RenderLayers = MAIN_LAYER, GroundedController)]
 pub struct Selene;
 
 impl Selene {
@@ -21,20 +22,28 @@ impl Selene {
 
 fn on_selene_spawn(mut commands: Commands, mut messages: MessageReader<EntityCreate>, textures: Res<CharacterTextures>) {
     for &EntityCreate { entity, bounds, .. } in messages.created(Selene::IDENT) {
+        let sprite_center = bounds.center();
+        let collider_center = vec2(sprite_center.x, bounds.min.y + 12.);
+
         commands.entity(entity).insert((
             Selene,
-            Transform2d::from_translation(bounds.center().extend(1.)),
+            // Transforms.
+            Transform2d::from_translation(collider_center.extend(1.)),
+            TransformExtrapolation,
+            CameraTarget::default(),
+            // Rendering.
             Animation::from(&textures.selene),
             AnimationTag::new(Selene::IDLE),
-            actions!(GroundedController[(Action::<Movement>::new(), Bindings::spawn(Cardinal::arrows()),)]),
-            children![(
-                Transform::from_xyz(0., 12. - bounds.half_size().y, 0.),
-                Collider::capsule(3., 18.),
-                #[cfg(feature = "dev")]
-                DebugRender::default(),
-            )],
+            AnimationRepeat::Loop,
+            PaintOffset(Transform2d::from_translation((sprite_center - collider_center).extend(0.))),
+            MAIN_LAYER,
+            // Collisions.
+            Collider::round_rectangle(2., 20., 2.),
             #[cfg(feature = "dev")]
-            DebugRender::none(),
+            DebugRender::default(),
+            // Inputs.
+            GroundController::default(),
+            actions!(GroundController[(Action::<Movement>::new(), Down::default(), Bindings::spawn(Cardinal::arrows()),)]),
         ));
     }
 }

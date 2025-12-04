@@ -5,7 +5,7 @@ pub mod animation;
 pub mod atlas;
 pub mod painter;
 
-use crate::{Movement, math::Transform2d, prelude::*};
+use crate::{math::Transform2d, prelude::*};
 
 pub const MAIN_LAYER: RenderLayers = RenderLayers::layer(0);
 pub const OUTPUT_LAYER: RenderLayers = RenderLayers::layer(1);
@@ -51,16 +51,10 @@ fn spawn_cameras(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
         Msaa::Off,
         MainCamera::default(),
         MAIN_LAYER,
-        actions!(MainCamera[(Action::<Movement>::new(), Bindings::spawn((Cardinal::wasd_keys(), Axial::left_stick())),)]),
     ));
 
     commands.spawn((Camera2d, Hdr, IsDefaultUiCamera, OutputCamera, OUTPUT_LAYER));
     commands.spawn((Sprite::from_image(image), PixelatedCanvas, OUTPUT_LAYER));
-}
-
-fn on_camera_move(movement: On<Fire<Movement>>, time: Res<Time>, mut trns: Query<&mut MainCamera>) {
-    let Ok(mut camera) = trns.get_mut(movement.context) else { return };
-    camera.pos += time.delta_secs() * 90. * movement.value;
 }
 
 fn update_canvas(
@@ -121,7 +115,6 @@ pub fn plugin(app: &mut App) {
     use bevy::transform::systems::*;
 
     app.add_plugins((animation::plugin, atlas::plugin, painter::plugin))
-        .add_input_context::<MainCamera>()
         .add_systems(Startup, spawn_cameras)
         .add_systems(Update, update_canvas)
         .add_systems(
@@ -130,6 +123,5 @@ pub fn plugin(app: &mut App) {
                 .chain()
                 .before(mark_dirty_trees)
                 .in_set(TransformSystems::Propagate),
-        )
-        .add_observer(on_camera_move);
+        );
 }

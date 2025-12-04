@@ -94,6 +94,19 @@ impl Transform2d {
             ..Self::IDENTITY
         }
     }
+
+    pub fn affine(self) -> Affine2 {
+        let Rot2 { cos, sin } = self.rotation;
+        let rotation = Mat2::from_cols(vec2(cos, sin), vec2(-sin, cos));
+        Affine2 {
+            matrix2: Mat2::from_cols(rotation.x_axis * self.scale.x, rotation.y_axis * self.scale.y),
+            translation: self.translation.truncate(),
+        }
+    }
+
+    pub fn affine_and_z(self) -> (Affine2, f32) {
+        (self.affine(), self.translation.z)
+    }
 }
 
 #[derive(Reflect, Component, Default, Debug, Clone, Copy, PartialEq, Deref, DerefMut)]
@@ -120,15 +133,14 @@ impl From<GlobalTransform> for GlobalTransform2d {
 }
 
 impl GlobalTransform2d {
-    pub fn from_scale_rotation_translation(scale: Vec2, Rot2 { cos, sin }: Rot2, translation: Vec3) -> Self {
-        let rotation = Mat2::from_cols(vec2(cos, sin), vec2(-sin, cos));
-        Self {
-            affine: Affine2 {
-                matrix2: Mat2::from_cols(rotation.x_axis * scale.x, rotation.y_axis * scale.y),
-                translation: translation.truncate(),
-            },
-            z: translation.z,
+    pub fn from_scale_rotation_translation(scale: Vec2, rotation: Rot2, translation: Vec3) -> Self {
+        let (affine, z) = Transform2d {
+            scale,
+            rotation,
+            translation,
         }
+        .affine_and_z();
+        Self { affine, z }
     }
 }
 
