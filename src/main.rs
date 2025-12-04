@@ -15,6 +15,7 @@ pub mod prelude {
     pub use std::{
         any::{Any, TypeId, type_name},
         borrow::Cow,
+        cmp::Ordering::*,
         collections::BTreeMap,
         f32::consts::{PI, TAU},
         fmt::{self, Debug},

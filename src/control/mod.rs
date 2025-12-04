@@ -7,10 +7,9 @@ use crate::prelude::*;
 #[action_output(Vec2)]
 pub struct Movement;
 
-#[derive(Reflect, Resource, Asset)]
-pub struct Keybinds {
-    //
-}
+#[derive(InputAction)]
+#[action_output(bool)]
+pub struct Jump;
 
 pub fn plugin(app: &mut App) {
     app.add_plugins(ground::plugin);

@@ -1,6 +1,6 @@
 use crate::{
     CharacterTextures,
-    control::{GroundController, Movement},
+    control::{GroundControl, Jump, Movement},
     math::Transform2d,
     prelude::*,
     render::{
@@ -38,12 +38,21 @@ fn on_selene_spawn(mut commands: Commands, mut messages: MessageReader<EntityCre
             PaintOffset(Transform2d::from_translation((sprite_center - collider_center).extend(0.))),
             MAIN_LAYER,
             // Collisions.
+            Mass(50.),
+            SweptCcd::LINEAR,
             Collider::round_rectangle(2., 20., 2.),
             #[cfg(feature = "dev")]
             DebugRender::default(),
             // Inputs.
-            GroundController::default(),
-            actions!(GroundController[(Action::<Movement>::new(), Down::default(), Bindings::spawn(Cardinal::arrows()),)]),
+            GroundControl::default(),
+            actions!(GroundControl[(
+                Action::<Movement>::new(),
+                Down::new(0.5),
+                Bindings::spawn(Cardinal::arrows()),
+            ), (
+                Action::<Jump>::new(),
+                bindings![KeyCode::KeyZ],
+            )]),
         ));
     }
 }
