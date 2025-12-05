@@ -115,6 +115,8 @@ pub mod prelude {
         prelude::*,
     };
     pub use bevy_framepace::FramepacePlugin;
+    pub use bevy_tnua::prelude::*;
+    pub use bevy_tnua_avian2d::prelude::*;
     pub use bitflags::{bitflags, bitflags_match};
     pub use bytemuck::{Pod, Zeroable, must_cast_slice as cast_slice, must_cast_slice_mut as cast_slice_mut};
     pub use serde::{
@@ -148,6 +150,7 @@ pub fn patched<T>(func: impl FnMut() -> T) -> T {
 }
 
 pub const PIXELS_PER_METER: f32 = 16.;
+pub const GRAVITY: f32 = 16. * PIXELS_PER_METER;
 
 #[derive(Reflect, States, Debug, Default, Clone, Copy, PartialEq, Eq, Hash)]
 #[reflect(State, Debug, Default, FromWorld, Clone, PartialEq, Hash)]
@@ -162,6 +165,58 @@ pub enum GameState {
 }
 
 pub fn main() -> AppExit {
+    set_panic_hook();
+    App::new()
+        .add_plugins((
+            #[cfg(not(target_family = "wasm"))]
+            print_mimalloc_version,
+            DefaultPlugins
+                .set(ImagePlugin::default_nearest())
+                .add_before::<AssetPlugin>(asset::register_user_sources),
+            PhysicsPlugins::default().with_length_unit(PIXELS_PER_METER),
+            #[cfg(feature = "dev")]
+            |app: &mut App| {
+                use render::MAIN_LAYER;
+                app.add_plugins(PhysicsDebugPlugin::default())
+                    .insert_gizmo_config(PhysicsGizmos::default(), GizmoConfig {
+                        enabled: true,
+                        line: GizmoLineConfig {
+                            width: 1.,
+                            perspective: false,
+                            style: GizmoLineStyle::Solid,
+                            joints: GizmoLineJoint::None,
+                        },
+                        depth_bias: -1.,
+                        render_layers: MAIN_LAYER,
+                    });
+            },
+            EnhancedInputPlugin,
+            FramepacePlugin,
+        ))
+        .insert_resource(Gravity(Vec2::NEG_Y * GRAVITY))
+        .insert_resource(DefaultFriction(Friction::new(0.)))
+        .init_state::<GameState>()
+        .add_plugins((
+            ProgressPlugin::default()
+                .trans(GameState::AssetLoading, GameState::Menu)
+                .trans(GameState::LevelLoading, GameState::InGame { paused: false }),
+            asset::plugin,
+            control::plugin,
+            entities::plugin,
+            math::plugin,
+            render::plugin,
+            saves::plugin,
+            util::plugin,
+            world::plugin,
+        ))
+        .add_systems(OnExit(GameState::AssetLoading), |mut load_level: ResMut<world::LoadLevel>| {
+            load_level.load("eastern_beacon");
+        })
+        .run()
+}
+
+/// Function moved to the bottom instead of inside `main()` for readability.
+fn set_panic_hook() {
     std::panic::set_hook(Box::new(|info| {
         let backtrace = format!(
             "{}\n{}",
@@ -210,52 +265,4 @@ pub fn main() -> AppExit {
             .run_modal();
         }
     }));
-
-    App::new()
-        .add_plugins((
-            #[cfg(not(target_family = "wasm"))]
-            print_mimalloc_version,
-            DefaultPlugins
-                .set(ImagePlugin::default_nearest())
-                .add_before::<AssetPlugin>(asset::register_user_sources),
-            PhysicsPlugins::default().with_length_unit(PIXELS_PER_METER),
-            #[cfg(feature = "dev")]
-            |app: &mut App| {
-                use render::MAIN_LAYER;
-
-                app.add_plugins(PhysicsDebugPlugin::default())
-                    .insert_gizmo_config(PhysicsGizmos::default(), GizmoConfig {
-                        enabled: true,
-                        line: GizmoLineConfig {
-                            width: 1.,
-                            perspective: false,
-                            style: GizmoLineStyle::Solid,
-                            joints: GizmoLineJoint::None,
-                        },
-                        depth_bias: -1.,
-                        render_layers: MAIN_LAYER,
-                    });
-            },
-            EnhancedInputPlugin,
-            FramepacePlugin,
-        ))
-        .insert_resource(Gravity(Vec2::NEG_Y * 9.81 * PIXELS_PER_METER))
-        .init_state::<GameState>()
-        .add_plugins((
-            ProgressPlugin::default()
-                .trans(GameState::AssetLoading, GameState::Menu)
-                .trans(GameState::LevelLoading, GameState::InGame { paused: false }),
-            asset::plugin,
-            control::plugin,
-            entities::plugin,
-            math::plugin,
-            render::plugin,
-            saves::plugin,
-            util::plugin,
-            world::plugin,
-        ))
-        .add_systems(OnExit(GameState::AssetLoading), |mut load_level: ResMut<world::LoadLevel>| {
-            load_level.load("eastern_beacon");
-        })
-        .run()
 }

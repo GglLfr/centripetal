@@ -3,7 +3,7 @@ use crate::{
     prelude::*,
     render::{
         animation::{AnimationDirection, AnimationSheet},
-        painter::{PaintOffset, Painter, PainterParam},
+        painter::{Painter, PainterParam},
     },
 };
 
@@ -214,16 +214,15 @@ fn update_animation_states(
 fn draw_animations(
     param: PainterParam,
     sheets: Res<Assets<AnimationSheet>>,
-    animations: Query<(&Animation, &AnimationState, &Painter, &GlobalTransform2d, Option<&PaintOffset>)>,
+    animations: Query<(&Animation, &AnimationState, &Painter, &GlobalTransform2d)>,
 ) {
-    animations.par_iter_inner().for_each(|(anim, &state, painter, &trns, offset)| {
+    animations.par_iter_inner().for_each(|(anim, &state, painter, &trns)| {
         let Some(sheet) = sheets.get(anim.id()) else { return };
         let Some(frame) = sheet.frames.get(state.index) else { return };
-        let (offset, offset_layer) = offset.map(|off| off.affine_and_z()).unwrap_or_default();
 
         let mut ctx = param.ctx(painter);
-        ctx.layer = trns.z + offset_layer;
-        ctx.rect(&frame.region, trns.affine * offset * Affine2::from_translation(frame.offset), default());
+        ctx.layer = trns.z;
+        ctx.rect(&frame.region, trns.affine * Affine2::from_translation(frame.offset), default());
     });
 }
 

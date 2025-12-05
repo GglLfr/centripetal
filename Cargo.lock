@@ -396,6 +396,37 @@ dependencies = [
 ]
 
 [[package]]
+name = "bevy-tnua"
+version = "0.26.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "eab78782a624f66db0ab3c5153bd01facfc250a53452ea3cde968bda3e7e24bf"
+dependencies = [
+ "bevy",
+ "bevy-tnua-physics-integration-layer",
+ "thiserror 2.0.17",
+]
+
+[[package]]
+name = "bevy-tnua-avian2d"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0ad912b2c2bae1b0f0f9654e17575ce1da04a6c70a3b2fd26c872263bc3e67a2"
+dependencies = [
+ "avian2d",
+ "bevy",
+ "bevy-tnua-physics-integration-layer",
+]
+
+[[package]]
+name = "bevy-tnua-physics-integration-layer"
+version = "0.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1cb6de3b2578e2c823e0a6bdbeb44b57a62697e72699ec06a6c1fcf800bbd332"
+dependencies = [
+ "bevy",
+]
+
+[[package]]
 name = "bevy_a11y"
 version = "0.17.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1692,6 +1723,8 @@ dependencies = [
  "atomicow",
  "avian2d",
  "bevy",
+ "bevy-tnua",
+ "bevy-tnua-avian2d",
  "bevy_enhanced_input",
  "bevy_framepace",
  "bevy_yarnspinner",
