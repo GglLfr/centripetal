@@ -74,11 +74,12 @@ fn update_hair_segments(time: Res<Time>, gravity: Res<Gravity>, hairs: Query<(&m
             hair.last_anchor = *pos;
         }
 
-        for (i, seg) in hair.segments.iter_mut().enumerate() {
-            // TODO accumulate position
+        let mut accum_pos = *pos;
+        for seg in &mut hair.segments {
             if seg.position.is_nan() {
-                seg.position = *pos;
-                seg.last_position = *pos;
+                accum_pos += vec2(0., -seg.length);
+                seg.position = accum_pos;
+                seg.last_position = accum_pos;
             } else {
                 // x_[t + Δt] = 2x_[t] - x_[t - Δt] + aΔt^2
                 // Assume gravity is the only acceleration applied to each segment.
