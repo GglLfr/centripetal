@@ -381,7 +381,6 @@ fn load_level_task(
                         },
                         match kind {
                             TileLayerKind::Main => {
-                                info!("{tilemap_entity}");
                                 if layer_def.parallax != Vec2::ZERO {
                                     Err("`tiles_main` must not have parallax effects!")?
                                 }

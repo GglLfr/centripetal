@@ -232,7 +232,6 @@ fn evaluate_ground(
                 }
                 (Some(tried), false) => {
                     if let Some(ground_velocity) = contacts.is_grounded_and_velocity((tried + param.buffer_time).min(now), param.coyote_time) {
-                        info!("Jump!");
                         // Disable coyote time on jump.
                         contacts[GroundContacts::DOWN] = None;
                         state.acted = true;
