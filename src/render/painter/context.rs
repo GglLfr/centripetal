@@ -57,4 +57,26 @@ impl PainterContext<'_> {
             Vertex::new(trns.transform_point2(vec2(bl.x, tr.y)), self.color, uv3),
         ]]);
     }
+
+    pub fn line(self, region: impl Into<AssetId<AtlasRegion>>, from: Vec2, from_thickness: f32, to: Vec2, to_thickness: f32) {
+        let region = region.into();
+        let Some(region) = self.regions.get(region) else {
+            error!("Missing atlas region `{region}`");
+            return
+        };
+
+        let [uv0, uv1, uv2, uv3] = region.uv_corners();
+
+        let Some([cos, sin]) = (to - from).try_normalize().map(|v| v.to_array()) else { return };
+        let bias = vec2(sin, -cos);
+        let bias_from = bias * from_thickness / 2.;
+        let bias_to = bias * to_thickness / 2.;
+
+        self.quads.request(self.painter, &region.page.texture, self.blend, self.layer, [[
+            Vertex::new(from + bias_from, self.color, uv0),
+            Vertex::new(from - bias_from, self.color, uv1),
+            Vertex::new(to - bias_to, self.color, uv2),
+            Vertex::new(to + bias_to, self.color, uv3),
+        ]]);
+    }
 }

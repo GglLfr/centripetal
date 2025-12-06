@@ -107,9 +107,10 @@ fn handle_atlas_requests(
 
                 let page_info = page.info.clone();
                 requests.0.push((page.info.texture.id(), data, rect));
-                AsyncComputeTaskPool::get()
-                    .spawn(async move { _ = payload_sender.send(AtlasInfo { page: page_info, rect }).await })
-                    .detach();
+
+                // The channel shouldn't be full assuming it comes from `AtlasRequester::request`, and if it's
+                // closed then the other side probably doesn't need it anymore.
+                _ = payload_sender.try_send(AtlasInfo { page: page_info, rect });
                 Ok(())
             } else {
                 Err((data, payload_sender))

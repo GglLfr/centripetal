@@ -5,7 +5,7 @@ use crate::{
 };
 
 #[derive(Component, Debug, Default, Clone)]
-#[require(GroundContacts, RigidBody::Dynamic, Mass = Self::LIGHT, LockedAxes::ROTATION_LOCKED)]
+#[require(GroundContacts, RigidBody::Dynamic, Mass = Self::LIGHT, AngularInertia(f32::MAX), NoAutoMass, NoAutoAngularInertia, LockedAxes::ROTATION_LOCKED)]
 pub struct GroundControl;
 
 #[derive(Component, Debug, Default, Deref, DerefMut, Clone, Copy)]
@@ -124,32 +124,6 @@ fn ground_move(actions: Query<(&Action<Movement>, &ActionOf<GroundControl>)>, mu
     }
 }
 
-fn evaluate_ground_move(time: Res<Time>, movements: Query<(&GroundMove, &GroundMoveState, &GroundContacts, Forces)>) {
-    let now = time.elapsed();
-    let dt = time.delta_secs();
-    movements.par_iter_inner().for_each(|(&param, &state, &contacts, mut forces)| {
-        // `vel0_*`     : Current velocity.
-        // `vel1_*`     : Target velocity.
-        // `dv_*_target`: Total change in velocity the actor would like to make.
-        // `dv_*_cap`   : Change in velocity the actor can actually make in this frame.
-        // `dv_*_factor`: Multiplier to the acceleration to not overaccelerate.
-        let vel0_x = forces.linear_velocity().x;
-        let vel1_x = state.x.clamp(-1., 1.) * param.move_speed;
-        let dv_x_target = vel1_x - vel0_x;
-
-        let [cling_left, cling_right] = contacts.is_clinging(now, Duration::ZERO);
-        let accel_x = match contacts.is_grounded(now, Duration::ZERO) {
-            true => param.grounded_move_accel,
-            false => param.aired_move_accel,
-        } * if (dv_x_target > 0. && cling_right) || (dv_x_target < 0. && cling_left) { 0. } else { 1. };
-
-        let dv_x_cap = accel_x * dt;
-        let dv_x_factor = (dv_x_target.abs() / dv_x_cap).min(1.);
-
-        forces.apply_linear_acceleration(vec2((accel_x * dv_x_factor).copysign(dv_x_target), 0.));
-    });
-}
-
 #[derive(Component, Debug, Clone, Copy)]
 #[require(GroundJumpState)]
 pub struct GroundJump {
@@ -176,17 +150,17 @@ impl Default for GroundJump {
 struct GroundJumpState {
     tried: Option<Duration>,
     acted: bool,
-    time: Option<Duration>,
+    time: Option<f32>,
 }
 
 fn ground_jump(
     time: Res<Time>,
     actions: Query<(&ActionEvents, &ActionOf<GroundControl>), With<Action<Jump>>>,
-    mut ground_moves: Query<&mut GroundJumpState>,
+    mut jump_states: Query<&mut GroundJumpState>,
 ) {
     let now = time.elapsed();
     for (events, action_of) in actions {
-        let Ok(mut ground_jump) = ground_moves.get_mut(action_of.entity()) else { continue };
+        let Ok(mut ground_jump) = jump_states.get_mut(action_of.entity()) else { continue };
         if events.contains(ActionEvents::STARTED) {
             if ground_jump.tried.is_none() {
                 ground_jump.tried = Some(now);
@@ -200,47 +174,72 @@ fn ground_jump(
     }
 }
 
-fn evaluate_ground_jump(time: Res<Time>, jumps: Query<(&GroundJump, &mut GroundJumpState, &mut GroundContacts, Forces)>) {
+fn evaluate_ground(
+    time: Res<Time>,
+    states: Query<(
+        &mut GroundContacts,
+        Option<(&GroundMove, &GroundMoveState)>,
+        Option<(&GroundJump, &mut GroundJumpState)>,
+        Forces,
+    )>,
+) {
     let now = time.elapsed();
-    let dt = time.delta();
-    jumps.par_iter_inner().for_each(|(&param, mut state, mut contacts, mut forces)| {
-        match (state.tried, state.acted) {
-            (None, false) => {
-                if let Some(commited) = state.time.take() {
-                    let commited = commited.as_secs_f32();
-                    let total = (2. * param.jump_height * GRAVITY).sqrt();
+    let dt = time.delta_secs();
+    states.par_iter_inner().for_each(|(mut contacts, movement, jump, mut forces)| {
+        if let Some((&param, &state)) = movement {
+            // `vel0`     : Current velocity.
+            // `vel1`     : Target velocity.
+            // `dv_target`: Total change in velocity the actor would like to make.
+            // `dv_cap`   : Change in velocity the actor can actually make in this frame.
+            // `dv_factor`: Multiplier to the acceleration to not overaccelerate.
+            let vel0_x = forces.linear_velocity().x;
+            let vel1_x = state.x.clamp(-1., 1.) * param.move_speed;
+            let dv_x_target = vel1_x - vel0_x;
 
-                    if commited < total / GRAVITY {
-                        let leftover = total - GRAVITY * commited;
-                        forces.linear_velocity_mut().y -= leftover;
+            let [cling_left, cling_right] = contacts.is_clinging(now, Duration::ZERO);
+            let accel_x = match contacts.is_grounded(now, Duration::ZERO) {
+                true => param.grounded_move_accel,
+                false => param.aired_move_accel,
+            } * if (dv_x_target > 0. && cling_right) || (dv_x_target < 0. && cling_left) { 0. } else { 1. };
+
+            let dv_x_cap = accel_x * dt;
+            let dv_x_factor = (dv_x_target.abs() / dv_x_cap).min(1.);
+
+            forces.apply_linear_acceleration(vec2((accel_x * dv_x_factor).copysign(dv_x_target), 0.));
+        }
+
+        if let Some((&param, mut state)) = jump {
+            // Apply an upwards velocity of sqrt(2gh), as stated in high school physics class.
+            // If the actor stops jumping before reaching maximum height, cancel the impulse.
+            match (state.tried, state.acted) {
+                (None, false) => {
+                    if let Some(commited) = state.time.take() {
+                        let total = (2. * param.jump_height * GRAVITY).sqrt();
+                        if commited < total / GRAVITY {
+                            let leftover = total - GRAVITY * commited;
+                            forces.linear_velocity_mut().y -= leftover;
+                        }
                     }
                 }
-            }
-            (Some(tried), false) => {
-                if let Some(ground_velocity) = contacts.is_grounded_and_velocity((tried + param.buffer_time).min(now), param.coyote_time) {
-                    // Disable coyote time on jump.
-                    contacts[GroundContacts::DOWN] = None;
-                    state.acted = true;
-                    state.time = Some(Duration::ZERO);
+                (Some(tried), false) => {
+                    if let Some(ground_velocity) = contacts.is_grounded_and_velocity((tried + param.buffer_time).min(now), param.coyote_time) {
+                        // Disable coyote time on jump.
+                        contacts[GroundContacts::DOWN] = None;
+                        state.acted = true;
+                        state.time = Some(0.);
 
-                    forces.linear_velocity_mut().y = ground_velocity.y + (2. * param.jump_height * GRAVITY).sqrt();
+                        forces.linear_velocity_mut().y = ground_velocity.y + (2. * param.jump_height * GRAVITY).sqrt();
+                    }
                 }
-            }
-            (.., true) => {
-                *state.time.get_or_insert(Duration::ZERO) += dt;
-            }
-        };
+                (.., true) => {
+                    *state.time.get_or_insert(0.) += dt;
+                }
+            };
+        }
     });
 }
 
 pub(super) fn plugin(app: &mut App) {
-    app.add_input_context_to::<FixedPreUpdate, GroundControl>().add_systems(
-        FixedUpdate,
-        (
-            update_ground_contacts,
-            (ground_move, ground_jump),
-            (evaluate_ground_move, evaluate_ground_jump).chain(),
-        )
-            .chain(),
-    );
+    app.add_input_context_to::<FixedPreUpdate, GroundControl>()
+        .add_systems(FixedUpdate, (update_ground_contacts, (ground_move, ground_jump), evaluate_ground).chain());
 }

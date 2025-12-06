@@ -14,6 +14,7 @@ pub mod world;
 pub mod prelude {
     pub use std::{
         any::{Any, TypeId, type_name},
+        array,
         borrow::Cow,
         cmp::Ordering::*,
         collections::BTreeMap,
