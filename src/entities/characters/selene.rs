@@ -62,7 +62,10 @@ fn on_selene_spawn(mut commands: Commands, mut messages: MessageReader<EntityCre
             ),
             // Inputs.
             (
-                GroundControl,
+                GroundControl {
+                    contact_shape: Collider::compound(vec![(collider_center - sprite_center, 0., Collider::rectangle(4., 22.))]),
+                    contact_distance: 1.,
+                },
                 GroundMove::default(),
                 GroundJump::default(),
                 actions!(GroundControl[(

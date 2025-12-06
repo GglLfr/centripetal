@@ -6,7 +6,10 @@ use crate::{
 
 #[derive(Component, Debug, Default, Clone)]
 #[require(GroundContacts, RigidBody::Dynamic, Mass = Self::LIGHT, AngularInertia(f32::MAX), NoAutoMass, NoAutoAngularInertia, LockedAxes::ROTATION_LOCKED)]
-pub struct GroundControl;
+pub struct GroundControl {
+    pub contact_shape: Collider,
+    pub contact_distance: f32,
+}
 
 #[derive(Component, Debug, Default, Deref, DerefMut, Clone, Copy)]
 pub struct GroundContacts(pub [Option<GroundContact>; 4]);
@@ -36,6 +39,10 @@ impl GroundContacts {
         })
     }
 
+    pub fn is_head_bumping(self, now: Duration, tolerance: Duration) -> bool {
+        self.is_touching(Self::UP, now, tolerance)
+    }
+
     pub fn is_clinging(self, now: Duration, tolerance: Duration) -> [bool; 2] {
         [
             self.is_touching(Self::LEFT, now, tolerance),
@@ -53,16 +60,18 @@ pub struct GroundContact {
 fn update_ground_contacts(
     time: Res<Time>,
     query: Res<SpatialQueryPipeline>,
-    contacts: Query<(Entity, &Position, &Rotation, &Collider, &mut GroundContacts)>,
+    contacts: Query<(Entity, &Position, &Rotation, &GroundControl, &mut GroundContacts)>,
     layers: Query<&CollisionLayers>,
     velocities: Query<&LinearVelocity>,
 ) {
     let now = time.elapsed();
-    contacts.par_iter_inner().for_each(|(e, &pos, &rot, collider, contacts)| {
+    contacts.par_iter_inner().for_each(|(e, &pos, &rot, control, contacts)| {
         let contacts = contacts.into_inner();
         let rot = rot.as_radians();
         let config = ShapeCastConfig {
-            max_distance: 1e-4,
+            max_distance: control.contact_distance,
+            target_distance: control.contact_distance,
+            ignore_origin_penetration: true,
             ..default()
         };
 
@@ -70,7 +79,7 @@ fn update_ground_contacts(
         let filter = SpatialQueryFilter::from_mask(layer.filters);
 
         for (i, dir) in GroundContacts::DIRS.into_iter().enumerate() {
-            query.shape_hits_callback(collider, *pos, rot, dir, &config, &filter, |data| {
+            query.shape_hits_callback(&control.contact_shape, *pos, rot, dir, &config, &filter, |data| {
                 if e != data.entity
                     && (layers.get(data.entity).copied().unwrap_or_default().filters & layer.memberships) != 0
                     && -data.normal1.dot(*dir) >= 0.5
@@ -140,7 +149,7 @@ impl Default for GroundJump {
         Self {
             // Jump as high as 2.5 meters.
             jump_height: 2.5 * PIXELS_PER_METER,
-            buffer_time: Duration::from_millis(200),
+            buffer_time: Duration::from_millis(100),
             coyote_time: Duration::from_millis(150),
         }
     }
@@ -223,6 +232,7 @@ fn evaluate_ground(
                 }
                 (Some(tried), false) => {
                     if let Some(ground_velocity) = contacts.is_grounded_and_velocity((tried + param.buffer_time).min(now), param.coyote_time) {
+                        info!("Jump!");
                         // Disable coyote time on jump.
                         contacts[GroundContacts::DOWN] = None;
                         state.acted = true;
@@ -232,7 +242,13 @@ fn evaluate_ground(
                     }
                 }
                 (.., true) => {
-                    *state.time.get_or_insert(0.) += dt;
+                    if contacts.is_head_bumping(now, Duration::ZERO) {
+                        state.tried = None;
+                        state.acted = false;
+                        state.time = None;
+                    } else {
+                        *state.time.get_or_insert(0.) += dt;
+                    }
                 }
             };
         }
