@@ -1,72 +1,4 @@
-use crate::{
-    CharacterTextures, MiscTextures,
-    control::{GroundControl, GroundJump, GroundMove, Jump, Movement},
-    math::{GlobalTransform2d, Transform2d},
-    prelude::*,
-    render::{
-        CameraTarget, MAIN_LAYER,
-        animation::{Animation, AnimationRepeat, AnimationTag},
-        painter::{Painter, PainterParam},
-    },
-    world::{EntityCreate, LevelSystems, MessageReaderEntityExt},
-};
-
-#[derive(Component, Debug)]
-pub struct Selene;
-impl Selene {
-    pub const IDENT: &'static str = "selene";
-    pub const IDLE: &'static str = "idle";
-}
-
-fn on_selene_spawn(mut commands: Commands, mut messages: MessageReader<EntityCreate>, textures: Res<CharacterTextures>) {
-    for &EntityCreate { entity, bounds, .. } in messages.created(Selene::IDENT) {
-        let sprite_center = bounds.center();
-        let collider_center = vec2(sprite_center.x, bounds.min.y + 12.);
-
-        commands.entity(entity).insert((
-            Selene,
-            // Hair.
-            children![
-                (Transform2d::from_xyz(-2.5, 4.5, -f32::EPSILON), Hair::new(3, 2., 0.1)),
-                (Transform2d::from_xyz(-1.25, 3.75, -f32::EPSILON), Hair::new(5, 2., 0.1)),
-                (Transform2d::from_xyz(0., 3., -f32::EPSILON), Hair::new(6, 2., 0.1)),
-                (Transform2d::from_xyz(1.25, 3.75, -f32::EPSILON), Hair::new(5, 2., 0.1)),
-                (Transform2d::from_xyz(2.5, 4.5, -f32::EPSILON), Hair::new(3, 2., 0.1)),
-            ],
-            // Transforms.
-            (
-                Transform2d::from_translation(sprite_center.extend(1.)),
-                TransformInterpolation,
-                TransformHermiteEasing,
-                CameraTarget::default(),
-            ),
-            // Rendering.
-            (Animation::from(&textures.selene), AnimationTag::new(Selene::IDLE), AnimationRepeat::Loop),
-            MAIN_LAYER,
-            // Physics.
-            (
-                SweptCcd::LINEAR,
-                Collider::compound(vec![(collider_center - sprite_center, 0., Collider::rectangle(6., 24.))]),
-                #[cfg(feature = "dev")]
-                DebugRender::none(),
-            ),
-            // Inputs.
-            (
-                GroundControl,
-                GroundMove::default(),
-                GroundJump::default(),
-                actions!(GroundControl[(
-                    Action::<Movement>::new(),
-                    Down::new(0.5),
-                    Bindings::spawn(Cardinal::arrows()),
-                ), (
-                    Action::<Jump>::new(),
-                    bindings![KeyCode::KeyZ],
-                )]),
-            ),
-        ));
-    }
-}
+use crate::{math::Transform2d, prelude::*};
 
 /// Hair strand simulation with Verlet integration.
 ///
@@ -74,7 +6,7 @@ fn on_selene_spawn(mut commands: Commands, mut messages: MessageReader<EntityCre
 /// the hair deals with constraints, and PBD proves the correct tool to give a nice stable result.
 #[derive(Component, Debug)]
 #[component(on_insert = Self::on_insert)]
-#[require(Painter, Transform2d, Position, Rotation)]
+#[require(Transform, Position, Rotation)]
 pub struct Hair {
     segments: Vec<HairSegment>,
     segment_length: f32,
@@ -90,6 +22,10 @@ impl Hair {
             damping,
             last_anchor: Vec2::NAN,
         }
+    }
+
+    pub fn iter_strands(&self) -> impl Iterator<Item = Entity> {
+        self.segments.iter().map(|seg| seg.entity)
     }
 
     fn on_insert(
@@ -149,7 +85,7 @@ fn update_hair_segments(time: Res<Time>, gravity: Res<Gravity>, hairs: Query<(&m
             }
         }
 
-        for _ in 0..4 {
+        for _ in 0..6 {
             let Some(first) = hair.segments.first_mut() else { continue };
             {
                 let dir = first.position - *pos;
@@ -206,40 +142,11 @@ fn writeback_hair_transforms(hairs: Query<(&Hair, &GlobalTransform, &Position, &
     }
 }
 
-fn draw_hair(
-    param: PainterParam,
-    misc: Res<MiscTextures>,
-    hairs: Query<(&Painter, &Hair, &GlobalTransform2d)>,
-    hair_transforms: Query<&GlobalTransform2d>,
-) {
-    for (painter, hair, &hair_trns) in hairs {
-        let mut ctx = param.ctx(painter);
-        ctx.layer = hair_trns.z;
-        ctx.color = Srgba::hex("70A3C4").unwrap().into();
-
-        let count = hair.segments.len();
-        let mut prev_pos = hair_trns.affine.translation;
-        for (i, &trns) in hair_transforms.iter_many(hair.segments.iter().map(|seg| seg.entity)).enumerate() {
-            ctx.line(
-                &misc.white,
-                prev_pos,
-                (count - i + 1) as f32 / count as f32 * 2.1,
-                trns.affine.translation,
-                (count - i) as f32 / count as f32 * 1.1,
-            );
-
-            prev_pos = trns.affine.translation;
-        }
-    }
-}
-
 pub(super) fn plugin(app: &mut App) {
-    app.add_systems(Update, on_selene_spawn.in_set(LevelSystems::SpawnEntities))
-        .add_systems(
-            FixedPostUpdate,
-            (update_hair_segments, writeback_hair_transforms)
-                .chain()
-                .in_set(PhysicsSystems::Writeback),
-        )
-        .add_systems(PostUpdate, draw_hair.after(TransformSystems::Propagate));
+    app.add_systems(
+        FixedPostUpdate,
+        (update_hair_segments, writeback_hair_transforms)
+            .chain()
+            .in_set(PhysicsSystems::Writeback),
+    );
 }

@@ -58,6 +58,22 @@ impl PainterContext<'_> {
         ]]);
     }
 
+    pub fn quad(self, region: impl Into<AssetId<AtlasRegion>>, vertices: [Vec2; 4]) {
+        let region = region.into();
+        let Some(region) = self.regions.get(region) else {
+            error!("Missing atlas region `{region}`");
+            return
+        };
+
+        let [uv0, uv1, uv2, uv3] = region.uv_corners();
+        self.quads.request(self.painter, &region.page.texture, self.blend, self.layer, [[
+            Vertex::new(vertices[0], self.color, uv0),
+            Vertex::new(vertices[1], self.color, uv1),
+            Vertex::new(vertices[2], self.color, uv2),
+            Vertex::new(vertices[3], self.color, uv3),
+        ]]);
+    }
+
     pub fn line(self, region: impl Into<AssetId<AtlasRegion>>, from: Vec2, from_thickness: f32, to: Vec2, to_thickness: f32) {
         let region = region.into();
         let Some(region) = self.regions.get(region) else {
