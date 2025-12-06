@@ -13,13 +13,17 @@ use crate::{
 };
 
 #[derive(Component, Debug, Clone, Copy)]
-pub struct Selene {
-    pub hairs: [Entity; 5],
-}
-
+pub struct Selene;
 impl Selene {
     pub const IDENT: &'static str = "selene";
     pub const IDLE: &'static str = "idle";
+}
+
+#[derive(Component, Debug, Clone)]
+#[require(Painter, Transform2d)]
+pub struct SeleneHair {
+    pub color: LinearRgba,
+    pub widths: Vec<f32>,
 }
 
 fn on_selene_spawn(mut commands: Commands, mut messages: MessageReader<EntityCreate>, textures: Res<CharacterTextures>) {
@@ -27,9 +31,18 @@ fn on_selene_spawn(mut commands: Commands, mut messages: MessageReader<EntityCre
         let sprite_center = bounds.center();
         let collider_center = vec2(sprite_center.x, bounds.min.y + 12.);
 
-        let hairs = array::from_fn(|_| commands.spawn_empty().id());
+        let hair_back = vec![6., 5.25, 4.5, 3.75, 3., 2.5, 2., 1.5, 1.];
         commands.entity(entity).insert((
-            Selene { hairs },
+            Selene,
+            // Hair.
+            children![(
+                Transform2d::from_xyz(0., 5., -f32::EPSILON),
+                Hair::new(hair_back[1..].iter().map(|rad| rad * 0.5), 0.1),
+                SeleneHair {
+                    color: Srgba::hex("70A3C4").unwrap().into(),
+                    widths: hair_back,
+                },
+            )],
             // Transforms.
             (
                 Transform2d::from_translation(sprite_center.extend(1.)),
@@ -62,59 +75,23 @@ fn on_selene_spawn(mut commands: Commands, mut messages: MessageReader<EntityCre
                 )]),
             ),
         ));
-
-        for (i, e) in hairs.into_iter().enumerate() {
-            commands.entity(e).insert((ChildOf(entity), match i {
-                0 => (Transform2d::from_xy(-3., 4.), Hair::new(6, 1., 0.1)),
-                1 => (Transform2d::from_xy(-1., 4.), Hair::new(6, 1., 0.1)),
-                2 => (Transform2d::from_xy(0.5, 4.), Hair::new(6, 1., 0.1)),
-                3 => (Transform2d::from_xy(2., 4.), Hair::new(6, 1., 0.1)),
-                4 => (Transform2d::from_xy(4., 4.), Hair::new(6, 1., 0.1)),
-                _ => continue,
-            }));
-        }
     }
 }
 
 fn draw_selene_hair(
     param: PainterParam,
     misc: Res<MiscTextures>,
-    selenes: Query<(&Selene, &Painter, &GlobalTransform2d)>,
-    hair_query: Query<&Hair>,
-    trns_query: Query<&GlobalTransform2d>,
+    hairs: Query<(&SeleneHair, &Hair, &Painter, &GlobalTransform2d)>,
+    strands: Query<&GlobalTransform2d>,
 ) {
-    let hair_back = LinearRgba::from(Srgba::from_u8_array(u32::to_be_bytes(0x70a3c4ff)));
-    for (selene, painter, &selene_trns) in selenes {
+    for (hair, hair_segments, painter, &trns) in hairs {
         let mut ctx = param.ctx(painter);
-        ctx.color = LinearRgba::new(1., 1., 1., 0.5); //hair_back;
-        ctx.layer = selene_trns.z.next_up();
+        ctx.color = hair.color;
+        ctx.layer = trns.z;
 
-        for hairs in selene.hairs.windows(2) {
-            let &[a, b] = hairs else { continue };
-
-            let [Ok(mut prev_a), Ok(mut prev_b)] = [a, b].map(|e| trns_query.get(e).map(|t| t.affine.translation)) else { continue };
-            let [Ok(mut a), Ok(mut b)] = [a, b].map(|e| {
-                hair_query.get(e).map(|hair| {
-                    hair.iter_strands()
-                        .flat_map(|strand| trns_query.get(strand).map(|t| t.affine.translation))
-                })
-            }) else {
-                continue
-            };
-
-            let [Some(mut curr_a), Some(mut curr_b)] = [a.next(), b.next()] else { continue };
-            loop {
-                ctx.quad(&misc.white, [prev_a, curr_a, curr_b, prev_b]);
-                match (a.next(), b.next()) {
-                    (None, None) => break,
-                    (Some(next_a), Some(next_b)) => {
-                        prev_a = mem::replace(&mut curr_a, next_a);
-                        prev_b = mem::replace(&mut curr_b, next_b);
-                    }
-                    (Some(next_a), None) => prev_a = mem::replace(&mut curr_a, next_a),
-                    (None, Some(next_b)) => prev_b = mem::replace(&mut curr_b, next_b),
-                }
-            }
+        ctx.rect(&misc.circle, trns.affine, (Some(Vec2::splat(hair.widths[0])), default()));
+        for (&next, &rad) in strands.iter_many(hair_segments.iter_strands()).zip(&hair.widths[1..]) {
+            ctx.rect(&misc.circle, next.affine, (Some(Vec2::splat(rad)), default()));
         }
     }
 }

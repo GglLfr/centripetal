@@ -55,6 +55,7 @@ define_collection! {
 
 define_collection! {
     pub MiscTextures {
+        circle: AtlasRegion = "misc/circle.png",
         white: AtlasRegion = "misc/white.png"
     }
 }

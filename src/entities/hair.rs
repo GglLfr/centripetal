@@ -9,22 +9,28 @@ use crate::{math::Transform2d, prelude::*};
 #[require(Transform, Position, Rotation)]
 pub struct Hair {
     segments: Vec<HairSegment>,
-    segment_length: f32,
     damping: f32,
     last_anchor: Vec2,
 }
 
 impl Hair {
-    pub fn new(length: usize, segment_length: f32, damping: f32) -> Self {
+    pub fn new(segment_lengths: impl IntoIterator<Item = f32>, damping: f32) -> Self {
         Self {
-            segments: Vec::with_capacity(length),
-            segment_length,
+            segments: segment_lengths
+                .into_iter()
+                .map(|length| HairSegment {
+                    entity: Entity::PLACEHOLDER,
+                    position: Vec2::NAN,
+                    last_position: Vec2::NAN,
+                    length,
+                })
+                .collect(),
             damping,
             last_anchor: Vec2::NAN,
         }
     }
 
-    pub fn iter_strands(&self) -> impl Iterator<Item = Entity> {
+    pub fn iter_strands(&self) -> impl Iterator<Item = Entity> + ExactSizeIterator {
         self.segments.iter().map(|seg| seg.entity)
     }
 
@@ -43,12 +49,9 @@ impl Hair {
         let (mut entities, mut commands) = world.entities_and_commands();
         let Some(mut this) = entities.get_mut(entity).ok().and_then(|e| e.into_mut::<Self>()) else { return };
 
-        let cap = this.segments.capacity();
-        this.segments.resize_with(cap, || HairSegment {
-            entity: commands.spawn((ChildOf(entity), Transform2d::default(), TransformInterpolation)).id(),
-            position: Vec2::NAN,
-            last_position: Vec2::NAN,
-        });
+        for seg in &mut this.segments {
+            seg.entity = commands.spawn((ChildOf(entity), Transform2d::default(), TransformInterpolation)).id();
+        }
     }
 }
 
@@ -57,6 +60,7 @@ struct HairSegment {
     entity: Entity,
     position: Vec2,
     last_position: Vec2,
+    length: f32,
 }
 
 fn update_hair_segments(time: Res<Time>, gravity: Res<Gravity>, hairs: Query<(&mut Hair, &Position)>) {
@@ -71,10 +75,10 @@ fn update_hair_segments(time: Res<Time>, gravity: Res<Gravity>, hairs: Query<(&m
         }
 
         for (i, seg) in hair.segments.iter_mut().enumerate() {
+            // TODO accumulate position
             if seg.position.is_nan() {
-                let init_pos = *pos + vec2(0., (i + 1) as f32 * -hair.segment_length);
-                seg.position = init_pos;
-                seg.last_position = init_pos;
+                seg.position = *pos;
+                seg.last_position = *pos;
             } else {
                 // x_[t + Δt] = 2x_[t] - x_[t - Δt] + aΔt^2
                 // Assume gravity is the only acceleration applied to each segment.
@@ -85,17 +89,18 @@ fn update_hair_segments(time: Res<Time>, gravity: Res<Gravity>, hairs: Query<(&m
             }
         }
 
-        for _ in 0..6 {
+        // TODO Probably use XPBD to avoid iterating *this* much...
+        for _ in 0..15 {
             let Some(first) = hair.segments.first_mut() else { continue };
             {
                 let dir = first.position - *pos;
                 let dir_len2 = dir.length_squared();
                 if dir_len2 > 1e-5 {
                     let dir_len = dir_len2.sqrt();
-                    let err = (dir_len - hair.segment_length) / dir_len;
+                    let err = (dir_len - first.length) / dir_len;
                     first.position -= dir * err;
                 } else {
-                    first.position = *pos + vec2(0., -hair.segment_length);
+                    first.position = *pos + vec2(0., -first.length);
                 }
             }
 
@@ -108,7 +113,7 @@ fn update_hair_segments(time: Res<Time>, gravity: Res<Gravity>, hairs: Query<(&m
                 }
 
                 let delta_len = delta_len2.sqrt();
-                let correction = delta * 0.5 * (delta_len - hair.segment_length) / delta_len;
+                let correction = delta * 0.5 * (delta_len - hair.segments[i + 1].length) / delta_len;
 
                 if i == 0 {
                     hair.segments[i + 1].position -= correction * 2.;
