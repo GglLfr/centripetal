@@ -1,5 +1,3 @@
-pub use centripetal_macros::MapAssetIds;
-
 use crate::{
     GameState, ProgressSystems,
     prelude::*,
@@ -90,53 +88,6 @@ fn track_asset_loading(progress: ProgressFor<GameState>, known_assets: Res<Known
 
     progress.update([current, known_assets.id_to_path.len() * 2]);
     Ok(())
-}
-
-pub trait MapAssetIds: 'static {
-    fn visit_asset_ids(&self, visitor: &mut dyn FnMut(UntypedAssetId));
-
-    fn map_asset_ids(&mut self, mapper: &mut dyn FnMut(UntypedAssetId) -> UntypedAssetId);
-}
-
-#[derive(Clone, Copy)]
-pub struct ReflectMapAssetIds {
-    visit_asset_ids: fn(&dyn PartialReflect, &mut dyn FnMut(UntypedAssetId)),
-    map_asset_ids: fn(&mut dyn PartialReflect, &mut dyn FnMut(UntypedAssetId) -> UntypedAssetId),
-}
-
-impl ReflectMapAssetIds {
-    pub fn visit_asset_ids(&self, target: &dyn PartialReflect, visitor: &mut dyn FnMut(UntypedAssetId)) {
-        (self.visit_asset_ids)(target, visitor)
-    }
-
-    pub fn map_asset_ids(&self, target: &mut dyn PartialReflect, mapper: &mut dyn FnMut(UntypedAssetId) -> UntypedAssetId) {
-        (self.map_asset_ids)(target, mapper)
-    }
-}
-
-impl<T: MapAssetIds> FromType<T> for ReflectMapAssetIds {
-    fn from_type() -> Self {
-        Self {
-            visit_asset_ids: |target, visitor| {
-                let target = target.try_downcast_ref::<T>().expect("Wrong type provided");
-                target.visit_asset_ids(visitor);
-            },
-            map_asset_ids: |target, mapper| {
-                let target = target.try_downcast_mut::<T>().expect("Wrong type provided");
-                target.map_asset_ids(mapper);
-            },
-        }
-    }
-}
-
-impl<T: Asset> MapAssetIds for AssetId<T> {
-    fn visit_asset_ids(&self, visitor: &mut dyn FnMut(UntypedAssetId)) {
-        visitor(self.untyped())
-    }
-
-    fn map_asset_ids(&mut self, mapper: &mut dyn FnMut(UntypedAssetId) -> UntypedAssetId) {
-        *self = mapper(self.untyped()).typed_debug_checked();
-    }
 }
 
 pub(super) fn register_user_sources(app: &mut App) {

@@ -242,12 +242,6 @@ impl<T: FreelyMutableState> ProgressPlugin<T> {
     }
 }
 
-impl<T: FreelyMutableState> Default for ProgressPlugin<T> {
-    fn default() -> Self {
-        Self::new(Update)
-    }
-}
-
 impl<T: FreelyMutableState> Plugin for ProgressPlugin<T> {
     fn build(&self, app: &mut App) {
         app.insert_resource(ProgressTracker::<T>::default())

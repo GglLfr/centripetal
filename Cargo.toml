@@ -22,16 +22,10 @@ avian2d = { version = "0.4", default-features = false, features = [
 ] }
 bevy_enhanced_input = "0.20"
 bevy_framepace = "0.20"
-bevy-tnua = "0.26"
-bevy-tnua-avian2d = "0.8"
 bevy_yarnspinner = "0.6"
 
 async-channel = "2"
 atomicow = "1"
-bincode = { version = "2", default-features = false, features = [
-    "std",
-    "serde",
-] }
 bitflags = "2"
 bytemuck = { version = "1", features = ["derive", "latest_stable_rust"] }
 directories = "6"
@@ -87,7 +81,6 @@ dev = [
     "bevy/debug",
     "bevy/embedded_watcher",
     "bevy/file_watcher",
-    "bevy/hotpatching",
     "bevy/track_location",
     "avian2d/debug-plugin",
 ]
@@ -97,6 +90,3 @@ panic = "unwind"
 
 [profile.release]
 panic = "abort"
-
-[patch.crates-io]
-erased-serde = { path = "vendor/erased-serde" }

@@ -24,7 +24,7 @@ pub struct AnimationIndices {
     pub direction: AnimationDirection,
 }
 
-#[derive(Reflect, Debug, Serialize, Deserialize)]
+#[derive(Reflect, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum AnimationDirection {
     Forward,

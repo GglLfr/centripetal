@@ -7,7 +7,6 @@ pub mod control;
 pub mod entities;
 pub mod math;
 pub mod render;
-pub mod saves;
 pub mod util;
 pub mod world;
 
@@ -86,7 +85,7 @@ pub mod prelude {
             },
         },
         prelude::*,
-        reflect::{FromType, Reflectable, TypeRegistry, TypeRegistryArc, erased_serde},
+        reflect::{FromType, Reflectable, TypeRegistry, TypeRegistryArc},
         render::{
             Extract, MainWorld, Render, RenderApp, RenderStartup, RenderSystems,
             render_asset::RenderAssets,
@@ -116,15 +115,9 @@ pub mod prelude {
         prelude::*,
     };
     pub use bevy_framepace::FramepacePlugin;
-    pub use bevy_tnua::prelude::*;
-    pub use bevy_tnua_avian2d::prelude::*;
     pub use bitflags::{bitflags, bitflags_match};
     pub use bytemuck::{Pod, Zeroable, must_cast_slice as cast_slice, must_cast_slice_mut as cast_slice_mut};
-    pub use serde::{
-        Deserialize, Deserializer, Serialize, Serializer,
-        de::{self, DeserializeSeed},
-        ser::{self, SerializeMap, SerializeSeq, SerializeStruct, SerializeTuple},
-    };
+    pub use serde::{Deserialize, de};
     pub use slab::Slab;
     pub use smallvec::{SmallVec, smallvec};
     pub use vec_belt::{Transfer, VecBelt};
@@ -139,15 +132,6 @@ static ALLOC: mimalloc_redirect::MiMalloc = mimalloc_redirect::MiMalloc;
 #[cfg(not(target_family = "wasm"))]
 fn print_mimalloc_version(_: &mut App) {
     info!("Using MiMalloc {}", mimalloc_redirect::MiMalloc::get_version());
-}
-
-#[inline(always)]
-pub fn patched<T>(func: impl FnMut() -> T) -> T {
-    #[cfg(feature = "dev")]
-    return bevy::app::hotpatch::call(func);
-
-    #[cfg(not(feature = "dev"))]
-    func()
 }
 
 pub const PIXELS_PER_METER: f32 = 16.;
@@ -198,7 +182,7 @@ pub fn main() -> AppExit {
         .insert_resource(DefaultFriction(Friction::new(0.)))
         .init_state::<GameState>()
         .add_plugins((
-            ProgressPlugin::default()
+            ProgressPlugin::new(Update)
                 .trans(GameState::AssetLoading, GameState::Menu)
                 .trans(GameState::LevelLoading, GameState::InGame { paused: false }),
             asset::plugin,
@@ -206,7 +190,6 @@ pub fn main() -> AppExit {
             entities::plugin,
             math::plugin,
             render::plugin,
-            saves::plugin,
             util::plugin,
             world::plugin,
         ))
@@ -242,6 +225,10 @@ fn set_panic_hook() {
             .unwrap_or_default()
             .join(log_name);
 
+        // TODO This is technically a security vulnerability.
+        //      The message provided to the message box is not checked, so somehow one could generate a
+        //      malicious backtrace to execute arbitrary commands on the host.
+        //      Someday, I would like to sanitize the inputs.
         error!("{backtrace}");
         tfd::MessageBox::new(
             "Crash!",

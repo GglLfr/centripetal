@@ -1,24 +1,20 @@
 use crate::{
-    GameState, MapAssetIds, ReflectMapAssetIds,
+    GameState,
     math::Transform2d,
     prelude::*,
     render::{MAIN_LAYER, MainCamera, atlas::AtlasRegion},
-    saves::{ReflectSave, Save},
     util::ecs::ReflectComponentPtr,
 };
 
-pub const TILE_PIXEL_SIZE: f32 = 8.;
 pub const TILEMAP_CHUNK_SIZE: u32 = 64;
 
-#[derive(Reflect, Save, Component, MapAssetIds, MapEntities, Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Reflect, Component, MapEntities, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[component(immutable, on_insert = on_tile_insert, on_replace = on_tile_replace)]
-#[version(0 = Self)]
-#[reflect(Save, Component, ComponentPtr, MapAssetIds, MapEntities, Debug, Clone, PartialEq, Hash)]
+#[reflect(Component, ComponentPtr, MapEntities, Debug, Clone, PartialEq, Hash)]
 pub struct Tile {
     #[entities]
     pub tilemap: Entity,
     pub pos: UVec2,
-    #[assets]
     pub region: AssetId<AtlasRegion>,
 }
 
@@ -91,12 +87,12 @@ fn on_tile_replace(
     }
 }
 
-#[derive(Reflect, Save, Component, MapEntities, Debug, Clone)]
+#[derive(Reflect, Component, MapEntities, Debug, Clone)]
 #[require(TilemapChunks, TilemapParallax, Transform2d, Visibility)]
 #[component(on_despawn = on_tilemap_despawn)]
-#[version(0 = Self)]
-#[reflect(Save, Component, ComponentPtr, MapEntities, Debug, Clone)]
+#[reflect(Component, ComponentPtr, MapEntities, Debug, Clone)]
 pub struct Tilemap {
+    grid_size: f32,
     dimension: UVec2,
     #[entities]
     tiles: Vec<Option<Entity>>,
@@ -104,84 +100,18 @@ pub struct Tilemap {
     changed_chunks: HashSet<UVec2>,
 }
 
-impl Serialize for Tilemap {
-    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        struct TilesSerializer<'a>(UVec2, &'a [Option<Entity>]);
-        impl Serialize for TilesSerializer<'_> {
-            fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-                let &Self(dimension, tiles) = self;
-                let width = dimension.x as usize;
-
-                let mut ser = serializer.serialize_seq(Some(tiles.iter().flatten().count()))?;
-                for (i, tile) in tiles.iter().enumerate() {
-                    let Some(tile) = tile else { continue };
-                    let x = (i % width) as u32;
-                    let y = (i / width) as u32;
-                    ser.serialize_element(&(x, y, tile))?;
-                }
-                ser.end()
-            }
-        }
-
-        let mut ser = serializer.serialize_struct("Tilemap", 2)?;
-        ser.serialize_field("dimension", &self.dimension)?;
-        ser.serialize_field("tiles", &TilesSerializer(self.dimension, &self.tiles))?;
-        ser.end()
-    }
-}
-
-impl<'de> Deserialize<'de> for Tilemap {
-    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        struct TilemapVisitor;
-        impl<'de> de::Visitor<'de> for TilemapVisitor {
-            type Value = Tilemap;
-
-            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-                write!(formatter, "a `Tilemap`")
-            }
-
-            fn visit_map<A: de::MapAccess<'de>>(self, mut map: A) -> Result<Self::Value, A::Error> {
-                let mut dimension = None;
-                let mut tiles = None;
-
-                while let Some(field) = map.next_key()? {
-                    match field {
-                        "dimension" => {
-                            if dimension.replace(map.next_value()?).is_some() {
-                                Err(de::Error::duplicate_field("dimension"))?
-                            }
-                        }
-                        "tiles" => {
-                            if tiles.replace(map.next_value::<Vec<(u32, u32, Entity)>>()?).is_some() {
-                                Err(de::Error::duplicate_field("tiles"))?
-                            }
-                        }
-                        unknown => Err(de::Error::unknown_field(unknown, &["dimension", "tiles"]))?,
-                    }
-                }
-
-                let mut tilemap = Tilemap::new(dimension.ok_or_else(|| de::Error::missing_field("dimension"))?);
-                let width = tilemap.dimension.x as usize;
-                for (x, y, tile) in tiles.ok_or_else(|| de::Error::missing_field("tiles"))? {
-                    tilemap.tiles[y as usize * width + x as usize] = Some(tile);
-                    tilemap.changed_chunks.insert(uvec2(x, y) / TILEMAP_CHUNK_SIZE);
-                }
-
-                Ok(tilemap)
-            }
-        }
-
-        deserializer.deserialize_struct("Tilemap", &["dimension", "tiles"], TilemapVisitor)
-    }
-}
-
 impl Tilemap {
-    pub fn new(dimension: UVec2) -> Self {
+    pub fn new(grid_size: f32, dimension: UVec2) -> Self {
         Self {
+            grid_size,
             dimension,
             tiles: vec![None; dimension.x as usize * dimension.y as usize],
             changed_chunks: default(),
         }
+    }
+
+    pub fn grid_size(&self) -> f32 {
+        self.grid_size
     }
 
     pub fn dimension(&self) -> UVec2 {
@@ -329,8 +259,8 @@ fn update_tilemap_chunks(
                             let Some(&tile) = tile.and_then(|e| tiles.get(e).ok()) else { continue };
                             let Some(region) = regions.get(tile.region) else { continue };
 
-                            let [bx, by] = ((pos % TILEMAP_CHUNK_SIZE).as_vec2() * TILE_PIXEL_SIZE).to_array();
-                            let [tx, ty] = [bx + TILE_PIXEL_SIZE, by + TILE_PIXEL_SIZE];
+                            let [bx, by] = ((pos % TILEMAP_CHUNK_SIZE).as_vec2() * tilemap.grid_size).to_array();
+                            let [tx, ty] = [bx + tilemap.grid_size, by + tilemap.grid_size];
                             let (positions, uvs, indices): &mut (Vec<_>, Vec<_>, Vec<_>) = &mut for_image.entry(&region.page.texture).or_default();
 
                             let i = positions.len() as u16;
@@ -364,7 +294,7 @@ fn update_tilemap_chunks(
                                     },
                                     (
                                         ChildOf(chunk_entity),
-                                        Aabb::from_min_max(Vec3::ZERO, Vec2::splat(TILEMAP_CHUNK_SIZE as f32 * TILE_PIXEL_SIZE as f32).extend(0.)),
+                                        Aabb::from_min_max(Vec3::ZERO, Vec2::splat(TILEMAP_CHUNK_SIZE as f32 * tilemap.grid_size).extend(0.)),
                                         Mesh2d(mesh_handle),
                                         MeshMaterial2d(material_handle),
                                         MAIN_LAYER,
@@ -385,10 +315,9 @@ fn update_tilemap_chunks(
     }
 }
 
-#[derive(Reflect, Save, Component, Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Reflect, Component, Debug, Clone, Copy)]
 #[require(Transform2d)]
-#[version(0 = Self)]
-#[reflect(Save, Component, ComponentPtr, Debug, Default, FromWorld, Clone)]
+#[reflect(Component, ComponentPtr, Debug, Default, FromWorld, Clone)]
 pub struct TilemapParallax {
     pub factor: Vec2,
     pub scale: bool,

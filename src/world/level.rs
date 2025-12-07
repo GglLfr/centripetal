@@ -3,10 +3,10 @@ use crate::{
     math::Transform2d,
     prelude::*,
     util::{IteratorExt, async_bridge::AsyncBridge},
-    world::{LevelCollectionRef, TILE_PIXEL_SIZE, Tile, Tilemap, TilemapParallax, WorldEnum},
+    world::{LevelCollectionRef, Tile, Tilemap, TilemapParallax, WorldEnum},
 };
 
-#[derive(Reflect, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[derive(Reflect, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize)]
 #[serde(rename_all = "snake_case")]
 #[reflect(Debug, Clone, PartialEq, Hash)]
 pub enum TileProperty {
@@ -333,9 +333,9 @@ fn load_level_task(
                     let mut entities = commands.spawn_many(gridTiles.len() as u32 + 1).await?.into_iter();
 
                     let tilemap_entity = entities.next().expect("Non-zero integer was provided; the entity must exist");
-                    commands
-                        .entity(tilemap_entity)
-                        .insert((Tilemap::new(uvec2(layer.__cWid, layer.__cHei)), TilemapProperties {
+                    commands.entity(tilemap_entity).insert((
+                        Tilemap::new(layer.__gridSize as f32, uvec2(layer.__cWid, layer.__cHei)),
+                        TilemapProperties {
                             tiles: tileset.properties.iter().try_map_into_default(|(key, value)| {
                                 Ok::<_, BevyError>((
                                     *(key.as_ref() as &dyn PartialReflect)
@@ -344,7 +344,8 @@ fn load_level_task(
                                     value.clone(),
                                 ))
                             })?,
-                        }));
+                        },
+                    ));
 
                     let kind = match layer.__identifier.as_str() {
                         "tiles_back" => TileLayerKind::Back,
@@ -418,7 +419,7 @@ fn tiles_main_created(
         commands.entity(e).insert((
             RigidBody::Static,
             Collider::voxels(
-                Vec2::splat(TILE_PIXEL_SIZE),
+                Vec2::splat(tilemap.grid_size()),
                 &*tilemap
                     .iter_tiles()
                     .flat_map(|(pos, tile)| {
