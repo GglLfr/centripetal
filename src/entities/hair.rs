@@ -91,7 +91,7 @@ fn update_hair_segments(time: Res<Time>, gravity: Res<Gravity>, hairs: Query<(&m
         }
 
         // TODO Probably use XPBD to avoid iterating *this* much...
-        for _ in 0..15 {
+        for _ in 0..16 {
             let Some(first) = hair.segments.first_mut() else { continue };
             {
                 let dir = first.position - *pos;

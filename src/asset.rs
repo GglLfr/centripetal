@@ -13,7 +13,7 @@ macro_rules! define_collection {
         #[derive(Resource, Debug)]
         $(#[$attr])*
         $vis struct $name {
-            $vis $($asset_name: Handle<$asset_type>,)*
+            $($vis $asset_name: Handle<$asset_type>,)*
         }
 
         impl $name {

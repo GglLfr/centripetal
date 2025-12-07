@@ -360,7 +360,6 @@ fn path_join(a: Vec2, b: Vec2, c: Vec2, hw: f32) -> Vec2 {
     let v1 = b - a;
     let v2 = c - b;
 
-    // v1.x * v2.x + v1.y * v2.y, v2.x * v1.y - v2.y * v1.x
     let t = vec2(v2.x * v1.y - v2.y * v1.x, v1.x * v2.x + v1.y * v2.y).to_angle();
     if !t.is_finite() {
         Vec2::ZERO

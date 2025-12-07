@@ -226,9 +226,26 @@ fn draw_animations(
     });
 }
 
+#[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum AnimationSystems {
+    /// [`PostUpdate`].
+    Update,
+    /// [`PostUpdate`] after [`TransformSystems::Propagate`] and [`AnimationSystems::Update`].
+    Draw,
+}
+
 pub(super) fn plugin(app: &mut App) {
-    app.add_message::<AnimationEnd>().add_message::<AnimationLoop>().add_systems(
+    app.configure_sets(
         PostUpdate,
-        (update_animation_states, draw_animations.after(TransformSystems::Propagate)).chain(),
+        (AnimationSystems::Update, AnimationSystems::Draw.after(TransformSystems::Propagate)).chain(),
+    )
+    .add_message::<AnimationEnd>()
+    .add_message::<AnimationLoop>()
+    .add_systems(
+        PostUpdate,
+        (
+            update_animation_states.in_set(AnimationSystems::Update),
+            draw_animations.in_set(AnimationSystems::Draw),
+        ),
     );
 }

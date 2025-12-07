@@ -9,6 +9,7 @@ pub struct AnimationSheet {
     pub region: Handle<AtlasRegion>,
     pub frames: Vec<AnimationFrame>,
     pub frame_tags: HashMap<String, AnimationIndices>,
+    pub event_tags: HashMap<String, AnimationIndices>,
 }
 
 #[derive(Reflect, Debug)]
@@ -92,6 +93,28 @@ impl AssetLoader for AnimationSheetLoader {
         let region = load_context.loader().immediate().load::<AtlasRegion>(region_path).await?;
         let region_ref = region.get();
 
+        let mut frame_tags = HashMap::new();
+        let mut event_tags = HashMap::new();
+
+        for tag in repr.meta.frameTags {
+            match tag.name.split_at_checked(2) {
+                None => Err(format!("Invalid tag name {}", tag.name))?,
+                Some((ident, name)) => {
+                    let tag = AnimationIndices {
+                        indices: tag.from..=tag.to,
+                        direction: tag.direction,
+                    };
+
+                    match ident {
+                        "f:" => &mut frame_tags,
+                        "e:" => &mut event_tags,
+                        unknown => Err(format!("Unknown tag category {}", &unknown[0..1]))?,
+                    }
+                    .insert(name.into(), tag);
+                }
+            }
+        }
+
         Ok(AnimationSheet {
             frames: repr.frames.into_iter().try_map_into_default(|(i, frame)| {
                 let frame_pos = uvec2(frame.x, frame.y);
@@ -115,17 +138,8 @@ impl AssetLoader for AnimationSheetLoader {
                 })
             })?,
             region: load_context.add_loaded_labeled_asset("region", region),
-            frame_tags: repr
-                .meta
-                .frameTags
-                .into_iter()
-                .map(|tag| {
-                    (tag.name, AnimationIndices {
-                        indices: tag.from..=tag.to,
-                        direction: tag.direction,
-                    })
-                })
-                .collect(),
+            frame_tags,
+            event_tags,
         })
     }
 }

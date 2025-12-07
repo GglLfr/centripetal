@@ -1,12 +1,12 @@
 use crate::{
     CharacterTextures, MiscTextures,
-    control::{GroundControl, GroundJump, GroundMove, Jump, Movement},
+    control::{GroundControl, GroundControlDirection, GroundControlState, GroundJump, GroundMove, Jump, Movement},
     entities::Hair,
     math::{GlobalTransform2d, Transform2d},
     prelude::*,
     render::{
         CameraTarget, MAIN_LAYER,
-        animation::{Animation, AnimationRepeat, AnimationTag},
+        animation::{Animation, AnimationRepeat, AnimationSystems, AnimationTag, AnimationTransition},
         painter::{Painter, PainterParam},
     },
     world::{EntityCreate, LevelSystems, MessageReaderEntityExt},
@@ -16,7 +16,9 @@ use crate::{
 pub struct Selene;
 impl Selene {
     pub const IDENT: &'static str = "selene";
+
     pub const IDLE: &'static str = "idle";
+    pub const JOG: &'static str = "jog";
 }
 
 #[derive(Component, Debug, Clone)]
@@ -36,7 +38,7 @@ fn on_selene_spawn(mut commands: Commands, mut messages: MessageReader<EntityCre
             Selene,
             // Hair.
             children![(
-                Transform2d::from_xyz(0., 5., -f32::EPSILON),
+                Transform2d::from_xyz(0.5, 5., -f32::EPSILON),
                 Hair::new(hair_back[1..].iter().map(|rad| rad * 0.5), 0.1),
                 SeleneHair {
                     color: Srgba::hex("70A3C4").unwrap().into(),
@@ -47,11 +49,10 @@ fn on_selene_spawn(mut commands: Commands, mut messages: MessageReader<EntityCre
             (
                 Transform2d::from_translation(sprite_center.extend(1.)),
                 TransformInterpolation,
-                TransformHermiteEasing,
                 CameraTarget::default(),
             ),
             // Rendering.
-            (Animation::from(&textures.selene), AnimationTag::new(Selene::IDLE), AnimationRepeat::Loop),
+            (Animation::from(&textures.selene), AnimationTag::new(Selene::IDLE)),
             MAIN_LAYER,
             // Physics.
             (
@@ -81,6 +82,30 @@ fn on_selene_spawn(mut commands: Commands, mut messages: MessageReader<EntityCre
     }
 }
 
+fn react_selene_animations(
+    mut commands: Commands,
+    states: Query<(Entity, &mut Transform, Ref<GroundControlState>, Ref<GroundControlDirection>), With<Selene>>,
+) {
+    for (selene, mut trns, state, dir) in states {
+        if !state.is_changed() && !dir.is_changed() {
+            continue
+        }
+
+        trns.scale = Vec3 {
+            x: trns.scale.x.abs() * dir.as_scalar(),
+            ..trns.scale
+        };
+
+        commands.entity(selene).insert(match *state {
+            GroundControlState::Idle => (AnimationTag::new(Selene::IDLE), AnimationRepeat::Halt, AnimationTransition::Discrete),
+            GroundControlState::Walk { .. } => (AnimationTag::new(Selene::JOG), AnimationRepeat::Loop, AnimationTransition::Discrete),
+            _ => (AnimationTag::new(Selene::IDLE), AnimationRepeat::Halt, AnimationTransition::Discrete),
+            //GroundControlState::Hover { steering } => todo!(),
+            //GroundControlState::Jump => todo!(),
+        });
+    }
+}
+
 fn draw_selene_hair(
     param: PainterParam,
     misc: Res<MiscTextures>,
@@ -100,6 +125,11 @@ fn draw_selene_hair(
 }
 
 pub(super) fn plugin(app: &mut App) {
-    app.add_systems(Update, on_selene_spawn.in_set(LevelSystems::SpawnEntities))
-        .add_systems(PostUpdate, draw_selene_hair.after(TransformSystems::Propagate));
+    app.add_systems(Update, on_selene_spawn.in_set(LevelSystems::SpawnEntities)).add_systems(
+        PostUpdate,
+        (
+            react_selene_animations.before(AnimationSystems::Update),
+            draw_selene_hair.after(TransformSystems::Propagate),
+        ),
+    );
 }
