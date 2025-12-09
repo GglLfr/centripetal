@@ -97,7 +97,7 @@ fn update_hair_segments(time: Res<Time>, gravity: Res<Gravity>, hairs: Query<(&m
             {
                 let dir = first.position - *pos;
                 let dir_len2 = dir.length_squared();
-                if dir_len2 > 1e-5 {
+                if dir_len2 > 1e-4 {
                     let dir_len = dir_len2.sqrt();
                     let err = (dir_len - first.length) / dir_len;
                     first.position -= dir * err;
@@ -110,7 +110,7 @@ fn update_hair_segments(time: Res<Time>, gravity: Res<Gravity>, hairs: Query<(&m
             for i in 0..end {
                 let delta = hair.segments[i + 1].position - hair.segments[i].position;
                 let delta_len2 = delta.length_squared();
-                if delta_len2 <= 1e-5 {
+                if delta_len2 <= 1e-4 {
                     continue
                 }
 

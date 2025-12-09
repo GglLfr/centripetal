@@ -363,7 +363,7 @@ fn path_join(a: Vec2, b: Vec2, c: Vec2, hw: f32) -> Vec2 {
     let t = vec2(v2.x * v1.y - v2.y * v1.x, v1.x * v2.x + v1.y * v2.y).to_angle();
     if !t.is_finite() {
         Vec2::ZERO
-    } else if t.abs() <= 1e-5 {
+    } else if t.abs() <= 1e-4 {
         let v = v1.normalize_or_zero() * hw;
         vec2(v.y, -v.x)
     } else {

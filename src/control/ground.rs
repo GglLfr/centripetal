@@ -276,7 +276,7 @@ fn evaluate_ground(
                     // Control state #1: Idle, walking, or hovering.
                     Some(..) => {
                         next_state = match state {
-                            GroundMoveState::Still if dv_x_target <= 1e-5 => GroundControlState::Idle,
+                            GroundMoveState::Still if dv_x_target <= 1e-4 => GroundControlState::Idle,
                             state => GroundControlState::Walk {
                                 decelerating: !state.is_moving(),
                             },
