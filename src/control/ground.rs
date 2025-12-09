@@ -206,7 +206,7 @@ impl Default for GroundJump {
             // Jump as high as 2.5 meters.
             jump_height: 2.5 * PIXELS_PER_METER,
             buffer_time: Duration::from_millis(100),
-            coyote_time: Duration::from_millis(150),
+            coyote_time: Duration::from_millis(100),
         }
     }
 }

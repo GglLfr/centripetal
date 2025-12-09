@@ -2,7 +2,7 @@ use crate::{
     math::{GlobalTransform2d, Transform2d},
     prelude::*,
     render::{
-        animation::{AnimationDirection, AnimationSheet},
+        animation::{AnimationDirection, AnimationFrame, AnimationIndices, AnimationSheet},
         painter::{Painter, PainterParam},
     },
 };
@@ -95,51 +95,89 @@ impl AnimationEvents {
     }
 }
 
-#[derive(Message, EntityEvent, Debug, Clone)]
-pub struct AnimationEnd {
-    pub entity: Entity,
-    pub tag: Cow<'static, str>,
-}
-
-#[derive(Message, EntityEvent, Debug, Clone)]
-pub struct AnimationLoop {
-    pub entity: Entity,
-    pub tag: Cow<'static, str>,
-}
-
 #[derive(Component, Debug, Default, Clone, Copy)]
 struct AnimationState {
     index: usize,
     time: Duration,
+    ticked: bool,
+}
+
+#[derive(QueryData)]
+#[query_data(mutable, derive(Debug))]
+pub struct AnimationQuery {
+    pub animation: Read<Animation>,
+    pub tag: Ref<'static, AnimationTag>,
+    state: Write<AnimationState>,
+}
+
+impl AnimationQueryItem<'_, '_> {
+    pub fn assets<'a>(&self, sheets: &'a Assets<AnimationSheet>) -> Option<AnimationAssets<'a>> {
+        let sheet = sheets.get(self.animation.id())?;
+        let frame = sheet.frames.get(self.state.index)?;
+        let frame_tag = sheet.frame_tags.get(self.tag.as_str())?;
+
+        Some(AnimationAssets { sheet, frame, frame_tag })
+    }
+
+    pub fn is_ticked(&self) -> bool {
+        self.state.ticked
+    }
+}
+
+impl AnimationQueryReadOnlyItem<'_, '_> {
+    pub fn assets<'a>(&self, sheets: &'a Assets<AnimationSheet>) -> Option<AnimationAssets<'a>> {
+        let sheet = sheets.get(self.animation.id())?;
+        let frame = sheet.frames.get(self.state.index)?;
+        let frame_tag = sheet.frame_tags.get(self.tag.as_str())?;
+
+        Some(AnimationAssets { sheet, frame, frame_tag })
+    }
+
+    pub fn is_ticked(&self) -> bool {
+        self.state.ticked
+    }
+}
+
+pub struct AnimationAssets<'a> {
+    pub sheet: &'a AnimationSheet,
+    pub frame: &'a AnimationFrame,
+    pub frame_tag: &'a AnimationIndices,
+}
+
+#[derive(Message, EntityEvent, Debug, Clone)]
+pub struct AnimateEnd {
+    pub entity: Entity,
+    pub tag: Cow<'static, str>,
+}
+
+#[derive(Message, EntityEvent, Debug, Clone)]
+pub struct AnimateLoop {
+    pub entity: Entity,
+    pub tag: Cow<'static, str>,
 }
 
 fn update_animation_states(
     commands: ParallelCommands,
-    mut end_writer: MessageWriter<AnimationEnd>,
-    mut loop_writer: MessageWriter<AnimationLoop>,
+    mut end_writer: MessageWriter<AnimateEnd>,
+    mut loop_writer: MessageWriter<AnimateLoop>,
     time: Res<Time>,
     sheets: Res<Assets<AnimationSheet>>,
     sheet_changes: Query<(), Or<(Changed<Animation>, AssetChanged<Animation>)>>,
     transitions: Query<&AnimationTransition>,
-    states: Query<(
-        Entity,
-        &Animation,
-        Ref<AnimationTag>,
-        &mut AnimationState,
-        &AnimationRepeat,
-        &AnimationEvents,
-    )>,
-    mut events: Local<Parallel<[(Vec<AnimationEnd>, Vec<AnimationLoop>); 2]>>,
+    states: Query<(Entity, AnimationQuery, &AnimationRepeat, &AnimationEvents)>,
+    mut events: Local<Parallel<[(Vec<AnimateEnd>, Vec<AnimateLoop>); 2]>>,
 ) {
     let dt = time.delta();
     states.par_iter_inner().for_each_init(
         || events.borrow_local_mut(),
-        |events, (entity, anim, tag, state, &repeat, &event_listener)| {
+        |events, (entity, anim_query, &repeat, &event_listener)| {
             let [(pull_end, pull_loop), (push_end, push_loop)] = &mut **events;
 
-            let Some(sheet) = sheets.get(anim.id()) else { return };
-            let Some(frame_tag) = sheet.frame_tags.get(tag.as_str()) else { return };
-            let state = state.into_inner();
+            let Some(sheet) = sheets.get(anim_query.animation.id()) else { return };
+            let Some(frame_tag) = sheet.frame_tags.get(anim_query.tag.as_str()) else { return };
+
+            let state = anim_query.state.into_inner();
+            state.ticked = false;
 
             let (first, last, incr) = match frame_tag.direction {
                 AnimationDirection::Forward => (*frame_tag.indices.start(), *frame_tag.indices.end(), 1),
@@ -147,7 +185,7 @@ fn update_animation_states(
             };
 
             // If the asset or the tag changed, reset the frame index.
-            if tag.is_changed() || sheet_changes.contains(entity) {
+            if anim_query.tag.is_changed() || sheet_changes.contains(entity) {
                 let transition = transitions.get(entity).copied();
                 if transition.is_ok() {
                     commands.command_scope(|mut commands| {
@@ -155,6 +193,7 @@ fn update_animation_states(
                     });
                 }
 
+                state.ticked = true;
                 state.index = first;
                 state.time = match transition.unwrap_or_default() {
                     AnimationTransition::Discrete => Duration::ZERO,
@@ -167,7 +206,7 @@ fn update_animation_states(
                 // `return`: Frame time shouldn't be accumulated any longer.
                 let Some(frame) = sheet.frames.get(state.index) else { return };
                 let Some(new_time) = state.time.checked_sub(frame.duration) else { break };
-                match repeat {
+                state.ticked = match repeat {
                     AnimationRepeat::Halt => {
                         if state.index == last {
                             state.time = frame.duration;
@@ -175,24 +214,40 @@ fn update_animation_states(
                         } else {
                             state.index = state.index.wrapping_add_signed(incr);
                             if state.index == last {
-                                event_listener.emit(AnimationEnd { entity, tag: tag.clone() }, pull_end, push_end);
+                                event_listener.emit(
+                                    AnimateEnd {
+                                        entity,
+                                        tag: anim_query.tag.clone(),
+                                    },
+                                    pull_end,
+                                    push_end,
+                                );
                             }
                             state.time = new_time;
+                            true
                         }
                     }
                     AnimationRepeat::Loop => {
                         state.index = if state.index == last {
-                            event_listener.emit(AnimationLoop { entity, tag: tag.clone() }, pull_loop, push_loop);
+                            event_listener.emit(
+                                AnimateLoop {
+                                    entity,
+                                    tag: anim_query.tag.clone(),
+                                },
+                                pull_loop,
+                                push_loop,
+                            );
                             first
                         } else {
                             state.index.wrapping_add_signed(incr)
                         };
                         state.time = new_time;
+                        true
                     }
                 }
             }
 
-            // `dt` is added at the end so the first frame has time to show up in the render world.
+            // `dt` is added at the end so the first frame has some time to show up in the render world.
             state.time += dt;
         },
     );
@@ -228,19 +283,23 @@ fn draw_animations(
 
 #[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum AnimationSystems {
-    /// [`PostUpdate`].
     Update,
-    /// [`PostUpdate`] after [`TransformSystems::Propagate`] and [`AnimationSystems::Update`].
+    Updated,
     Draw,
 }
 
 pub(super) fn plugin(app: &mut App) {
     app.configure_sets(
         PostUpdate,
-        (AnimationSystems::Update, AnimationSystems::Draw.after(TransformSystems::Propagate)).chain(),
+        (
+            (AnimationSystems::Update, AnimationSystems::Updated)
+                .chain()
+                .before(TransformSystems::Propagate),
+            AnimationSystems::Draw.after(TransformSystems::Propagate),
+        ),
     )
-    .add_message::<AnimationEnd>()
-    .add_message::<AnimationLoop>()
+    .add_message::<AnimateEnd>()
+    .add_message::<AnimateLoop>()
     .add_systems(
         PostUpdate,
         (

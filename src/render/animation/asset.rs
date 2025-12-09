@@ -17,6 +17,7 @@ pub struct AnimationFrame {
     pub region: Handle<AtlasRegion>,
     pub offset: Vec2,
     pub duration: Duration,
+    pub slices: HashMap<String, Rect>,
 }
 
 #[derive(Reflect, Debug)]
@@ -41,7 +42,7 @@ impl AssetLoader for AnimationSheetLoader {
     async fn load(&self, reader: &mut dyn Reader, _: &Self::Settings, load_context: &mut LoadContext<'_>) -> Result<Self::Asset, Self::Error> {
         #[derive(Deserialize)]
         struct Repr {
-            frames: BTreeMap<u32, FrameRepr>,
+            frames: BTreeMap<usize, FrameRepr>,
             meta: MetaRepr,
         }
 
@@ -60,6 +61,7 @@ impl AssetLoader for AnimationSheetLoader {
         struct MetaRepr {
             image: String,
             frameTags: Vec<FrameTagRepr>,
+            slices: Vec<SliceRepr>,
         }
 
         #[derive(Deserialize)]
@@ -85,6 +87,18 @@ impl AssetLoader for AnimationSheetLoader {
             h: u32,
         }
 
+        #[derive(Deserialize)]
+        struct SliceRepr {
+            name: String,
+            keys: Vec<SliceKey>,
+        }
+
+        #[derive(Deserialize)]
+        struct SliceKey {
+            frame: usize,
+            bounds: RectRepr,
+        }
+
         let mut bytes = Vec::new();
         reader.read_to_end(&mut bytes).await?;
 
@@ -95,7 +109,6 @@ impl AssetLoader for AnimationSheetLoader {
 
         let mut frame_tags = HashMap::new();
         let mut event_tags = HashMap::new();
-
         for tag in repr.meta.frameTags {
             match tag.name.split_at_checked(2) {
                 None => Err(format!("Invalid tag name {}", tag.name))?,
@@ -119,6 +132,7 @@ impl AssetLoader for AnimationSheetLoader {
             frames: repr.frames.into_iter().try_map_into_default(|(i, frame)| {
                 let frame_pos = uvec2(frame.x, frame.y);
                 let frame_size = uvec2(frame.w, frame.h);
+                let src_size = uvec2(frame.sourceSize.w, frame.sourceSize.h).as_vec2();
 
                 Ok::<_, BevyError>(AnimationFrame {
                     region: load_context.add_labeled_asset(format!("frame#{i}"), AtlasRegion {
@@ -131,10 +145,28 @@ impl AssetLoader for AnimationSheetLoader {
                         },
                     }),
                     offset: vec2(
-                        frame.spriteSourceSize.x as f32 + (frame.spriteSourceSize.w as f32) / 2. - frame.sourceSize.w as f32 / 2.,
-                        -(frame.spriteSourceSize.y as f32 + (frame.spriteSourceSize.h as f32) / 2. - frame.sourceSize.h as f32 / 2.),
+                        frame.spriteSourceSize.x as f32 + (frame.spriteSourceSize.w as f32) / 2. - src_size.x / 2.,
+                        -(frame.spriteSourceSize.y as f32 + (frame.spriteSourceSize.h as f32) / 2. - src_size.y / 2.),
                     ),
                     duration: Duration::from_millis(frame.duration),
+                    slices: repr
+                        .meta
+                        .slices
+                        .iter()
+                        .flat_map(|slice| {
+                            slice.keys.iter().filter_map(|key| {
+                                (key.frame == i).then(|| {
+                                    let rect = Rect {
+                                        min: vec2(key.bounds.x as f32, src_size.y - (key.bounds.y + key.bounds.h) as f32) - src_size / 2.,
+                                        max: vec2((key.bounds.x + key.bounds.w) as f32, src_size.y - key.bounds.y as f32) - src_size / 2.,
+                                    };
+
+                                    info!("{i} => {rect:?}");
+                                    (slice.name.clone(), rect)
+                                })
+                            })
+                        })
+                        .collect(),
                 })
             })?,
             region: load_context.add_loaded_labeled_asset("region", region),

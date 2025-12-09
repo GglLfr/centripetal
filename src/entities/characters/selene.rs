@@ -6,19 +6,22 @@ use crate::{
     prelude::*,
     render::{
         CameraTarget, MAIN_LAYER,
-        animation::{Animation, AnimationRepeat, AnimationSystems, AnimationTag, AnimationTransition},
+        animation::{Animation, AnimationQueryReadOnly, AnimationRepeat, AnimationSheet, AnimationSystems, AnimationTag, AnimationTransition},
         painter::{Painter, PainterParam},
     },
     world::{EntityCreate, LevelSystems, MessageReaderEntityExt},
 };
 
 #[derive(Component, Debug, Clone, Copy)]
-pub struct Selene;
+pub struct Selene {
+    pub hair: Entity,
+}
+
 impl Selene {
     pub const IDENT: &'static str = "selene";
 
     pub const IDLE: &'static str = "idle";
-    pub const JOG: &'static str = "jog";
+    pub const RUN: &'static str = "run";
 }
 
 #[derive(Component, Debug, Clone)]
@@ -33,18 +36,10 @@ fn on_selene_spawn(mut commands: Commands, mut messages: MessageReader<EntityCre
         let sprite_center = bounds.center();
         let collider_center = vec2(sprite_center.x, bounds.min.y + 12.);
 
-        let hair_back = vec![6., 5.25, 4.5, 3.75, 3., 2.5, 2., 1.5, 1.];
+        let hair = commands.spawn_empty().id();
+        let hair_back = vec![7., 5.5, 5.5, 4.5, 3.75, 3., 2.5, 2., 1.5, 1.];
         commands.entity(entity).insert((
-            Selene,
-            // Hair.
-            children![(
-                Transform2d::from_xyz(0.5, 5., -f32::EPSILON),
-                Hair::new(hair_back[1..].iter().map(|rad| rad * 0.5), 0.1),
-                SeleneHair {
-                    color: Srgba::hex("70A3C4").unwrap().into(),
-                    widths: hair_back,
-                },
-            )],
+            Selene { hair },
             // Transforms.
             (
                 Transform2d::from_translation(sprite_center.extend(1.)),
@@ -79,6 +74,16 @@ fn on_selene_spawn(mut commands: Commands, mut messages: MessageReader<EntityCre
                 )]),
             ),
         ));
+
+        commands.entity(hair).insert((
+            ChildOf(entity),
+            Transform2d::IDENTITY,
+            Hair::new(hair_back[1..].iter().map(|rad| rad / 3.), 0.1),
+            SeleneHair {
+                color: Srgba::hex("70A3C4").unwrap().into(),
+                widths: hair_back,
+            },
+        ));
     }
 }
 
@@ -92,17 +97,33 @@ fn react_selene_animations(
         }
 
         trns.scale = Vec3 {
-            x: trns.scale.x.abs() * dir.as_scalar(),
+            x: trns.scale.x.abs().copysign(dir.as_scalar()),
             ..trns.scale
         };
 
         commands.entity(selene).insert(match *state {
             GroundControlState::Idle => (AnimationTag::new(Selene::IDLE), AnimationRepeat::Halt, AnimationTransition::Discrete),
-            GroundControlState::Walk { .. } => (AnimationTag::new(Selene::JOG), AnimationRepeat::Loop, AnimationTransition::Discrete),
+            GroundControlState::Walk { .. } => (AnimationTag::new(Selene::RUN), AnimationRepeat::Loop, AnimationTransition::Discrete),
             _ => (AnimationTag::new(Selene::IDLE), AnimationRepeat::Halt, AnimationTransition::Discrete),
             //GroundControlState::Hover { steering } => todo!(),
             //GroundControlState::Jump => todo!(),
         });
+    }
+}
+
+fn adjust_selene_scale(
+    sheets: Res<Assets<AnimationSheet>>,
+    selenes: Query<(&Selene, AnimationQueryReadOnly)>,
+    mut trns_query: Query<&mut Transform2d>,
+) {
+    for (selene, query) in selenes {
+        if query.is_ticked()
+            && let Ok(mut trns) = trns_query.get_mut(selene.hair)
+            && let Some(assets) = query.assets(&sheets)
+            && let Some(&slice) = assets.frame.slices.get("head_pos")
+        {
+            trns.set_if_neq(Transform2d::from_translation((slice.center() - vec2(0., 0.5)).extend(-f32::EPSILON)));
+        }
     }
 }
 
@@ -129,6 +150,7 @@ pub(super) fn plugin(app: &mut App) {
         PostUpdate,
         (
             react_selene_animations.before(AnimationSystems::Update),
+            adjust_selene_scale.in_set(AnimationSystems::Updated),
             draw_selene_hair.after(TransformSystems::Propagate),
         ),
     );

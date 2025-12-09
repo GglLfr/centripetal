@@ -149,7 +149,7 @@ fn sync_to_local_3d(mut transforms: Query<(&mut Transform, &mut Transform2d)>) {
         if src.is_changed() {
             let dst = dst.into_inner();
             dst.translation = src.translation;
-            dst.rotation = Quat::from_axis_angle(Vec3::Z, src.rotation.as_radians());
+            dst.rotation = Quat::from_rotation_z(src.rotation.as_radians());
             dst.scale = src.scale.extend(dst.scale.z);
         } else if dst.is_changed() {
             *src = (*dst).into();

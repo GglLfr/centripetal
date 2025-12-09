@@ -50,7 +50,8 @@ impl Hair {
         let Some(mut this) = entities.get_mut(entity).ok().and_then(|e| e.into_mut::<Self>()) else { return };
 
         for seg in &mut this.segments {
-            seg.entity = commands.spawn((ChildOf(entity), Transform2d::default(), TransformInterpolation)).id();
+            let trns = Transform::from_translation(Vec3::NAN);
+            seg.entity = commands.spawn((trns, Transform2d::from(trns), TransformInterpolation)).id();
         }
     }
 }
@@ -129,21 +130,13 @@ fn update_hair_segments(time: Res<Time>, gravity: Res<Gravity>, hairs: Query<(&m
     });
 }
 
-fn writeback_hair_transforms(hairs: Query<(&Hair, &GlobalTransform, &Position, &Rotation)>, mut query: Query<&mut Transform>) {
-    for (hair, &global_trns, &pos, &rot) in hairs {
+fn writeback_hair_transforms(hairs: Query<(&Hair, &GlobalTransform)>, mut query: Query<&mut Transform>) {
+    for (hair, &global_trns) in hairs {
         for &seg in &hair.segments {
             let Ok(mut trns) = query.get_mut(seg.entity) else { continue };
 
-            let parent_transform = global_trns.compute_transform();
-            let parent_pos = pos.extend(parent_transform.translation.z);
-            let parent_rot = Quat::from(rot);
-            let parent_scale = parent_transform.scale;
-
-            let parent_transform = GlobalTransform::from(Transform::from_translation(parent_pos).with_rotation(parent_rot).with_scale(parent_scale));
-            let new_transform = GlobalTransform::from(Transform::from_translation(seg.position.extend(parent_pos.z * parent_scale.z)))
-                .reparented_to(&parent_transform);
-
-            *trns = new_transform;
+            let parent_trns = global_trns.compute_transform();
+            *trns = Transform::from_translation(seg.position.extend(parent_trns.translation.z * parent_trns.scale.z));
         }
     }
 }
