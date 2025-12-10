@@ -84,6 +84,7 @@ pub mod prelude {
                 atomic::{AtomicU64, Ordering},
             },
         },
+        post_process::bloom::Bloom,
         prelude::*,
         reflect::{FromType, Reflectable, TypeRegistry, TypeRegistryArc},
         render::{

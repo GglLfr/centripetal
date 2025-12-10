@@ -119,8 +119,8 @@ fn update_hair_segments(
             }
         }
 
-        // TODO Probably use XPBD to avoid iterating *this* much...
-        for _ in 0..16 {
+        const ITER_COUNT: usize = 8;
+        for iter in 1..=ITER_COUNT {
             let Some(first) = hair.segments.first_mut() else { continue };
             {
                 let dir = first.position - *pos;
@@ -145,7 +145,10 @@ fn update_hair_segments(
                 let delta_len = delta_len2.sqrt();
                 let correction = delta * 0.5 * (delta_len - hair.segments[i + 1].length) / delta_len;
 
-                if i == 0 {
+                // On the `ITER_COUNT`'th iteration, convergence should have been reached.
+                // In that case, *enforce* the distance constraint instead of distributing it evenly, so that
+                // segments don't gradually move further from the root segment.
+                if i == 0 || iter == ITER_COUNT {
                     hair.segments[i + 1].position -= correction * 2.;
                 } else {
                     hair.segments[i].position += correction;

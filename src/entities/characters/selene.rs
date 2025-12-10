@@ -6,7 +6,9 @@ use crate::{
     prelude::*,
     render::{
         CameraTarget, MAIN_LAYER,
-        animation::{Animation, AnimationQueryReadOnly, AnimationRepeat, AnimationSheet, AnimationSystems, AnimationTag, AnimationTransition},
+        animation::{
+            Animation, AnimationEvents, AnimationQueryReadOnly, AnimationRepeat, AnimationSheet, AnimationSystems, AnimationTag, AnimationTransition,
+        },
         painter::{Painter, PainterParam},
     },
     world::{EntityCreate, LevelSystems, MessageReaderEntityExt},
@@ -22,6 +24,7 @@ impl Selene {
 
     pub const IDLE: &'static str = "idle";
     pub const RUN: &'static str = "run";
+    pub const RUN_TRANS: &'static str = "run_trans";
 }
 
 #[derive(Component, Debug, Clone)]
@@ -86,9 +89,28 @@ fn on_selene_spawn(mut commands: Commands, mut messages: MessageReader<EntityCre
 
 fn react_selene_animations(
     mut commands: Commands,
-    states: Query<(Entity, &mut Transform2d, Ref<GroundControlState>, Ref<GroundControlDirection>), With<Selene>>,
+    states: Query<
+        (
+            Entity,
+            &AnimationTag,
+            &AnimationEvents,
+            &mut Transform2d,
+            Ref<GroundControlState>,
+            Ref<GroundControlDirection>,
+        ),
+        With<Selene>,
+    >,
 ) {
-    for (entity, trns, state, dir) in states {
+    for (entity, tag, &events, trns, state, dir) in states {
+        match (tag.as_str(), events.contains(AnimationEvents::JUST_HALTED)) {
+            (Selene::RUN_TRANS, true) => {
+                commands
+                    .entity(entity)
+                    .insert((AnimationTag::new(Selene::RUN), AnimationRepeat::Loop, AnimationTransition::Continuous));
+            }
+            (..) => {}
+        }
+
         if !state.is_changed() && !dir.is_changed() {
             continue
         }
@@ -98,7 +120,9 @@ fn react_selene_animations(
 
         commands.entity(entity).insert(match *state {
             GroundControlState::Idle => (AnimationTag::new(Selene::IDLE), AnimationRepeat::Halt, AnimationTransition::Discrete),
-            GroundControlState::Walk { .. } => (AnimationTag::new(Selene::RUN), AnimationRepeat::Loop, AnimationTransition::Discrete),
+            GroundControlState::Walk { decelerating: false } => {
+                (AnimationTag::new(Selene::RUN_TRANS), AnimationRepeat::Halt, AnimationTransition::Discrete)
+            }
             _ => (AnimationTag::new(Selene::IDLE), AnimationRepeat::Halt, AnimationTransition::Discrete),
             //GroundControlState::Hover { steering } => todo!(),
             //GroundControlState::Jump => todo!(),
@@ -145,8 +169,7 @@ pub(super) fn plugin(app: &mut App) {
     app.add_systems(Update, on_selene_spawn.in_set(LevelSystems::SpawnEntities)).add_systems(
         PostUpdate,
         (
-            react_selene_animations.before(AnimationSystems::Update),
-            adjust_selene_hair.in_set(AnimationSystems::Updated),
+            (react_selene_animations, adjust_selene_hair).chain().in_set(AnimationSystems::Updated),
             draw_selene_hair.after(TransformSystems::Propagate),
         ),
     );
