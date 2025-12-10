@@ -174,7 +174,7 @@ impl GlobalTransform2d {
     }
 }
 
-fn sync_to_local_3d(mut transforms: Query<(&mut Transform, &mut Transform2d)>) {
+fn sync_local_2d_to_3d(mut transforms: Query<(&mut Transform, &mut Transform2d)>) {
     transforms.par_iter_mut().for_each(|(dst, mut src)| {
         if src.is_changed() {
             let dst = dst.into_inner();
@@ -187,7 +187,7 @@ fn sync_to_local_3d(mut transforms: Query<(&mut Transform, &mut Transform2d)>) {
     });
 }
 
-fn writeback_to_global_2d(mut transforms: Query<(&GlobalTransform, &mut GlobalTransform2d), Changed<GlobalTransform>>) {
+fn sync_global_3d_to_2d(mut transforms: Query<(&GlobalTransform, &mut GlobalTransform2d), Changed<GlobalTransform>>) {
     transforms.par_iter_mut().for_each(|(&src, mut dst)| {
         *dst = src.into();
     });
@@ -201,16 +201,16 @@ pub(super) fn plugin(app: &mut App) {
     app.add_systems(
         PostStartup,
         (
-            sync_to_local_3d.before(mark_dirty_trees),
-            writeback_to_global_2d.after(sync_simple_transforms),
+            sync_local_2d_to_3d.before(mark_dirty_trees),
+            sync_global_3d_to_2d.after(sync_simple_transforms),
         )
             .in_set(TransformSystems::Propagate),
     )
     .add_systems(
         PostUpdate,
         (
-            sync_to_local_3d.before(mark_dirty_trees),
-            writeback_to_global_2d.after(sync_simple_transforms),
+            sync_local_2d_to_3d.before(mark_dirty_trees),
+            sync_global_3d_to_2d.after(sync_simple_transforms),
         )
             .in_set(TransformSystems::Propagate),
     );

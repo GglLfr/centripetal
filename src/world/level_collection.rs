@@ -10,10 +10,10 @@ mod sealed {
     use super::*;
 
     pub trait Sealed {}
-    impl<T: 'static + PartialReflect + Hash + PartialEq + Eq> Sealed for T {}
+    impl<T: PartialReflect + Hash + PartialEq + Eq> Sealed for T {}
 }
 
-pub trait WorldEnum: 'static + PartialReflect + sealed::Sealed {
+pub trait WorldEnum: PartialReflect + sealed::Sealed {
     fn eq(&self, other: &dyn WorldEnum) -> bool;
 
     fn hash(&self, state: &mut dyn Hasher);
@@ -24,7 +24,7 @@ pub trait WorldEnum: 'static + PartialReflect + sealed::Sealed {
     }
 }
 
-impl<T: 'static + PartialReflect + Hash + PartialEq + Eq> WorldEnum for T {
+impl<T: PartialReflect + Hash + PartialEq + Eq> WorldEnum for T {
     fn eq(&self, other: &dyn WorldEnum) -> bool {
         (other as &dyn PartialReflect)
             .try_downcast_ref::<Self>()

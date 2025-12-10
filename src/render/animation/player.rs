@@ -209,7 +209,6 @@ fn update_animation_states(
                 state.ticked = match repeat {
                     AnimationRepeat::Halt => {
                         if state.index == last {
-                            state.time = frame.duration;
                             return
                         } else {
                             state.index = state.index.wrapping_add_signed(incr);

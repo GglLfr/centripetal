@@ -67,12 +67,7 @@ impl<In, Out> Clone for AsyncMessager<In, Out> {
 }
 
 fn execute_async_commands(mut commands: Commands, bridge: Res<AsyncBridge>) {
-    let mut count = 128u32;
-    while let Some(next_count) = count.checked_sub(1)
-        && let Ok((mut queue, done)) = bridge.command_channel.1.try_recv()
-    {
-        count = next_count;
-
+    while let Ok((mut queue, done)) = bridge.command_channel.1.try_recv() {
         queue.push(move |_: &mut World| _ = done.try_send(()));
         commands.append(&mut queue);
     }
@@ -80,11 +75,7 @@ fn execute_async_commands(mut commands: Commands, bridge: Res<AsyncBridge>) {
 
 fn execute_async_assets(mut commands: Commands, bridge: Res<AsyncBridge>, registry: Res<AppTypeRegistry>) -> Result {
     let registry = registry.clone();
-    let mut count = 128u32;
-    while let Some(next_count) = count.checked_sub(1)
-        && let Ok((handle, sender)) = bridge.asset_channel.1.try_recv()
-    {
-        count = next_count;
+    while let Ok((handle, sender)) = bridge.asset_channel.1.try_recv() {
         let asset_fns = registry
             .read()
             .get_type_data::<ReflectAsset>(handle.type_id())
@@ -102,13 +93,8 @@ fn execute_async_assets(mut commands: Commands, bridge: Res<AsyncBridge>, regist
 }
 
 fn execute_async_entities(entities: &Entities, bridge: Res<AsyncBridge>) {
-    let mut count = 128u32;
-    while let Some(next_count) = count.checked_sub(1)
-        && let Ok((len, sender)) = bridge.entity_channel.1.try_recv()
-    {
-        count = next_count;
+    while let Ok((len, sender)) = bridge.entity_channel.1.try_recv() {
         let entities = entities.reserve_entities(len).collect();
-
         _ = sender.try_send(entities);
     }
 }
