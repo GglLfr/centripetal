@@ -88,12 +88,14 @@ fn react_selene_animations(
     mut commands: Commands,
     states: Query<(Entity, &mut Transform2d, Ref<GroundControlState>, Ref<GroundControlDirection>), With<Selene>>,
 ) {
-    for (entity, mut trns, state, dir) in states {
+    for (entity, trns, state, dir) in states {
         if !state.is_changed() && !dir.is_changed() {
             continue
         }
 
-        trns.scale.x = trns.scale.x.abs().copysign(dir.as_scalar());
+        let new_scale_x = trns.scale.x.abs().copysign(dir.as_scalar());
+        trns.map_unchanged(|t| &mut t.scale.x).set_if_neq(new_scale_x);
+
         commands.entity(entity).insert(match *state {
             GroundControlState::Idle => (AnimationTag::new(Selene::IDLE), AnimationRepeat::Halt, AnimationTransition::Discrete),
             GroundControlState::Walk { .. } => (AnimationTag::new(Selene::RUN), AnimationRepeat::Loop, AnimationTransition::Discrete),
@@ -111,11 +113,12 @@ fn adjust_selene_hair(
 ) {
     for (selene, query) in selenes {
         if query.is_ticked()
-            && let Ok(mut trns) = trns_query.get_mut(selene.hair)
+            && let Ok(trns) = trns_query.get_mut(selene.hair)
             && let Some(assets) = query.assets(&sheets)
             && let Some(&slice) = assets.frame.slices.get("head_pos")
         {
-            trns.translation = (slice.center() - vec2(0., 0.5)).extend(-f32::EPSILON);
+            trns.map_unchanged(|t| &mut t.translation)
+                .set_if_neq((slice.center() - vec2(0., 0.5)).extend(-f32::EPSILON));
         }
     }
 }
