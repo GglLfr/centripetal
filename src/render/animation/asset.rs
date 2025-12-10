@@ -161,7 +161,6 @@ impl AssetLoader for AnimationSheetLoader {
                                         max: vec2((key.bounds.x + key.bounds.w) as f32, src_size.y - key.bounds.y as f32) - src_size / 2.,
                                     };
 
-                                    info!("{i} => {rect:?}");
                                     (slice.name.clone(), rect)
                                 })
                             })

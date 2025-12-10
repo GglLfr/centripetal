@@ -6,7 +6,7 @@ use crate::{math::Transform2d, prelude::*};
 /// the hair deals with constraints, and PBD proves the correct tool to give a nice stable result.
 #[derive(Component, Debug)]
 #[component(on_insert = Self::on_insert)]
-#[require(Transform, Position, Rotation)]
+#[require(Transform, TransformInterpolation)]
 pub struct Hair {
     segments: Vec<HairSegment>,
     damping: f32,
@@ -30,7 +30,15 @@ impl Hair {
         }
     }
 
-    pub fn iter_strands(&self) -> impl Iterator<Item = Entity> + ExactSizeIterator {
+    pub fn last_anchor(&self) -> Vec2 {
+        self.last_anchor
+    }
+
+    pub fn iter_segments(&self) -> impl Iterator<Item = HairSegment> + ExactSizeIterator + DoubleEndedIterator {
+        self.segments.iter().copied()
+    }
+
+    pub fn iter_strands(&self) -> impl Iterator<Item = Entity> + ExactSizeIterator + DoubleEndedIterator {
         self.segments.iter().map(|seg| seg.entity)
     }
 
@@ -57,19 +65,39 @@ impl Hair {
 }
 
 #[derive(Debug, Clone, Copy)]
-struct HairSegment {
-    entity: Entity,
-    position: Vec2,
-    last_position: Vec2,
-    length: f32,
+pub struct HairSegment {
+    pub entity: Entity,
+    pub position: Vec2,
+    pub last_position: Vec2,
+    pub length: f32,
 }
 
-fn update_hair_segments(time: Res<Time>, gravity: Res<Gravity>, hairs: Query<(&mut Hair, &Position)>) {
+fn update_hair_segments(
+    time: Res<Time>,
+    gravity: Res<Gravity>,
+    hairs: Query<(&mut Hair, &Transform, Option<&ChildOf>)>,
+    parent_query: Query<(&Position, &Rotation, &GlobalTransform)>,
+) {
     let dt = time.delta_secs();
     let dt2 = dt * dt;
     let g = gravity.0;
 
-    hairs.par_iter_inner().for_each(|(hair, &pos)| {
+    hairs.par_iter_inner().for_each(|(hair, &hair_trns, hair_child_of)| {
+        let pos = &if let Some(child_of) = hair_child_of
+            && let Ok((&parent_pos, &parent_rot, &parent_trns)) = parent_query.get(child_of.parent())
+        {
+            let parent_trns = parent_trns.compute_transform();
+            (Transform {
+                translation: parent_pos.extend(parent_trns.translation.z),
+                rotation: Quat::from(parent_rot),
+                scale: parent_trns.scale,
+            } * hair_trns)
+                .translation
+                .truncate()
+        } else {
+            hair_trns.translation.truncate()
+        };
+
         let hair = hair.into_inner();
         if hair.last_anchor.is_nan() {
             hair.last_anchor = *pos;
@@ -136,7 +164,8 @@ fn writeback_hair_transforms(hairs: Query<(&Hair, &GlobalTransform)>, mut query:
             let Ok(mut trns) = query.get_mut(seg.entity) else { continue };
 
             let parent_trns = global_trns.compute_transform();
-            *trns = Transform::from_translation(seg.position.extend(parent_trns.translation.z * parent_trns.scale.z));
+            let translation = seg.position.extend(parent_trns.translation.z * parent_trns.scale.z);
+            *trns = Transform::from_translation(translation);
         }
     }
 }

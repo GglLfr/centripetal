@@ -75,33 +75,26 @@ fn on_selene_spawn(mut commands: Commands, mut messages: MessageReader<EntityCre
             ),
         ));
 
-        commands.entity(hair).insert((
-            ChildOf(entity),
-            Transform2d::IDENTITY,
-            Hair::new(hair_back[1..].iter().map(|rad| rad / 3.), 0.1),
-            SeleneHair {
+        commands
+            .entity(hair)
+            .insert((ChildOf(entity), Hair::new(hair_back[1..].iter().map(|rad| rad / 3.), 0.1), SeleneHair {
                 color: Srgba::hex("70A3C4").unwrap().into(),
                 widths: hair_back,
-            },
-        ));
+            }));
     }
 }
 
 fn react_selene_animations(
     mut commands: Commands,
-    states: Query<(Entity, &mut Transform, Ref<GroundControlState>, Ref<GroundControlDirection>), With<Selene>>,
+    states: Query<(Entity, &mut Transform2d, Ref<GroundControlState>, Ref<GroundControlDirection>), With<Selene>>,
 ) {
-    for (selene, mut trns, state, dir) in states {
+    for (entity, mut trns, state, dir) in states {
         if !state.is_changed() && !dir.is_changed() {
             continue
         }
 
-        trns.scale = Vec3 {
-            x: trns.scale.x.abs().copysign(dir.as_scalar()),
-            ..trns.scale
-        };
-
-        commands.entity(selene).insert(match *state {
+        trns.scale.x = trns.scale.x.abs().copysign(dir.as_scalar());
+        commands.entity(entity).insert(match *state {
             GroundControlState::Idle => (AnimationTag::new(Selene::IDLE), AnimationRepeat::Halt, AnimationTransition::Discrete),
             GroundControlState::Walk { .. } => (AnimationTag::new(Selene::RUN), AnimationRepeat::Loop, AnimationTransition::Discrete),
             _ => (AnimationTag::new(Selene::IDLE), AnimationRepeat::Halt, AnimationTransition::Discrete),
@@ -111,10 +104,10 @@ fn react_selene_animations(
     }
 }
 
-fn adjust_selene_scale(
+fn adjust_selene_hair(
     sheets: Res<Assets<AnimationSheet>>,
     selenes: Query<(&Selene, AnimationQueryReadOnly)>,
-    mut trns_query: Query<&mut Transform2d>,
+    mut trns_query: Query<&mut Transform, Without<Selene>>,
 ) {
     for (selene, query) in selenes {
         if query.is_ticked()
@@ -122,7 +115,7 @@ fn adjust_selene_scale(
             && let Some(assets) = query.assets(&sheets)
             && let Some(&slice) = assets.frame.slices.get("head_pos")
         {
-            trns.set_if_neq(Transform2d::from_translation((slice.center() - vec2(0., 0.5)).extend(-f32::EPSILON)));
+            trns.translation = (slice.center() - vec2(0., 0.5)).extend(-f32::EPSILON);
         }
     }
 }
@@ -150,7 +143,7 @@ pub(super) fn plugin(app: &mut App) {
         PostUpdate,
         (
             react_selene_animations.before(AnimationSystems::Update),
-            adjust_selene_scale.in_set(AnimationSystems::Updated),
+            adjust_selene_hair.in_set(AnimationSystems::Updated),
             draw_selene_hair.after(TransformSystems::Propagate),
         ),
     );

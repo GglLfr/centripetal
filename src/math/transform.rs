@@ -95,6 +95,11 @@ impl Transform2d {
         }
     }
 
+    pub const fn with_rotation(mut self, rotation: Rot2) -> Self {
+        self.rotation = rotation;
+        self
+    }
+
     pub fn affine(self) -> Affine2 {
         let Rot2 { cos, sin } = self.rotation;
         let rotation = Mat2::from_cols(vec2(cos, sin), vec2(-sin, cos));
@@ -125,6 +130,12 @@ impl GlobalTransform2d {
     };
 }
 
+impl From<Transform2d> for GlobalTransform2d {
+    fn from(value: Transform2d) -> Self {
+        Self::from_scale_rotation_translation(value.scale, value.rotation, value.translation)
+    }
+}
+
 impl From<GlobalTransform> for GlobalTransform2d {
     fn from(value: GlobalTransform) -> Self {
         let (scale, rotation, translation) = value.to_scale_rotation_translation();
@@ -141,6 +152,25 @@ impl GlobalTransform2d {
         }
         .affine_and_z();
         Self { affine, z }
+    }
+
+    pub fn compute_transform(&self) -> Transform2d {
+        let (scale, angle, translation) = self.to_scale_angle_translation();
+        Transform2d {
+            translation: translation.extend(self.z),
+            rotation: Rot2::radians(angle),
+            scale,
+        }
+    }
+
+    pub fn reparented_to(&self, parent: &GlobalTransform2d) -> Transform2d {
+        let relative_affine = parent.inverse() * self.affine;
+        let (scale, angle, translation) = relative_affine.to_scale_angle_translation();
+        Transform2d {
+            translation: translation.extend(self.z - parent.z),
+            rotation: Rot2::radians(angle),
+            scale,
+        }
     }
 }
 
@@ -165,10 +195,12 @@ fn writeback_to_global_2d(mut transforms: Query<(&GlobalTransform, &mut GlobalTr
 
 pub(super) fn plugin(app: &mut App) {
     use bevy::transform::systems::*;
+
+    // Add to the `TransformSystems::Propagate` chain.
+    // Always remember to adjust for changes when updating Bevy (and Avian).
     app.add_systems(
         PostStartup,
         (
-            // Add to the `TransformSystems::Propagate` chain. Always remember to adjust for changes when updating Bevy.
             sync_to_local_3d.before(mark_dirty_trees),
             writeback_to_global_2d.after(sync_simple_transforms),
         )
