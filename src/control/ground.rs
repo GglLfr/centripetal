@@ -6,7 +6,7 @@ use crate::{
 
 #[derive(Component, Debug, Default, Clone)]
 #[require(
-    GroundControlState, GroundControlDirection, GroundContacts,
+    GroundControlState, GroundControlStatePrevious, GroundControlDirection, GroundContacts,
     RigidBody::Dynamic, Mass = Self::LIGHT, AngularInertia(f32::MAX),
     NoAutoMass, NoAutoAngularInertia,
     LockedAxes::ROTATION_LOCKED,
@@ -20,13 +20,16 @@ impl GroundControl {
     pub const LIGHT: Mass = Mass(50.);
 }
 
+#[derive(Component, Debug, Default, Clone, Copy, PartialEq, Eq, Deref, DerefMut)]
+pub struct GroundControlStatePrevious(pub GroundControlState);
+
 // TODO Decouple this and `GroundControlDirection` so there will be common components for other
 // controllers.
 #[derive(Component, Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub enum GroundControlState {
     #[default]
     Idle,
-    Walk {
+    Run {
         /// `true` if the actor is trying to halt its horizontal movement and go idle.
         decelerating: bool,
     },
@@ -243,6 +246,7 @@ fn evaluate_ground(
     time: Res<Time>,
     states: Query<(
         &mut GroundControlState,
+        &mut GroundControlStatePrevious,
         &mut GroundControlDirection,
         &mut GroundContacts,
         Option<(&GroundMove, &GroundMoveState)>,
@@ -252,9 +256,8 @@ fn evaluate_ground(
 ) {
     let now = time.elapsed();
     let dt = time.delta_secs();
-    states
-        .par_iter_inner()
-        .for_each(|(mut control_state, mut control_direction, mut contacts, movement, jump, mut forces)| {
+    states.par_iter_inner().for_each(
+        |(mut control_state, mut control_state_previous, mut control_direction, mut contacts, movement, jump, mut forces)| {
             let mut next_state = *control_state;
             let mut next_direction = *control_direction;
 
@@ -277,7 +280,7 @@ fn evaluate_ground(
                     Some(..) => {
                         next_state = match state {
                             GroundMoveState::Still if dv_x_target <= 1e-4 => GroundControlState::Idle,
-                            state => GroundControlState::Walk {
+                            state => GroundControlState::Run {
                                 decelerating: !state.is_moving(),
                             },
                         };
@@ -342,9 +345,12 @@ fn evaluate_ground(
                 };
             }
 
-            control_state.set_if_neq(next_state);
+            if let Some(prev) = control_state.replace_if_neq(next_state) {
+                *control_state_previous = GroundControlStatePrevious(prev);
+            }
             control_direction.set_if_neq(next_direction);
-        });
+        },
+    );
 }
 
 pub(super) fn plugin(app: &mut App) {

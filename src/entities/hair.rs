@@ -2,7 +2,7 @@ use crate::{math::Transform2d, prelude::*};
 
 /// Hair strand simulation with Verlet integration.
 ///
-/// Use PBD (position-based dynamics) instead of the usual Semi-Implicit Euler Integration here as
+/// Uses PBD (position-based dynamics) instead of the usual Semi-Implicit Euler Integration here as
 /// the hair deals with constraints, and PBD proves the correct tool to give a nice stable result.
 #[derive(Component, Debug)]
 #[component(on_insert = Self::on_insert)]

@@ -1,6 +1,6 @@
 use crate::{
     CharacterTextures, MiscTextures,
-    control::{GroundControl, GroundControlDirection, GroundControlState, GroundJump, GroundMove, Jump, Movement},
+    control::{GroundControl, GroundControlDirection, GroundControlState, GroundControlStatePrevious, GroundJump, GroundMove, Jump, Movement},
     entities::Hair,
     math::{GlobalTransform2d, Transform2d},
     prelude::*,
@@ -80,7 +80,7 @@ fn on_selene_spawn(mut commands: Commands, mut messages: MessageReader<EntityCre
 
         commands
             .entity(hair)
-            .insert((ChildOf(entity), Hair::new(hair_back[1..].iter().map(|rad| rad / 3.), 0.1), SeleneHair {
+            .insert((ChildOf(entity), Hair::new(hair_back[1..].iter().map(|rad| rad / 3.), 0.2), SeleneHair {
                 color: Srgba::hex("70A3C4").unwrap().into(),
                 widths: hair_back,
             }));
@@ -95,38 +95,58 @@ fn react_selene_animations(
             &AnimationTag,
             &AnimationEvents,
             &mut Transform2d,
+            &GroundControlStatePrevious,
             Ref<GroundControlState>,
             Ref<GroundControlDirection>,
         ),
         With<Selene>,
     >,
 ) {
-    for (entity, tag, &events, trns, state, dir) in states {
-        match (tag.as_str(), events.contains(AnimationEvents::JUST_HALTED)) {
-            (Selene::RUN_TRANS, true) => {
-                commands
-                    .entity(entity)
-                    .insert((AnimationTag::new(Selene::RUN), AnimationRepeat::Loop, AnimationTransition::Continuous));
+    use AnimationRepeat::*;
+    use AnimationTransition::*;
+    use GroundControlState::*;
+
+    for (entity, tag, &events, trns, &state_prev, state, dir) in states {
+        let mut entity_commands = commands.entity(entity);
+        if state.is_changed() || dir.is_changed() {
+            let new_scale_x = trns.scale.x.abs().copysign(dir.as_scalar());
+            trns.map_unchanged(|t| &mut t.scale.x).set_if_neq(new_scale_x);
+
+            match (*state_prev, *state) {
+                // 1.) Any -> Start running.
+                (.., Run { decelerating: false }) => {
+                    entity_commands.insert((AnimationTag::new(Selene::RUN_TRANS), Halt, Discrete));
+                }
+                // 2.) Walking -> Attempting to stop running (decelerating or instantly still).
+                (Run { decelerating: false }, Run { decelerating: true } | Idle) => {
+                    entity_commands.insert((AnimationTag::new(Selene::RUN_TRANS), Halt, Discrete));
+                }
+                // 3.) Any -> Idling.
+                (.., Idle) => {
+                    entity_commands.insert((AnimationTag::new(Selene::IDLE), Halt, Discrete));
+                }
+                // 4.) Any -> Jumping.
+                (.., Jump) => {
+                    // TODO jump animation
+                    entity_commands.insert((AnimationTag::new(Selene::IDLE), Halt, Discrete));
+                }
+                _ => {}
             }
-            (..) => {}
         }
 
-        if !state.is_changed() && !dir.is_changed() {
-            continue
-        }
-
-        let new_scale_x = trns.scale.x.abs().copysign(dir.as_scalar());
-        trns.map_unchanged(|t| &mut t.scale.x).set_if_neq(new_scale_x);
-
-        commands.entity(entity).insert(match *state {
-            GroundControlState::Idle => (AnimationTag::new(Selene::IDLE), AnimationRepeat::Halt, AnimationTransition::Discrete),
-            GroundControlState::Walk { decelerating: false } => {
-                (AnimationTag::new(Selene::RUN_TRANS), AnimationRepeat::Halt, AnimationTransition::Discrete)
+        if events.contains(AnimationEvents::JUST_HALTED) {
+            match (tag.as_str(), *state) {
+                // Continuation of 1.), proceed to the actual run animation.
+                (Selene::RUN_TRANS, Run { decelerating: false }) => {
+                    entity_commands.insert((AnimationTag::new(Selene::RUN), Loop, Continuous));
+                }
+                // Continuation of 2.), finish with the idle animation.
+                (Selene::RUN_TRANS, Idle) => {
+                    entity_commands.insert((AnimationTag::new(Selene::IDLE), Halt, Discrete));
+                }
+                _ => {}
             }
-            _ => (AnimationTag::new(Selene::IDLE), AnimationRepeat::Halt, AnimationTransition::Discrete),
-            //GroundControlState::Hover { steering } => todo!(),
-            //GroundControlState::Jump => todo!(),
-        });
+        }
     }
 }
 
@@ -142,7 +162,7 @@ fn adjust_selene_hair(
             && let Some(&slice) = assets.frame.slices.get("head_pos")
         {
             trns.map_unchanged(|t| &mut t.translation)
-                .set_if_neq((slice.center() - vec2(0., 0.5)).extend(-f32::EPSILON));
+                .set_if_neq((slice.center() - vec2(0., 0.5)).extend(-1e-4));
         }
     }
 }
