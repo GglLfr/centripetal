@@ -4,6 +4,7 @@ use crate::{
     prelude::*,
     render::{MAIN_LAYER, MainCamera, atlas::AtlasRegion},
     util::ecs::ReflectComponentPtr,
+    world::{TileId, TileProperty, TilemapProperties},
 };
 
 pub const TILEMAP_CHUNK_SIZE: u32 = 64;
@@ -209,11 +210,11 @@ pub struct TilemapChunk {
 
 fn update_tilemap_chunks(
     mut commands: Commands,
-    tilemaps: Query<(Entity, &Tilemap, &mut TilemapChunks), Changed<Tilemap>>,
+    tilemaps: Query<(Entity, &Tilemap, Option<&TilemapProperties>, &mut TilemapChunks), Changed<Tilemap>>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<ColorMaterial>>,
     regions: Res<Assets<AtlasRegion>>,
-    tiles: Query<&Tile>,
+    tiles: Query<(&Tile, Option<&TileId>)>,
 ) {
     let regions = regions.into_inner();
     let mesh_handle_allocator = &meshes.get_handle_provider();
@@ -221,7 +222,7 @@ fn update_tilemap_chunks(
 
     for (mesh_id, mesh, material_id, material, chunk_bundle) in ComputeTaskPool::get()
         .scope(|scope| {
-            for (tilemap_entity, tilemap, mut chunks) in tilemaps {
+            for (tilemap_entity, tilemap, tilemap_properties, mut chunks) in tilemaps {
                 if chunks
                     .reborrow()
                     .map_unchanged(|chunk| &mut chunk.last_dimension)
@@ -256,23 +257,35 @@ fn update_tilemap_chunks(
                     scope.spawn(async move {
                         let mut for_image = HashMap::new();
                         for (pos, tile) in tilemap.iter_chunk(chunk_pos) {
-                            let Some(&tile) = tile.and_then(|e| tiles.get(e).ok()) else { continue };
+                            let Some((&tile, tile_id)) = tile.and_then(|e| tiles.get(e).ok()) else { continue };
                             let Some(region) = regions.get(tile.region) else { continue };
 
                             let [bx, by] = ((pos % TILEMAP_CHUNK_SIZE).as_vec2() * tilemap.grid_size).to_array();
                             let [tx, ty] = [bx + tilemap.grid_size, by + tilemap.grid_size];
-                            let (positions, uvs, indices): &mut (Vec<_>, Vec<_>, Vec<_>) = &mut for_image.entry(&region.page.texture).or_default();
+                            let (positions, uvs, colors, indices): &mut (Vec<_>, Vec<_>, Vec<_>, Vec<_>) =
+                                &mut for_image.entry(&region.page.texture).or_default();
 
                             let i = positions.len() as u16;
                             indices.extend([i, i + 1, i + 2, i + 2, i + 3, i]);
 
                             positions.extend([[bx, by, 0.], [tx, by, 0.], [tx, ty, 0.], [bx, ty, 0.]]);
                             uvs.extend(region.uv_corners().map(|uv| uv.to_array()));
+                            colors.extend(iter::repeat_n(
+                                match tilemap_properties
+                                    .zip(tile_id)
+                                    .map(|(props, &id)| props.get(&TileProperty::Emissive).is_some_and(|tiles| tiles.contains(&*id)))
+                                    .unwrap_or(false)
+                                {
+                                    false => [1., 1., 1., 1.],
+                                    true => [10., 10., 10., 1.],
+                                },
+                                4,
+                            ));
                         }
 
                         for_image
                             .into_iter()
-                            .map(move |(image, (positions, uvs, indices))| {
+                            .map(move |(image, (positions, uvs, colors, indices))| {
                                 let mesh_handle = mesh_handle_allocator.reserve_handle().typed();
                                 let mesh_handle_id = mesh_handle.id();
 
@@ -284,7 +297,8 @@ fn update_tilemap_chunks(
                                     Mesh::new(PrimitiveTopology::TriangleList, RenderAssetUsages::RENDER_WORLD)
                                         .with_inserted_indices(Indices::U16(indices))
                                         .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, VertexAttributeValues::Float32x3(positions))
-                                        .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, VertexAttributeValues::Float32x2(uvs)),
+                                        .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, VertexAttributeValues::Float32x2(uvs))
+                                        .with_inserted_attribute(Mesh::ATTRIBUTE_COLOR, VertexAttributeValues::Float32x4(colors)),
                                     material_handle_id,
                                     ColorMaterial {
                                         color: Color::WHITE,

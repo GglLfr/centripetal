@@ -34,7 +34,7 @@ pub struct SeleneHair {
     pub widths: Vec<f32>,
 }
 
-fn on_selene_spawn(mut commands: Commands, mut messages: MessageReader<EntityCreate>, textures: Res<CharacterTextures>) {
+fn spawn_selene(mut commands: Commands, mut messages: MessageReader<EntityCreate>, textures: Res<CharacterTextures>) {
     for &EntityCreate { entity, bounds, .. } in messages.created(Selene::IDENT) {
         let sprite_center = bounds.center();
         let collider_center = vec2(sprite_center.x, bounds.min.y + 12.);
@@ -153,7 +153,7 @@ fn react_selene_animations(
 fn adjust_selene_hair(
     sheets: Res<Assets<AnimationSheet>>,
     selenes: Query<(&Selene, AnimationQueryReadOnly)>,
-    mut trns_query: Query<&mut Transform, Without<Selene>>,
+    mut trns_query: Query<&mut Transform2d>,
 ) {
     for (selene, query) in selenes {
         if query.is_ticked()
@@ -186,10 +186,10 @@ fn draw_selene_hair(
 }
 
 pub(super) fn plugin(app: &mut App) {
-    app.add_systems(Update, on_selene_spawn.in_set(LevelSystems::SpawnEntities)).add_systems(
+    app.add_systems(Update, spawn_selene.in_set(LevelSystems::SpawnEntities)).add_systems(
         PostUpdate,
         (
-            (react_selene_animations, adjust_selene_hair).chain().in_set(AnimationSystems::Updated),
+            (react_selene_animations, adjust_selene_hair).chain().in_set(AnimationSystems::PostUpdate),
             draw_selene_hair.after(TransformSystems::Propagate),
         ),
     );

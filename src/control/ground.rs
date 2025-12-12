@@ -20,9 +20,6 @@ impl GroundControl {
     pub const LIGHT: Mass = Mass(50.);
 }
 
-#[derive(Component, Debug, Default, Clone, Copy, PartialEq, Eq, Deref, DerefMut)]
-pub struct GroundControlStatePrevious(pub GroundControlState);
-
 // TODO Decouple this and `GroundControlDirection` so there will be common components for other
 // controllers.
 #[derive(Component, Debug, Default, Clone, Copy, PartialEq, Eq)]
@@ -39,6 +36,9 @@ pub enum GroundControlState {
     },
     Jump,
 }
+
+#[derive(Component, Debug, Default, Clone, Copy, PartialEq, Eq, Deref, DerefMut)]
+pub struct GroundControlStatePrevious(pub GroundControlState);
 
 #[derive(Component, Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub enum GroundControlDirection {

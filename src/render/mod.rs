@@ -53,7 +53,20 @@ fn spawn_cameras(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
         MAIN_LAYER,
     ));
 
-    commands.spawn((Camera2d, Hdr, Bloom::NATURAL, IsDefaultUiCamera, OutputCamera, OUTPUT_LAYER));
+    commands.spawn((
+        Camera2d,
+        Camera {
+            clear_color: ClearColorConfig::Custom(Color::NONE),
+            ..default()
+        },
+        Hdr,
+        Bloom::NATURAL,
+        DebandDither::Enabled,
+        Tonemapping::SomewhatBoringDisplayTransform,
+        IsDefaultUiCamera,
+        OutputCamera,
+        OUTPUT_LAYER,
+    ));
     commands.spawn((Sprite::from_image(image), PixelatedCanvas, OUTPUT_LAYER));
 }
 

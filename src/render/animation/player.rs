@@ -200,14 +200,11 @@ fn update_animation_states(
         &mut AnimationEvents,
         Has<AnimationEventsEnabled>,
     )>,
-    mut animate_events: Local<Parallel<(Vec<AnimateEnd>, Vec<AnimateLoop>)>>,
 ) {
     let dt = time.delta();
-    states.par_iter_inner().for_each_init(
-        || animate_events.borrow_local_mut(),
-        |animate_events, (entity, anim_query, &repeat, mut events, event_enabled)| {
-            let (push_end, push_loop) = &mut **animate_events;
-
+    states
+        .par_iter_inner()
+        .for_each(|(entity, anim_query, &repeat, mut events, event_enabled)| {
             let Some(sheet) = sheets.get(anim_query.animation.id()) else { return };
             let Some(frame_tag) = sheet.frame_tags.get(anim_query.tag.as_str()) else { return };
 
@@ -251,9 +248,11 @@ fn update_animation_states(
                         if state.index == last {
                             events.set_if_neq(AnimationEvents::HALTED | AnimationEvents::JUST_HALTED);
                             if event_enabled {
-                                push_end.push(AnimateEnd {
-                                    entity,
-                                    tag: (*anim_query.tag).clone(),
+                                commands.command_scope(|mut commands| {
+                                    commands.trigger(AnimateEnd {
+                                        entity,
+                                        tag: (*anim_query.tag).clone(),
+                                    });
                                 });
                             }
 
@@ -269,9 +268,11 @@ fn update_animation_states(
                         state.index = if state.index == last {
                             events.set_if_neq(AnimationEvents::ONGOING | AnimationEvents::JUST_LOOPED);
                             if event_enabled {
-                                push_loop.push(AnimateLoop {
-                                    entity,
-                                    tag: (*anim_query.tag).clone(),
+                                commands.command_scope(|mut commands| {
+                                    commands.trigger(AnimateLoop {
+                                        entity,
+                                        tag: (*anim_query.tag).clone(),
+                                    });
                                 });
                             }
                             first
@@ -288,19 +289,7 @@ fn update_animation_states(
 
             // `dt` is added at the end so the first frame has some time to show up in the render world.
             state.time += dt;
-        },
-    );
-
-    commands.command_scope(|mut commands| {
-        for (push_end, push_loop) in animate_events.iter_mut() {
-            for event in push_end.drain(..) {
-                commands.trigger(event);
-            }
-            for event in push_loop.drain(..) {
-                commands.trigger(event);
-            }
-        }
-    });
+        });
 }
 
 fn draw_animations(
@@ -320,8 +309,8 @@ fn draw_animations(
 
 #[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum AnimationSystems {
-    Update,
-    Updated,
+    PreUpdate,
+    PostUpdate,
     Draw,
 }
 
@@ -329,16 +318,16 @@ pub(super) fn plugin(app: &mut App) {
     app.configure_sets(
         PostUpdate,
         (
-            (AnimationSystems::Update, AnimationSystems::Updated)
-                .chain()
-                .before(TransformSystems::Propagate),
+            (AnimationSystems::PreUpdate, AnimationSystems::PostUpdate).before(TransformSystems::Propagate),
             AnimationSystems::Draw.after(TransformSystems::Propagate),
         ),
     )
     .add_systems(
         PostUpdate,
         (
-            update_animation_states.in_set(AnimationSystems::Update),
+            update_animation_states
+                .after(AnimationSystems::PreUpdate)
+                .before(AnimationSystems::PostUpdate),
             draw_animations.in_set(AnimationSystems::Draw),
         ),
     )

@@ -64,7 +64,6 @@ features = [
     "multi_threaded",
     "png",
     "reflect_auto_register",
-    "serialize",
     "sysinfo_plugin",
     "x11",
     "wayland",

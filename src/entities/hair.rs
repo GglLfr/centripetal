@@ -6,11 +6,10 @@ use crate::{math::Transform2d, prelude::*};
 /// the hair deals with constraints, and PBD proves the correct tool to give a nice stable result.
 #[derive(Component, Debug)]
 #[component(on_insert = Self::on_insert)]
-#[require(Transform, TransformInterpolation)]
+#[require(Transform)]
 pub struct Hair {
     segments: Vec<HairSegment>,
     damping: f32,
-    last_anchor: Vec2,
 }
 
 impl Hair {
@@ -26,12 +25,7 @@ impl Hair {
                 })
                 .collect(),
             damping,
-            last_anchor: Vec2::NAN,
         }
-    }
-
-    pub fn last_anchor(&self) -> Vec2 {
-        self.last_anchor
     }
 
     pub fn iter_segments(&self) -> impl Iterator<Item = HairSegment> + ExactSizeIterator + DoubleEndedIterator {
@@ -83,7 +77,7 @@ fn update_hair_segments(
     let g = gravity.0;
 
     hairs.par_iter_inner().for_each(|(hair, &hair_trns, hair_child_of)| {
-        let pos = &if let Some(child_of) = hair_child_of
+        let root_pos = if let Some(child_of) = hair_child_of
             && let Ok((&parent_pos, &parent_rot, &parent_trns)) = parent_query.get(child_of.parent())
         {
             let parent_trns = parent_trns.compute_transform();
@@ -99,14 +93,11 @@ fn update_hair_segments(
         };
 
         let hair = hair.into_inner();
-        if hair.last_anchor.is_nan() {
-            hair.last_anchor = *pos;
-        }
+        let mut accum_pos = root_pos;
 
-        let mut accum_pos = *pos;
         for seg in &mut hair.segments {
+            accum_pos -= vec2(0., seg.length);
             if seg.position.is_nan() {
-                accum_pos += vec2(0., -seg.length);
                 seg.position = accum_pos;
                 seg.last_position = accum_pos;
             } else {
@@ -121,43 +112,35 @@ fn update_hair_segments(
 
         const ITER_COUNT: usize = 8;
         for iter in 1..=ITER_COUNT {
-            let Some(first) = hair.segments.first_mut() else { continue };
-            {
-                let dir = first.position - *pos;
-                let dir_len2 = dir.length_squared();
-                if dir_len2 > 1e-4 {
-                    let dir_len = dir_len2.sqrt();
-                    let err = (dir_len - first.length) / dir_len;
-                    first.position -= dir * err;
-                } else {
-                    first.position = *pos + vec2(0., -first.length);
-                }
-            }
+            for this_index in 0..hair.segments.len() {
+                let this_pos = hair.segments[this_index].position;
+                let parent_pos = match this_index.checked_sub(1) {
+                    Some(prev_index) => hair.segments[prev_index].position,
+                    None => root_pos,
+                };
 
-            let Some(end) = hair.segments.len().checked_sub(1) else { continue };
-            for i in 0..end {
-                let delta = hair.segments[i + 1].position - hair.segments[i].position;
+                let delta = this_pos - parent_pos;
                 let delta_len2 = delta.length_squared();
                 if delta_len2 <= 1e-4 {
+                    hair.segments[this_index].position = parent_pos - vec2(0., hair.segments[this_index].length);
                     continue
                 }
 
                 let delta_len = delta_len2.sqrt();
-                let correction = delta * 0.5 * (delta_len - hair.segments[i + 1].length) / delta_len;
+                let correction = delta * 0.5 * (delta_len - hair.segments[this_index].length) / delta_len;
 
-                // On the `ITER_COUNT`'th iteration, convergence should have been reached.
-                // In that case, *enforce* the distance constraint instead of distributing it evenly, so that
-                // segments don't gradually move further from the root segment.
-                if i == 0 || iter == ITER_COUNT {
-                    hair.segments[i + 1].position -= correction * 2.;
-                } else {
-                    hair.segments[i].position += correction;
-                    hair.segments[i + 1].position -= correction;
+                match this_index.checked_sub(1) {
+                    // On the `ITER_COUNT`'th iteration, convergence should have been reached.
+                    // In that case, *enforce* the distance constraint instead of distributing it evenly, so that
+                    // segments don't gradually move further from the root segment.
+                    Some(prev_index) if iter != ITER_COUNT => {
+                        hair.segments[this_index].position -= correction;
+                        hair.segments[prev_index].position += correction;
+                    }
+                    _ => hair.segments[this_index].position -= correction * 2.,
                 }
             }
         }
-
-        hair.last_anchor = *pos;
     });
 }
 

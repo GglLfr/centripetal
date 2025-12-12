@@ -72,11 +72,6 @@ impl Transform2d {
         scale: Vec2::ONE,
     };
 
-    pub const ABOVE: Self = Self {
-        translation: Vec3::new(0., 0., f32::EPSILON),
-        ..Self::IDENTITY
-    };
-
     pub const fn from_xy(x: f32, y: f32) -> Self {
         Self::from_xyz(x, y, 0.)
     }

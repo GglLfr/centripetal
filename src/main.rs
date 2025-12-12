@@ -21,7 +21,7 @@ pub mod prelude {
         fmt::{self, Debug},
         fs,
         hash::{Hash, Hasher},
-        io,
+        io, iter,
         marker::PhantomData,
         mem::{self, MaybeUninit, offset_of},
         ops::{Deref, DerefMut, Mul, Range, RangeInclusive},

@@ -2,6 +2,7 @@ use crate::{
     GameState, ProgressFor, ProgressSystems,
     math::Transform2d,
     prelude::*,
+    render::MainCamera,
     util::{IteratorExt, async_bridge::AsyncBridge},
     world::{LevelCollectionRef, Tile, Tilemap, TilemapParallax, WorldEnum},
 };
@@ -134,11 +135,12 @@ fn load_level(
     progress: ProgressFor<GameState>,
     time: Res<Time>,
     server: Res<AssetServer>,
-    mut load_level: ResMut<LoadLevelProgress>,
+    bridge: Res<AsyncBridge>,
     collection: Res<LevelCollectionRef>,
+    mut load_level: ResMut<LoadLevelProgress>,
     mut entity_creation_writer: MessageWriter<EntityCreate>,
     mut layer_creation_writer: MessageWriter<LayerCreate>,
-    bridge: Res<AsyncBridge>,
+    mut camera: Single<&mut Camera, With<MainCamera>>,
 ) -> Result {
     let LoadLevelProgress::Running(started, task) = (match &mut *load_level {
         LoadLevelProgress::Pending(level_identifier) => {
@@ -163,6 +165,8 @@ fn load_level(
 
             entity_creation_writer.write_batch(output.entity_creation);
             layer_creation_writer.write_batch(output.layer_creation);
+            camera.clear_color = ClearColorConfig::Custom(output.clear_color.into());
+
             *load_level = LoadLevelProgress::Done;
             progress.update(true);
             Ok(())
@@ -182,6 +186,7 @@ fn load_level(
 struct LoadLevelOutput {
     entity_creation: Vec<EntityCreate>,
     layer_creation: Vec<LayerCreate>,
+    clear_color: Srgba,
 }
 
 fn load_level_task(
@@ -193,6 +198,7 @@ fn load_level_task(
     #[derive(Deserialize)]
     #[expect(non_snake_case, reason = "LDtk naming scheme")]
     struct Repr {
+        __bgColor: String,
         layerInstances: Vec<LayerInstanceRepr>,
     }
 
@@ -262,8 +268,9 @@ fn load_level_task(
         Reader::read_to_end(&mut source.reader().read(path).await?, &mut bytes).await?;
 
         let repr = serde_json::from_slice::<Repr>(&bytes)?;
-        let mut commands = ctx.commands();
+        output.clear_color = Srgba::hex(repr.__bgColor)?;
 
+        let mut commands = ctx.commands();
         let mut used_names = HashSet::new();
         for (i, layer) in repr.layerInstances.into_iter().rev().enumerate() {
             if !used_names.insert(layer.__identifier.clone()) {
@@ -406,7 +413,7 @@ fn load_level_task(
     }
 }
 
-fn tiles_main_created(
+fn create_tile_collider(
     mut commands: Commands,
     mut tiles: MessageReader<LayerCreate>,
     tilemap_query: Query<(&Tilemap, &TilemapProperties)>,
@@ -428,7 +435,7 @@ fn tiles_main_created(
                             .is_ok_and(|&tile| collisions.contains(&*tile))
                             .then_some(pos.as_ivec2())
                     })
-                    .collect::<Box<_>>(),
+                    .collect::<Vec<_>>(),
             ),
             #[cfg(feature = "dev")]
             DebugRender::none(),
@@ -458,7 +465,7 @@ pub(super) fn plugin(app: &mut App) {
             Update,
             (
                 load_level.in_set(LevelSystems::Load),
-                tiles_main_created.in_set(LevelSystems::SpawnEntities),
+                create_tile_collider.in_set(LevelSystems::SpawnEntities),
             ),
         );
 }
