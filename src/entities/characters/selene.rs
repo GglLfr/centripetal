@@ -23,8 +23,10 @@ impl Selene {
     pub const IDENT: &'static str = "selene";
 
     pub const IDLE: &'static str = "idle";
-    pub const RUN: &'static str = "run";
-    pub const RUN_TRANS: &'static str = "run_trans";
+    pub const RUN_LEFT: &'static str = "run_left";
+    pub const RUN_TRANS_LEFT: &'static str = "run_trans_left";
+    pub const RUN_RIGHT: &'static str = "run_right";
+    pub const RUN_TRANS_RIGHT: &'static str = "run_trans_right";
 }
 
 #[derive(Component, Debug, Clone)]
@@ -108,18 +110,54 @@ fn react_selene_animations(
 
     for (entity, tag, &events, trns, &state_prev, state, dir) in states {
         let mut entity_commands = commands.entity(entity);
+        if events & (AnimationEvents::JUST_HALTED | AnimationEvents::JUST_LOOPED) != AnimationEvents::empty() {
+            match (tag.as_str(), *state) {
+                // a.) Continuation of 1.), proceed to the actual run animation.
+                (Selene::RUN_TRANS_LEFT, Run { decelerating: false }) => {
+                    entity_commands.insert((AnimationTag::new(Selene::RUN_LEFT), Loop, Continuous));
+                }
+                (Selene::RUN_TRANS_RIGHT, Run { decelerating: false }) => {
+                    entity_commands.insert((AnimationTag::new(Selene::RUN_RIGHT), Loop, Continuous));
+                }
+                // b.) Continuation of 2.), finish with the idle animation.
+                (Selene::RUN_TRANS_LEFT | Selene::RUN_TRANS_RIGHT, Idle) => {
+                    entity_commands.insert((AnimationTag::new(Selene::IDLE), Halt, Discrete));
+                }
+                // c.) Continuation of a.) and loop of d.).
+                (Selene::RUN_LEFT, ..) => {
+                    entity_commands.insert((AnimationTag::new(Selene::RUN_RIGHT), Loop, Continuous));
+                }
+                // d.) Continuation of c.).
+                (Selene::RUN_RIGHT, ..) => {
+                    entity_commands.insert((AnimationTag::new(Selene::RUN_LEFT), Loop, Continuous));
+                }
+                _ => {}
+            }
+        }
+
         if state.is_changed() || dir.is_changed() {
             let new_scale_x = trns.scale.x.abs().copysign(dir.as_scalar());
             trns.map_unchanged(|t| &mut t.scale.x).set_if_neq(new_scale_x);
 
-            match (*state_prev, *state) {
+            match (tag.as_str(), *state_prev, *state) {
                 // 1.) Any -> Start running.
                 (.., Run { decelerating: false }) => {
-                    entity_commands.insert((AnimationTag::new(Selene::RUN_TRANS), Halt, Discrete));
+                    entity_commands.insert((AnimationTag::new(Selene::RUN_TRANS_LEFT), Halt, Discrete));
                 }
                 // 2.) Walking -> Attempting to stop running (decelerating or instantly still).
-                (Run { decelerating: false }, Run { decelerating: true } | Idle) => {
-                    entity_commands.insert((AnimationTag::new(Selene::RUN_TRANS), Halt, Discrete));
+                (tag, Run { decelerating: false }, Run { decelerating: true } | Idle) => {
+                    if let Some(tag) = match tag {
+                        Selene::RUN_LEFT => Some(Selene::RUN_TRANS_LEFT),
+                        Selene::RUN_RIGHT => Some(Selene::RUN_TRANS_RIGHT),
+                        Selene::RUN_TRANS_LEFT => None,
+                        Selene::RUN_TRANS_RIGHT => None,
+                        other => {
+                            warn!("Invalid Selene animation state while running: {other}");
+                            Some(Selene::RUN_TRANS_LEFT)
+                        }
+                    } {
+                        entity_commands.insert((AnimationTag::new(tag), Halt, Discrete));
+                    }
                 }
                 // 3.) Any -> Idling.
                 (.., Idle) => {
@@ -128,20 +166,6 @@ fn react_selene_animations(
                 // 4.) Any -> Jumping.
                 (.., Jump) => {
                     // TODO jump animation
-                    entity_commands.insert((AnimationTag::new(Selene::IDLE), Halt, Discrete));
-                }
-                _ => {}
-            }
-        }
-
-        if events.contains(AnimationEvents::JUST_HALTED) {
-            match (tag.as_str(), *state) {
-                // Continuation of 1.), proceed to the actual run animation.
-                (Selene::RUN_TRANS, Run { decelerating: false }) => {
-                    entity_commands.insert((AnimationTag::new(Selene::RUN), Loop, Continuous));
-                }
-                // Continuation of 2.), finish with the idle animation.
-                (Selene::RUN_TRANS, Idle) => {
                     entity_commands.insert((AnimationTag::new(Selene::IDLE), Halt, Discrete));
                 }
                 _ => {}
